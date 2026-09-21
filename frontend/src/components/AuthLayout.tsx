@@ -24,9 +24,9 @@ export function AuthLayout({ children, darkMode, onToggleDark }: { children: Rea
           transition={{ duration: 1, ease: "easeOut" }}
           style={{ position: "relative", zIndex: 10, display: "flex", justifyContent: "center" }}
         >
-          {/* Logo with glass background */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24, padding: "40px 56px", borderRadius: 24, background: "var(--surface)", border: "1px solid var(--line)", backdropFilter: "blur(12px)", boxShadow: "var(--shadow-card)" }}>
-            <img src="/logo.png" alt="AegisGraph AI Logo" style={{ borderRadius: 18, objectFit: "cover", boxShadow: "0 0 0 1px rgba(59,130,246,0.3), 0 0 30px rgba(59,130,246,0.2)", maxWidth: "100%", maxHeight: "150px" }} />
+          {/* Logo */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
+            <img src="/logo.png" alt="AegisGraph AI Logo" style={{ borderRadius: 18, objectFit: "cover", maxWidth: "100%", maxHeight: "150px" }} />
             <h1 style={{ fontFamily: "var(--font-display)", fontSize: 42, fontWeight: 800, color: "var(--ink)", letterSpacing: "-0.04em", lineHeight: 1, margin: 0, textAlign: "center" }}>
               AegisGraph<span style={{ color: "var(--accent)" }}> AI</span>
             </h1>
@@ -37,7 +37,7 @@ export function AuthLayout({ children, darkMode, onToggleDark }: { children: Rea
       </div>
 
       {/* ── RIGHT ── */}
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 6%", background: "var(--base)", position: "relative", overflowY: "auto" }}>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 6%", background: "var(--base)", position: "relative", overflow: "hidden" }}>
         
         {/* Top Right Theme Toggle */}
         {onToggleDark && (

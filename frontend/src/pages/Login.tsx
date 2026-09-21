@@ -149,7 +149,7 @@ export function Login({
                       placeholder="Admin ID or Email"
                       value={adminEmail}
                       onChange={(e) => setAdminEmail(e.target.value)}
-                      style={{ width: "100%", background: "transparent", border: "1px solid var(--line)", borderRadius: 12, padding: "14px 16px 14px 42px", fontSize: 15, outline: "none", transition: "border-color 0.2s" }}
+                      style={{ width: "100%", background: "transparent", color: "var(--ink)", border: "1px solid var(--line)", borderRadius: 12, padding: "14px 16px 14px 42px", fontSize: 15, outline: "none", transition: "border-color 0.2s" }}
                       onFocus={(e) => e.target.style.borderColor = "var(--accent)"}
                       onBlur={(e) => e.target.style.borderColor = "var(--line)"}
                     />
@@ -171,7 +171,7 @@ export function Login({
                       placeholder="••••••••••"
                       value={adminPass}
                       onChange={(e) => setAdminPass(e.target.value)}
-                      style={{ width: "100%", background: "transparent", border: "1px solid var(--line)", borderRadius: 12, padding: "14px 42px", fontSize: 15, outline: "none", transition: "border-color 0.2s" }}
+                      style={{ width: "100%", background: "transparent", color: "var(--ink)", border: "1px solid var(--line)", borderRadius: 12, padding: "14px 42px", fontSize: 15, outline: "none", transition: "border-color 0.2s" }}
                       onFocus={(e) => e.target.style.borderColor = "var(--accent)"}
                       onBlur={(e) => e.target.style.borderColor = "var(--line)"}
                     />
@@ -218,7 +218,7 @@ export function Login({
                       placeholder="EMP-0001"
                       value={empId}
                       onChange={(e) => setEmpId(e.target.value)}
-                      style={{ width: "100%", background: "transparent", border: "1px solid var(--line)", borderRadius: 12, padding: "14px 16px 14px 42px", fontSize: 15, outline: "none", transition: "border-color 0.2s" }}
+                      style={{ width: "100%", background: "transparent", color: "var(--ink)", border: "1px solid var(--line)", borderRadius: 12, padding: "14px 16px 14px 42px", fontSize: 15, outline: "none", transition: "border-color 0.2s" }}
                       onFocus={(e) => e.target.style.borderColor = "var(--accent)"}
                       onBlur={(e) => e.target.style.borderColor = "var(--line)"}
                     />
@@ -240,7 +240,7 @@ export function Login({
                       placeholder="••••••"
                       value={empPin}
                       onChange={(e) => setEmpPin(e.target.value)}
-                      style={{ width: "100%", background: "transparent", border: "1px solid var(--line)", borderRadius: 12, padding: "14px 42px", fontSize: 15, outline: "none", transition: "border-color 0.2s", letterSpacing: empPin ? "0.2em" : "normal" }}
+                      style={{ width: "100%", background: "transparent", color: "var(--ink)", border: "1px solid var(--line)", borderRadius: 12, padding: "14px 42px", fontSize: 15, outline: "none", transition: "border-color 0.2s", letterSpacing: empPin ? "0.2em" : "normal" }}
                       onFocus={(e) => e.target.style.borderColor = "var(--accent)"}
                       onBlur={(e) => e.target.style.borderColor = "var(--line)"}
                     />
