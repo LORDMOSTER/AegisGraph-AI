@@ -1,0 +1,12 @@
+{
+    "status": "PASS",
+    "companies_tested": [
+        "TATA-JAMSHEDPUR",
+        "TATA-PUNE"
+    ],
+    "isolation_verified": true,
+    "company_a_records_returned": 50,
+    "company_b_records_returned": 50,
+    "cross_tenant_spillage_detected": false,
+    "latency_ms": 6.48
+}

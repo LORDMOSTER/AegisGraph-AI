@@ -1,0 +1,26 @@
+# Virtual environments
+venv/
+env/
+.venv/
+.env
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Node/Frontend
+node_modules/
+dist/
+dist-ssr/
+.vite/
+
+# Editor/OS
+.DS_Store
+.vscode/
+.idea/
+Thumbs.db
+
+# Logs
+*.log

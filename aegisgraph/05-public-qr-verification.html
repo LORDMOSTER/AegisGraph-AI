@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="generator" content="inspoai-v3"/>
+<meta name="inspoai-dna" content="soft-productivity"/>
+<meta name="inspoai-platform" content="web"/>
+<meta name="inspoai-taste" content="v2"/>
+<title>AegisGraph — Public QR Verification</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config = {"theme":{"extend":{"colors":{"base":"#F9F9F8","surface":"#FFFFFF","raised":"#F1F1EF","line":"#E4E4E1","ink":"#1C1C1A","muted":"#71716C","accent":"#2563EB","accentInk":"#FFFFFF","accent2":"#0D9488"},"fontFamily":{"display":["Inter Tight","sans-serif"],"body":["Inter","sans-serif"],"mono":["IBM Plex Mono","monospace"]},"borderRadius":{"card":"0.625rem"}}}};</script>
+<script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+<style>
+  html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  body { font-family: 'Inter', sans-serif; background: #F9F9F8; color: #1C1C1A; }
+  /* Canvas embed: the canvas auto-sizes the iframe to the page's full height,
+  so 100vh sections would balloon with it (measure → grow → re-expand loop).
+  When embedded, pin *-screen sections to a fixed desktop viewport instead. */
+  .v3-embedded .h-screen { height: 900px !important; }
+  .v3-embedded .min-h-screen { min-height: 900px !important; }
+  ::selection { background: #2563EB33; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #E4E4E1; border-radius: 8px; border: 2px solid #F9F9F8; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  iconify-icon { display: inline-block; vertical-align: middle; }
+  /* Photos must never distort: cover-crop instead of stretch when a sized
+     container disagrees with the image's aspect ratio (browser default is
+     "fill"). Images without forced dimensions are unaffected. */
+  img { object-fit: cover; }
+  [x-cloak] { display: none !important; }
+  input, textarea, select, button { font-family: inherit; }
+  html { scroll-behavior: smooth; }
+  /* Inline text editing (canvas editor only — the shell script arms it when embedded) */
+  .v3-editing { outline: 2px dashed #2563EB; outline-offset: 3px; border-radius: 4px; cursor: text !important; }
+  /* Scroll-reveal (auto-applied by the shell script below).
+     Taste v2: content is NEVER hidden waiting for a reveal (the anti-slop
+     law's invisible-content trap — a failed observer, a screenshot pass or an
+     export must still show the full page). The motion becomes a settle from a
+     small offset: always readable, never opacity-gated. */
+  @media (prefers-reduced-motion: no-preference) {
+    .v3-reveal { transform: translateY(16px); }
+    .v3-reveal.v3-in { transform: none; transition: transform 0.65s cubic-bezier(0.22,1,0.36,1); }
+    a, button { transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease; }
+  }
+  /* One-time confetti burst (auto-armed by [data-confetti] — see script below) */
+  @keyframes v3-confetti-burst {
+    0% { transform: translate(0,0) rotate(0deg) scale(1); opacity: 1; }
+    100% { transform: translate(var(--v3cx), var(--v3cy)) rotate(var(--v3cr)) scale(0.4); opacity: 0; }
+  }
+  .v3-confetti-piece {
+    position: fixed; top: 0; left: 0; width: 8px; height: 8px; pointer-events: none; z-index: 9999;
+    animation: v3-confetti-burst 1.1s cubic-bezier(0.15,0.7,0.3,1) forwards;
+  }
+  /* Shared film-grain texture for the photo treatment layer (lint.js) — one
+     data-URI noise tile, reused via mix-blend-mode + opacity, never
+     regenerated per image. */
+  .v3-grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 140px 140px;
+    mix-blend-mode: overlay;
+  }
+</style>
+<script>
+  // Embedded documents (canvas iframes): the canvas auto-sizes the iframe to
+  // the page's full height, so any vh-based sizing would balloon with it
+  // (measure -> grow -> re-expand loop). Pin EVERY vh-derived Tailwind class
+  // to a fixed 900px reference viewport via inline styles (beats everything).
+  // Real tabs (live preview, downloaded code) keep true viewport units.
+  // AI-generated images (pollinations renders on demand) can time out or 502
+  // under burst load: retry once with a cache-buster, then swap to a stock
+  // fallback — a broken-image icon must never ship.
+  document.addEventListener('error', function (e) {
+    var el = e.target;
+    if (!el || el.tagName !== 'IMG' || !el.src) return;
+    var n = +(el.getAttribute('data-v3-retry') || 0);
+    el.setAttribute('data-v3-retry', String(n + 1));
+    if (n < 2) {
+      // 429s need breathing room: 3s, then 8s, staggered per image
+      var src = el.src.replace(/[?&]v3r=d+/, '');
+      var wait = (n === 0 ? 3000 : 8000) + Math.random() * 2000;
+      setTimeout(function () { el.src = src + (src.indexOf('?') > -1 ? '&' : '?') + 'v3r=' + Date.now(); }, wait);
+    } else {
+      var h = 0, s = el.src;
+      for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+      el.src = 'https://picsum.photos/seed/v3' + h + '/1200/900';
+    }
+  }, true);
+
+  window.__v3FixVh = function () {};
+  if (window.self !== window.top) {
+    document.documentElement.classList.add('v3-embedded');
+    window.__v3FixVh = function () {
+      var PX_PER_VH = 9; // 900px reference viewport
+      document.querySelectorAll('[class]').forEach(function (el) {
+        el.classList.forEach(function (c) {
+          var m;
+          if (/^h-(screen|dvh|svh|lvh)$/.test(c)) el.style.setProperty('height', '900px', 'important');
+          else if (/^min-h-(screen|dvh|svh|lvh)$/.test(c)) el.style.setProperty('min-height', '900px', 'important');
+          else if (/^max-h-(screen|dvh|svh|lvh)$/.test(c)) el.style.setProperty('max-height', '900px', 'important');
+          else if ((m = c.match(/^h-[(d+)(?:d|s|l)?vh]$/))) el.style.setProperty('height', (m[1] * PX_PER_VH) + 'px', 'important');
+          else if ((m = c.match(/^min-h-[(d+)(?:d|s|l)?vh]$/))) el.style.setProperty('min-height', (m[1] * PX_PER_VH) + 'px', 'important');
+          else if ((m = c.match(/^max-h-[(d+)(?:d|s|l)?vh]$/))) el.style.setProperty('max-height', (m[1] * PX_PER_VH) + 'px', 'important');
+        });
+        // Inline style="...vh" from the model gets the same treatment
+        var st = el.getAttribute('style');
+        if (st && /d(?:d|s|l)?vh/.test(st)) {
+          el.setAttribute('style', st.replace(/(d+(?:.d+)?)(?:d|s|l)?vh/g, function (_, n) { return (parseFloat(n) * PX_PER_VH) + 'px'; }));
+        }
+      });
+    };
+    addEventListener('DOMContentLoaded', window.__v3FixVh);
+
+    // Inline text editing: double-click any pure-text element to edit it in
+    // place. On commit the new text is posted to the canvas, which patches the
+    // stored document (the live DOM already shows the edit — no reload).
+    var v3EditEl = null, v3EditOrig = '', v3EditOrigHtml = '', v3EditIdx = 0;
+    var v3Norm = function (s) { return String(s || '').replace(/\s+/g, ' ').trim(); };
+    // Editable = text with at most <br> line breaks inside (multi-line
+    // headlines) — anything with real child markup keeps its styling safe.
+    var v3Editable = function (el) {
+      if (!v3Norm(el.textContent)) return false;
+      for (var i = 0; i < el.children.length; i++) {
+        if (el.children[i].tagName !== 'BR') return false;
+      }
+      return true;
+    };
+    function v3EndEdit(commit) {
+      var el = v3EditEl; if (!el) return; v3EditEl = null;
+      el.removeAttribute('contenteditable');
+      el.classList.remove('v3-editing');
+      if (!commit) { el.innerHTML = v3EditOrigHtml; return; }
+      if (el.innerHTML === v3EditOrigHtml) return;
+      parent.postMessage({
+        type: 'v3-edit',
+        tag: el.tagName.toLowerCase(),
+        origText: v3EditOrig,
+        newText: el.textContent,
+        newHtml: el.innerHTML,
+        matchIndex: v3EditIdx
+      }, '*');
+    }
+    document.addEventListener('dblclick', function (e) {
+      var t = e.target && e.target.closest && e.target.closest('h1,h2,h3,h4,h5,h6,p,a,button,span,li,td,th,dt,dd,blockquote,figcaption,label,legend,summary');
+      if (!t || t === v3EditEl) return;
+      if (!v3Editable(t)) return;
+      e.preventDefault(); e.stopPropagation();
+      if (v3EditEl) v3EndEdit(true);
+      v3EditEl = t; v3EditOrig = t.textContent; v3EditOrigHtml = t.innerHTML;
+      // Which duplicate is this? (e.g. two "Learn more" buttons) — lets the
+      // canvas patch the right one in the source document.
+      var same = [].filter.call(document.querySelectorAll(t.tagName), function (n) {
+        return v3Editable(n) && v3Norm(n.textContent) === v3Norm(v3EditOrig);
+      });
+      v3EditIdx = Math.max(0, [].indexOf.call(same, t));
+      try { t.contentEditable = 'plaintext-only'; } catch (_) { t.contentEditable = 'true'; }
+      t.classList.add('v3-editing');
+      t.focus();
+    }, true);
+    document.addEventListener('focusout', function (e) { if (v3EditEl && e.target === v3EditEl) v3EndEdit(true); }, true);
+    document.addEventListener('keydown', function (e) {
+      if (!v3EditEl) return;
+      if (e.key === 'Escape') { e.preventDefault(); v3EndEdit(false); }
+      else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); v3EditEl.blur(); }
+    }, true);
+    // While editing a link/button, a click must not navigate or toggle anything
+    document.addEventListener('click', function (e) {
+      if (v3EditEl && v3EditEl.contains(e.target)) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
+  }
+  // Live-build channel: the canvas injects streamed body updates without
+  // reloading the document (a reload would re-fetch Tailwind/fonts each time).
+  addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'v3-body' && typeof e.data.html === 'string') {
+      document.body.innerHTML = e.data.html;
+      window.__v3FixVh();
+    } else if (e.data && e.data.type === 'v3-html' && typeof e.data.html === 'string') {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(e.data.html, 'text/html');
+        
+        // 1. Update body contents
+        document.body.innerHTML = doc.body.innerHTML;
+        document.body.className = doc.body.className;
+        if (doc.body.style.cssText) {
+          document.body.style.cssText = doc.body.style.cssText;
+        }
+        
+        // 2. Update Tailwind config dynamically
+        const configScript = doc.querySelector('script:not([src])');
+        if (configScript && window.tailwind) {
+          try {
+            const match = configScript.innerHTML.match(/tailwind.configs*=s*([sS]*)/);
+            if (match) {
+              const configObj = new Function('return ' + match[1].trim())();
+              tailwind.config = configObj;
+            }
+          } catch (err) {
+            console.error('Tailwind config re-evaluation failed:', err);
+          }
+        }
+        
+        // 3. Update Google Fonts link
+        const oldFontLink = document.querySelector('link[href*="fonts.googleapis.com"]');
+        const newFontLink = doc.querySelector('link[href*="fonts.googleapis.com"]');
+        if (oldFontLink && newFontLink) {
+          oldFontLink.href = newFontLink.href;
+        }
+        
+        // 4. Update head style tag (scrollbars, selection colors)
+        const oldStyle = document.querySelector('style');
+        const newStyle = doc.querySelector('style');
+        if (oldStyle && newStyle) {
+          oldStyle.innerHTML = newStyle.innerHTML;
+        }
+        window.__v3FixVh();
+      } catch (err) {
+        console.error('v3-html instant retheme failed:', err);
+      }
+    }
+  });
+</script>
+<script>
+  // Framer-motion-style entrance: top-level sections/cards fade-slide in with
+  // a stagger as they scroll into view; on marketing pages each section's own
+  // content (headlines, copy, images, cards) staggers in too. Deterministic —
+  // never model-written.
+  addEventListener('DOMContentLoaded', () => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    // App chrome (sidebars, navs, tab bars, headers) must NEVER be animated —
+    // only page content. In app shells animate the main column's children;
+    // on marketing pages animate top-level sections.
+    const isAppShell = !!document.querySelector('aside, [class*="h-screen"]');
+    let targets;
+    if (isAppShell) {
+      const main = document.querySelector('main') || document.body;
+      targets = Array.from(main.children).filter(el => !['HEADER', 'NAV', 'ASIDE'].includes(el.tagName));
+      // If main has a single content wrapper, animate its children instead
+      if (targets.length === 1 && targets[0].children.length > 1) targets = Array.from(targets[0].children);
+    } else {
+      const roots = document.querySelectorAll('body > section, body > footer, body > div > section, body > div > footer, main > section');
+      targets = roots.length > 1 ? Array.from(roots) : [];
+    }
+    // Marketing sections: stagger the section's content row-by-row. Descend
+    // through single-wrapper containers to the real content children.
+    const markChildren = (section) => {
+      let root = section;
+      while (root.children.length === 1 && root.children[0].children.length) root = root.children[0];
+      const kids = Array.from(root.children).filter(k => !['SCRIPT', 'STYLE'].includes(k.tagName)).slice(0, 10);
+      if (kids.length < 2) return;
+      kids.forEach((k, i) => {
+        k.classList.add('v3-reveal');
+        k.style.transitionDelay = Math.min(i * 80, 480) + 'ms';
+      });
+    };
+    let order = 0;
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        const el = e.target;
+        setTimeout(() => {
+          el.classList.add('v3-in');
+          el.querySelectorAll('.v3-reveal').forEach(k => k.classList.add('v3-in'));
+        }, (order++ % 4) * 90);
+        io.unobserve(el);
+      }
+    }, { threshold: 0.08, rootMargin: '0px 0px -6% 0px' });
+    targets.forEach(el => {
+      if (['SCRIPT', 'STYLE', 'NAV', 'ASIDE', 'HEADER'].includes(el.tagName)) return;
+      el.classList.add('v3-reveal');
+      if (!isAppShell) markChildren(el);
+      io.observe(el);
+    });
+    // Safety: anything hidden but already inside the viewport after 1.5s
+    // becomes visible. Below-the-fold content stays armed so the reveal
+    // still plays when the user scrolls to it.
+    setTimeout(() => {
+      document.querySelectorAll('.v3-reveal:not(.v3-in)').forEach(el => {
+        const r = el.getBoundingClientRect();
+        if (r.top < innerHeight && r.bottom > 0) el.classList.add('v3-in');
+      });
+    }, 1500);
+    // Buttery inertia scrolling (Lenis) on marketing pages — app shells keep
+    // native scrolling for their inner panels.
+    if (!isAppShell && document.body.scrollHeight > innerHeight * 1.2) {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/lenis@1.3.4/dist/lenis.min.js';
+      s.onload = () => {
+        try {
+          document.documentElement.style.scrollBehavior = 'auto'; // Lenis replaces CSS smooth scroll
+          const lenis = new Lenis({ duration: 1.1, smoothWheel: true, anchors: true });
+          const raf = (t) => { lenis.raf(t); requestAnimationFrame(raf); };
+          requestAnimationFrame(raf);
+        } catch (err) { /* native scrolling still works */ }
+      };
+      document.head.appendChild(s);
+    }
+  });
+</script>
+<script>
+  // One-time confetti burst for celebration/success moments. The model marks
+  // the moment with a bare data-confetti attribute — no JS, no external
+  // library (Lottie/canvas-confetti CDNs are never loaded in this shell and
+  // would render broken/static). Fires exactly once per element, on-brand
+  // colors, self-cleans — never a loop.
+  addEventListener('DOMContentLoaded', () => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const v3ConfettiColors = ['#2563EB', '#0D9488', '#2563EB', '#1C1C1A'];
+    document.querySelectorAll('[data-confetti]').forEach((el) => {
+      el.removeAttribute('data-confetti');
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+      const pieces = [];
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < 26; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 60 + Math.random() * 120;
+        const p = document.createElement('span');
+        p.className = 'v3-confetti-piece';
+        p.style.left = cx + 'px';
+        p.style.top = cy + 'px';
+        p.style.background = v3ConfettiColors[i % v3ConfettiColors.length];
+        p.style.borderRadius = i % 3 === 0 ? '50%' : '2px';
+        p.style.setProperty('--v3cx', Math.cos(angle) * dist + 'px');
+        p.style.setProperty('--v3cy', (Math.sin(angle) * dist - 40) + 'px');
+        p.style.setProperty('--v3cr', (Math.random() * 480 - 240) + 'deg');
+        p.style.animationDelay = (Math.random() * 120) + 'ms';
+        frag.appendChild(p);
+        pieces.push(p);
+      }
+      document.body.appendChild(frag);
+      setTimeout(() => pieces.forEach((p) => p.remove()), 1500);
+    });
+  });
+</script>
+<script>
+  // Selective hero background: a lightweight Canvas2D animated gradient-blob
+  // field (never WebGL/Three.js — deliberately cheap, deterministic, and
+  // impossible for the model to get wrong since it never writes the canvas
+  // code itself). The model only opts a hero section in via a bare
+  // data-hero-canvas attribute; this mounts and animates it in this DNA's
+  // own accent colors. z-index:-1 keeps it behind normal in-flow content
+  // without needing to touch the model's own markup.
+  addEventListener('DOMContentLoaded', () => {
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const heroColors = ['#2563EB', '#0D9488', '#2563EB'];
+    document.querySelectorAll('[data-hero-canvas]').forEach((el) => {
+      el.removeAttribute('data-hero-canvas');
+      if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+      const canvas = document.createElement('canvas');
+      canvas.style.cssText = 'position:absolute;inset:0;z-index:-1;pointer-events:none;filter:blur(60px);';
+      el.prepend(canvas);
+      const ctx = canvas.getContext('2d');
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      function resize() {
+        canvas.width = Math.max(1, el.clientWidth * dpr);
+        canvas.height = Math.max(1, el.clientHeight * dpr);
+        canvas.style.width = el.clientWidth + 'px';
+        canvas.style.height = el.clientHeight + 'px';
+      }
+      resize();
+      addEventListener('resize', resize);
+      const blobs = heroColors.map(() => ({
+        color: heroColors[Math.floor(Math.random() * heroColors.length)],
+        baseX: 0.2 + Math.random() * 0.6,
+        baseY: 0.2 + Math.random() * 0.6,
+        r: 0.32 + Math.random() * 0.22,
+        speed: 0.00012 + Math.random() * 0.00008,
+        phase: Math.random() * Math.PI * 2,
+        driftX: 0.12 + Math.random() * 0.08,
+        driftY: 0.10 + Math.random() * 0.06
+      }));
+      function paint(t) {
+        const w = canvas.width, h = canvas.height;
+        if (!w || !h) return;
+        ctx.clearRect(0, 0, w, h);
+        blobs.forEach((b) => {
+          const x = (b.baseX + Math.sin(t * b.speed + b.phase) * b.driftX) * w;
+          const y = (b.baseY + Math.cos(t * b.speed * 0.8 + b.phase) * b.driftY) * h;
+          const r = b.r * Math.max(w, h);
+          const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+          g.addColorStop(0, b.color + '55');
+          g.addColorStop(1, b.color + '00');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+      if (reduceMotion) {
+        paint(0);
+      } else {
+        const loop = (t) => { paint(t); requestAnimationFrame(loop); };
+        requestAnimationFrame(loop);
+      }
+    });
+  });
+</script>
+</head>
+<body class="font-body">
+<div class="ml-60 min-h-screen bg-base font-body text-ink">
+  <div class="mx-auto max-w-3xl px-6 py-10">
+
+    <!-- Brand header -->
+    <div class="flex items-center justify-between border-b border-line pb-5">
+      <div class="flex items-center gap-2.5">
+        <span class="grid h-7 w-7 place-items-center rounded-card bg-ink text-[13px] font-bold text-base">A</span>
+        <span class="font-display text-lg font-semibold tracking-tight text-ink">AegisGraph</span>
+      </div>
+      <span class="text-xs text-muted">Safety certification, verified.</span>
+    </div>
+
+    <!-- Verified state -->
+    <div class="mt-8 rounded-card border border-line bg-surface p-6 shadow-[0_1px_2px_rgba(28,28,26,0.05),0_1px_1px_rgba(28,28,26,0.03)]">
+      <div class="flex items-start gap-5">
+        <div class="grid h-14 w-14 shrink-0 place-items-center rounded-full border bg-raised text-ink border border-line">
+          <iconify-icon icon="lucide:check" class="" style="font-size:30px"></iconify-icon>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="font-display text-2xl tracking-tight text-ink">Certificate verified</h1>
+            <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">Verified</span>
+          </div>
+          <p class="mt-3 font-display text-xl font-semibold text-ink">Priya Raghunathan</p>
+          <p class="text-sm text-muted">Process Operator, Ashgrove Steel Works</p>
+
+          <div class="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <div class="rounded-card border border-line bg-base px-3.5 py-3">
+              <p class="text-[11px] font-medium uppercase tracking-wider text-muted">Structured ID</p>
+              <p class="mt-1 font-mono text-sm font-medium text-ink">OP-44128-AGX</p>
+            </div>
+            <div class="rounded-card border border-line bg-base px-3.5 py-3">
+              <p class="text-[11px] font-medium uppercase tracking-wider text-muted">Exam score</p>
+              <p class="mt-1 font-display text-lg font-semibold leading-tight text-ink">92%</p>
+            </div>
+            <div class="rounded-card border border-line bg-base px-3.5 py-3">
+              <p class="text-[11px] font-medium uppercase tracking-wider text-muted">Issued</p>
+              <p class="mt-1 font-display text-lg font-semibold leading-tight text-ink">14 Apr 2026</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Revoked / tampered states -->
+    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+      <div class="rounded-card border border-line bg-surface p-5 shadow-[0_1px_2px_rgba(28,28,26,0.05),0_1px_1px_rgba(28,28,26,0.03)]">
+        <div class="flex items-center gap-3">
+          <div class="grid h-10 w-10 shrink-0 place-items-center rounded-lg border bg-raised text-ink border border-line">
+            <iconify-icon icon="lucide:x" class="" style="font-size:20px"></iconify-icon>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-sm font-semibold text-ink">Certificate revoked</h2>
+              <span class="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">Revoked</span>
+            </div>
+            <p class="font-mono text-xs text-muted">OP-44128-AGX</p>
+          </div>
+        </div>
+        <div class="mt-4 border-t border-line pt-3">
+          <p class="text-[11px] font-medium uppercase tracking-wider text-muted">Reason</p>
+          <p class="mt-1 text-sm leading-relaxed text-ink">Recertification not completed before expiry on 30 May 2026.</p>
+        </div>
+      </div>
+
+      <div class="rounded-card border border-line bg-surface p-5 shadow-[0_1px_2px_rgba(28,28,26,0.05),0_1px_1px_rgba(28,28,26,0.03)]">
+        <div class="flex items-center gap-3">
+          <div class="grid h-10 w-10 shrink-0 place-items-center rounded-lg border bg-raised text-ink border border-line">
+            <iconify-icon icon="lucide:x" class="" style="font-size:20px"></iconify-icon>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-sm font-semibold text-ink">Certificate not found</h2>
+              <span class="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">Unverified</span>
+            </div>
+            <p class="font-mono text-xs text-muted">OP-44128-AGX</p>
+          </div>
+        </div>
+        <div class="mt-4 border-t border-line pt-3">
+          <p class="text-[11px] font-medium uppercase tracking-wider text-muted">Reason</p>
+          <p class="mt-1 text-sm leading-relaxed text-ink">This QR code does not match any issued certificate. It may have been altered or copied.</p>
+          <p class="mt-2 text-xs text-muted">Report this badge to your safety manager.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Certificate detail card -->
+    <div class="mt-4 rounded-card border border-line bg-surface shadow-[0_1px_2px_rgba(28,28,26,0.05),0_1px_1px_rgba(28,28,26,0.03)]">
+      <div class="flex items-center justify-between border-b border-line px-5 py-4">
+        <h2 class="text-sm font-semibold text-ink">Certificate detail</h2>
+        <span class="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">Active</span>
+      </div>
+      <dl class="divide-y divide-line">
+        <div class="flex items-center justify-between gap-6 px-5 py-3.5">
+          <dt class="text-sm text-muted">Certificate number</dt>
+          <dd class="font-mono text-sm font-medium text-ink">AGX-C-00318</dd>
+        </div>
+        <div class="flex items-center justify-between gap-6 px-5 py-3.5">
+          <dt class="text-sm text-muted">Issuing company</dt>
+          <dd class="text-right text-sm font-medium text-ink">AegisGraph Compliance Services</dd>
+        </div>
+        <div class="flex items-center justify-between gap-6 px-5 py-3.5">
+          <dt class="text-sm text-muted">Certification</dt>
+          <dd class="text-right text-sm font-medium text-ink">Confined Space Entry, Level 2</dd>
+        </div>
+        <div class="flex items-center justify-between gap-6 px-5 py-3.5">
+          <dt class="text-sm text-muted">Valid from</dt>
+          <dd class="text-sm font-medium text-ink">14 Apr 2026</dd>
+        </div>
+        <div class="flex items-center justify-between gap-6 px-5 py-3.5">
+          <dt class="text-sm text-muted">Valid until</dt>
+          <dd class="text-sm font-medium text-ink">14 Apr 2029</dd>
+        </div>
+        <div class="flex items-center justify-between gap-6 px-5 py-3.5">
+          <dt class="text-sm text-muted">Verified against</dt>
+          <dd class="text-right text-sm font-medium text-ink">AegisGraph rule graph, revision 6</dd>
+        </div>
+      </dl>
+    </div>
+
+    <!-- Trust footer -->
+    <div class="mt-4 rounded-card border border-line bg-raised px-5 py-4">
+      <div class="flex items-start gap-3">
+        <div class="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface border border-line text-ink">
+          <iconify-icon icon="lucide:wifi-off" style="font-size:18px"></iconify-icon>
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium text-ink">Verified at 3:07 PM, 28 Jun 2026</p>
+          <p class="mt-1 text-xs leading-relaxed text-muted">This verification ran offline against a signed local copy of the certificate registry.</p>
+          <a href="#" class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-accent hover:text-accent/80">
+            How verification works
+            <iconify-icon icon="lucide:arrow-right" style="font-size:13px"></iconify-icon>
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

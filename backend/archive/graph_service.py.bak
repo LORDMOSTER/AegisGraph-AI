@@ -1,0 +1,293 @@
+import logging
+import random
+import time
+from typing import Any, Optional
+
+from neo4j import GraphDatabase
+from neo4j import exceptions as neo4j_exc
+
+from app.core.config import settings
+from app.core import metrics
+from app.models.schemas import (
+    AnalyticsSummary,
+    BatchIngestResponse,
+    RuleRecord,
+    SectionMetrics,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class GraphService:
+    """
+    AegisGraph AI — Neo4j Knowledge Graph Engine.
+
+    Provides:
+    - Multi-tenant Transactional batch ingestion
+    - Enhanced DCWGT traversal with strict tenant boundaries
+    - Recursive sibling-fallback when constraints cannot be met
+    - Live analytics extraction for the dashboard
+    """
+
+    def __init__(self) -> None:
+        try:
+            self._driver = GraphDatabase.driver(
+                settings.neo4j_uri,
+                auth=(settings.neo4j_user, settings.neo4j_password),
+            )
+            logger.info("Neo4j driver initialized for AegisGraph AI.")
+        except neo4j_exc.ServiceUnavailable as exc:
+            logger.error("Cannot reach Neo4j at %s: %s", settings.neo4j_uri, exc)
+            raise
+
+    def close(self) -> None:
+        self._driver.close()
+        logger.info("Neo4j driver closed.")
+
+    # ------------------------------------------------------------------
+    # Batch Ingestion
+    # ------------------------------------------------------------------
+
+    def batch_ingest(
+        self, company_code: str, manual_metadata: dict, rules: list[dict], clear_existing: bool = False
+    ) -> BatchIngestResponse:
+        """
+        Transactional bulk ingest of enriched rule records enforcing multi-tenant boundaries.
+
+        Args:
+            company_code: The tenant identifier.
+            manual_metadata: Metadata containing 'manual_id' and other manual details.
+            rules: List of rule dictionaries.
+            clear_existing: Wipe the tenant's existing graph before ingestion.
+
+        Returns:
+            BatchIngestResponse with counts and wall-clock duration.
+        """
+        start = time.perf_counter()
+        manual_id = manual_metadata.get("manual_id", f"{company_code}-DEFAULT-MANUAL")
+
+        with self._driver.session() as session:
+            if clear_existing:
+                session.run(
+                    "MATCH (c:Company {company_code: $company_code})<-[:BELONGS_TO]-(m:Manual)-[*]->(n) DETACH DELETE m, n",
+                    company_code=company_code
+                )
+                logger.info(f"Graph cleared for tenant {company_code}.")
+
+            cypher = """
+            UNWIND $rules AS row
+            MERGE (c:Company {company_code: $company_code})
+            MERGE (c)<-[:BELONGS_TO]-(m:Manual {manual_id: $manual_id})
+            MERGE (m)-[:HAS_SECTION]->(s:Section {name: row.section})
+            MERGE (s)-[:CONTAINS]->(sc:SubCategory {name: row.subcategory})
+            MERGE (sc)-[:DEFINES]->(r:Rule {rule_id: row.rule_id})
+            SET r.text                    = row.text,
+                r.risk_score              = toInteger(row.risk_score),
+                r.cognitive_level         = row.cognitive_level,
+                r.response_time_sec       = toInteger(row.response_time_sec),
+                r.is_active               = coalesce(row.is_active, true)
+            """
+            
+            payload = []
+            for r in rules:
+                payload.append({
+                    "section": r.get("section", "General"),
+                    "subcategory": r.get("subcategory", "General"),
+                    "rule_id": r["rule_id"],
+                    "text": r["text"],
+                    "risk_score": r.get("risk_score", 5),
+                    "cognitive_level": r.get("cognitive_level", "Understand"),
+                    "response_time_sec": r.get("response_time_sec", 60),
+                    "is_active": r.get("is_active", True)
+                })
+
+            session.run(cypher, company_code=company_code, manual_id=manual_id, rules=payload)
+            logger.info(f"Ingested {len(rules)} rules for tenant {company_code}.")
+
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        metrics.record_query_latency(duration_ms)
+
+        return BatchIngestResponse(
+            ingested_count=len(rules),
+            cleared=clear_existing,
+            duration_ms=duration_ms,
+        )
+
+    # ------------------------------------------------------------------
+    # DCWGT Traversal — Primary & Fallback
+    # ------------------------------------------------------------------
+
+    def _fetch_rules_for_section(self, company_code: str, section: str) -> list[dict[str, Any]]:
+        """Primary graph traversal for a named Section bound to a tenant."""
+        cypher = """
+        MATCH (c:Company {company_code: $company_code})<-[:BELONGS_TO]-(:Manual)-[:HAS_SECTION]->(s:Section {name: $section})-[:CONTAINS]->(sc:SubCategory)-[:DEFINES]->(r:Rule)
+        WHERE coalesce(r.is_active, true) = true
+        RETURN r.rule_id               AS id,
+               r.text                  AS text,
+               sc.name                 AS sub_category,
+               coalesce(r.risk_score, 5) AS risk_score,
+               coalesce(r.cognitive_level, 'Understand') AS cognitive_level,
+               coalesce(r.response_time_sec, 60)  AS estimated_response_time,
+               '1.0'                   AS revision_version
+        """
+        t0 = time.perf_counter()
+        try:
+            with self._driver.session() as session:
+                records = session.run(cypher, company_code=company_code, section=section)
+                result = [dict(rec) for rec in records]
+            elapsed = round((time.perf_counter() - t0) * 1000, 2)
+            logger.debug(f"Primary query for '{section}' took {elapsed:.2f} ms, returned {len(result)} rows.")
+            return result
+        except Exception as exc:
+            logger.error(f"Cypher query failed for section '{section}': {exc}")
+            return []
+
+    def _fetch_sibling_fallback(
+        self, company_code: str, exclude_section: str, exclude_ids: list[str]
+    ) -> list[dict[str, Any]]:
+        """
+        Recursive fallback: when a section does not have enough rules,
+        pull from sibling sections ordered by risk_score descending.
+        This ensures the constraint is satisfied without crashing.
+        """
+        cypher = """
+        MATCH (c:Company {company_code: $company_code})<-[:BELONGS_TO]-(:Manual)-[:HAS_SECTION]->(s:Section)-[:CONTAINS]->(sc:SubCategory)-[:DEFINES]->(r:Rule)
+        WHERE s.name <> $section AND NOT r.rule_id IN $exclude_ids AND coalesce(r.is_active, true) = true
+        RETURN r.rule_id               AS id,
+               r.text                  AS text,
+               sc.name                 AS sub_category,
+               coalesce(r.risk_score, 5) AS risk_score,
+               coalesce(r.cognitive_level, 'Understand') AS cognitive_level,
+               coalesce(r.response_time_sec, 60)  AS estimated_response_time,
+               '1.0'                   AS revision_version
+        ORDER BY r.risk_score DESC
+        """
+        try:
+            with self._driver.session() as session:
+                records = session.run(cypher, company_code=company_code, section=exclude_section, exclude_ids=exclude_ids)
+                result = [dict(rec) for rec in records]
+            logger.info(f"Sibling fallback for '{exclude_section}' found {len(result)} candidate rules.")
+            return result
+        except Exception as exc:
+            logger.error(f"Sibling fallback query failed: {exc}")
+            return []
+
+    # ------------------------------------------------------------------
+    # Public DCWGT Entry Point
+    # ------------------------------------------------------------------
+
+    def generate_constrained_dataset(
+        self, company_code: str, constraints: dict[str, int]
+    ) -> tuple[list[RuleRecord], float]:
+        """
+        Core DCWGT v2 Algorithm with recursive fallback and ms profiling.
+        """
+        logger.info(f"DCWGT v2 traversal started for tenant {company_code}. Constraints: {constraints}")
+        pipeline_start = time.perf_counter()
+        verified: list[RuleRecord] = []
+        collected_ids: list[str] = []
+
+        for section, required_count in constraints.items():
+            available = self._fetch_rules_for_section(company_code, section)
+
+            if not available:
+                logger.warning(f"No rules found for section: {section}")
+                available = []
+
+            shortage = required_count - len(available)
+
+            if shortage > 0:
+                logger.warning(
+                    f"Constraint mismatch for '{section}': need {required_count}, found {len(available)}. "
+                    f"Activating recursive sibling fallback for {shortage} rule(s)."
+                )
+                fallback = self._fetch_sibling_fallback(
+                    company_code=company_code,
+                    exclude_section=section,
+                    exclude_ids=collected_ids + [r["id"] for r in available],
+                )
+                available.extend(fallback[:shortage])
+
+            sample_size = min(required_count, len(available))
+            selected = random.sample(available, sample_size)
+
+            for rule in selected:
+                collected_ids.append(rule["id"])
+                verified.append(
+                    RuleRecord(
+                        id=rule["id"],
+                        text=rule["text"],
+                        sub_category=rule["sub_category"],
+                        risk_score=float(rule.get("risk_score") or 5.0),
+                        cognitive_level=str(rule.get("cognitive_level") or "Understand"),
+                        estimated_response_time=int(rule.get("estimated_response_time") or 60),
+                        revision_version=str(rule.get("revision_version") or "1.0"),
+                    )
+                )
+
+            logger.info(f"Locked {len(selected)} rule(s) for section: {section}")
+
+        total_ms = round((time.perf_counter() - pipeline_start) * 1000, 2)
+        metrics.record_query_latency(total_ms)
+        logger.info(
+            f"DCWGT v2 complete. {len(verified)} rules extracted in {total_ms:.2f} ms."
+        )
+        return verified, total_ms
+
+    # ------------------------------------------------------------------
+    # Analytics
+    # ------------------------------------------------------------------
+
+    def get_analytics(self, company_code: str) -> AnalyticsSummary:
+        """
+        Aggregate graph statistics bounded by tenant.
+        """
+        totals_cypher = """
+        MATCH (c:Company {company_code: $company_code})<-[:BELONGS_TO]-(m:Manual)-[:HAS_SECTION]->(s:Section)-[:CONTAINS]->(sc:SubCategory)-[:DEFINES]->(r:Rule)
+        RETURN
+            count(DISTINCT r) AS rules,
+            count(DISTINCT s) AS sections,
+            count(DISTINCT sc) AS subcategories
+        """
+        section_cypher = """
+        MATCH (c:Company {company_code: $company_code})<-[:BELONGS_TO]-(m:Manual)-[:HAS_SECTION]->(s:Section)
+        OPTIONAL MATCH (s)-[:CONTAINS]->(:SubCategory)-[:DEFINES]->(r:Rule)
+        RETURN s.name AS name,
+               count(r) AS rule_count,
+               coalesce(avg(r.risk_score), 0.0) AS avg_risk_score
+        ORDER BY rule_count DESC
+        """
+        try:
+            with self._driver.session() as session:
+                totals = session.run(totals_cypher, company_code=company_code).single()
+                section_rows = list(session.run(section_cypher, company_code=company_code))
+
+            section_metrics = [
+                SectionMetrics(
+                    name=row["name"],
+                    rule_count=row["rule_count"],
+                    avg_risk_score=round(float(row["avg_risk_score"]), 2),
+                )
+                for row in section_rows
+            ]
+
+            return AnalyticsSummary(
+                total_rules=totals["rules"] if totals else 0,
+                total_sections=totals["sections"] if totals else 0,
+                total_subcategories=totals["subcategories"] if totals else 0,
+                section_metrics=section_metrics,
+                last_inference_latency_ms=metrics.get_last_inference_latency(),
+                last_query_latency_ms=metrics.get_last_query_latency(),
+                latency_history=metrics.get_latency_history(),
+            )
+        except Exception as exc:
+            logger.error(f"Analytics query failed: {exc}")
+            return AnalyticsSummary(
+                total_rules=0,
+                total_sections=0,
+                total_subcategories=0,
+                section_metrics=[],
+                last_inference_latency_ms=None,
+                last_query_latency_ms=None,
+                latency_history=[],
+            )

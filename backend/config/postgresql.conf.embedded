@@ -1,0 +1,19 @@
+# PostgreSQL configuration tuned for AegisGraph AI Edge-AI Deployment
+# Optimized for 8GB-16GB industrial PCs running local LLM inference
+
+# Network
+listen_addresses = 'localhost'
+max_connections = 50
+
+# Memory Constraints (Strict tuning to prevent LLM OOM)
+shared_buffers = 128MB
+work_mem = 4MB
+maintenance_work_mem = 16MB
+effective_cache_size = 256MB
+
+# Logging
+log_destination = 'stderr'
+logging_collector = on
+log_directory = 'pg_log'
+log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+log_min_duration_statement = 500  # Log slow queries over 500ms

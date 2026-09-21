@@ -1,0 +1,202 @@
+[
+  {
+    "id": "REG-001",
+    "section": "Emergency Protocol",
+    "sub_category": "Critical Shutdown",
+    "rule": "In the event of a hydraulic pressure surge exceeding 2500 PSI, the operator must immediately strike the primary Red E-Stop plunger located on the left-side console panel.",
+    "risk_score": 9.8,
+    "cognitive_level": "Apply",
+    "estimated_response_time": 30,
+    "revision_version": "2.1"
+  },
+  {
+    "id": "REG-002",
+    "section": "Emergency Protocol",
+    "sub_category": "Fire Suppression",
+    "rule": "If an engine compartment thermal sensor triggers an alarm, park the heavy machinery away from high-combustible areas, lower all ground attachments, and activate the cabin-mounted Halon fire suppression switch.",
+    "risk_score": 9.5,
+    "cognitive_level": "Apply",
+    "estimated_response_time": 45,
+    "revision_version": "2.0"
+  },
+  {
+    "id": "REG-003",
+    "section": "Emergency Protocol",
+    "sub_category": "Rollover Response",
+    "rule": "During an unrecoverable structural tipping event, operators must strictly brace against the ROPS frame, cross their arms over their chest, and absolutely refrain from attempting to jump clear of the falling cabin.",
+    "risk_score": 10.0,
+    "cognitive_level": "Analyze",
+    "estimated_response_time": 15,
+    "revision_version": "3.0"
+  },
+  {
+    "id": "REG-004",
+    "section": "Emergency Protocol",
+    "sub_category": "Toxic Gas Detection",
+    "rule": "When the cabin atmospheric multi-gas detector flashes red indicating H2S presence exceeding 10 ppm, instantly don the 5-minute emergency escape breathing apparatus (EEBA) before initiating the evacuation sequence.",
+    "risk_score": 9.9,
+    "cognitive_level": "Evaluate",
+    "estimated_response_time": 20,
+    "revision_version": "1.8"
+  },
+  {
+    "id": "REG-005",
+    "section": "Routine Check",
+    "sub_category": "Pre-Shift Inspection",
+    "rule": "Before starting the machine engine, the operator must perform a physical walkaround to inspect the undercarriage tread lines for structural fracturing, missing retention pins, or excessive mud packing.",
+    "risk_score": 6.5,
+    "cognitive_level": "Understand",
+    "estimated_response_time": 60,
+    "revision_version": "1.8"
+  },
+  {
+    "id": "REG-006",
+    "section": "Routine Check",
+    "sub_category": "Fluid Metrics",
+    "rule": "Verify that transmission, hydraulic, and coolant reservoir fluid sight glasses indicate levels within the marked optimal running boundaries strictly when the engine block is completely cold.",
+    "risk_score": 5.5,
+    "cognitive_level": "Analyze",
+    "estimated_response_time": 90,
+    "revision_version": "1.5"
+  },
+  {
+    "id": "REG-007",
+    "section": "Routine Check",
+    "sub_category": "Visibility Systems",
+    "rule": "All 360-degree camera feeds, active LiDAR proximity radar displays, and physical mirror alignment must be confirmed operational before commencing any reversing or blind-spot traversal operations.",
+    "risk_score": 7.8,
+    "cognitive_level": "Evaluate",
+    "estimated_response_time": 55,
+    "revision_version": "1.7"
+  },
+  {
+    "id": "REG-008",
+    "section": "Routine Check",
+    "sub_category": "Pneumatic Pressure",
+    "rule": "Tire pressure on all wheel-based loaders must be manually gauged and confirmed to be within 5% of the manufacturer's load-adjusted spec to prevent sidewall blowout under maximum payload.",
+    "risk_score": 7.2,
+    "cognitive_level": "Understand",
+    "estimated_response_time": 120,
+    "revision_version": "2.1"
+  },
+  {
+    "id": "REG-009",
+    "section": "Maintenance",
+    "sub_category": "Lubrication",
+    "rule": "The secondary articulation knuckles and boom pivot points must be grease-injected using the pneumatic Molybdenum lubrication tool every 50 operating hours to mitigate friction welding risks.",
+    "risk_score": 7.2,
+    "cognitive_level": "Apply",
+    "estimated_response_time": 75,
+    "revision_version": "1.9"
+  },
+  {
+    "id": "REG-010",
+    "section": "Maintenance",
+    "sub_category": "Brake System",
+    "rule": "Dynamic braking performance tests must be conducted at a controlled 15 km/h every 200 operational hours on all load-bearing axle assemblies, with results digitally signed in the maintenance registry.",
+    "risk_score": 8.5,
+    "cognitive_level": "Analyze",
+    "estimated_response_time": 120,
+    "revision_version": "2.0"
+  },
+  {
+    "id": "REG-011",
+    "section": "Maintenance",
+    "sub_category": "Filter Replacement",
+    "rule": "Hydraulic oil filters must be replaced with OEM-certified components every 500 operating hours or immediately upon detection of anomalous bronze particulates in the scheduled oil spectral analysis.",
+    "risk_score": 6.8,
+    "cognitive_level": "Understand",
+    "estimated_response_time": 80,
+    "revision_version": "1.6"
+  },
+  {
+    "id": "REG-012",
+    "section": "Maintenance",
+    "sub_category": "Structural Integrity",
+    "rule": "Perform an ultrasonic non-destructive testing (NDT) scan on the primary lifting boom welds annually to identify microscopic stress fractures invisible to the naked eye.",
+    "risk_score": 8.9,
+    "cognitive_level": "Create",
+    "estimated_response_time": 300,
+    "revision_version": "3.1"
+  },
+  {
+    "id": "REG-013",
+    "section": "High-Voltage Systems",
+    "sub_category": "Lockout/Tagout (LOTO)",
+    "rule": "Before servicing the electric drive motors, the master battery disconnect switch must be thrown, a personal padlock applied, and the digital isolation verified via the zero-energy test meter.",
+    "risk_score": 9.7,
+    "cognitive_level": "Apply",
+    "estimated_response_time": 180,
+    "revision_version": "4.0"
+  },
+  {
+    "id": "REG-014",
+    "section": "High-Voltage Systems",
+    "sub_category": "Cable Inspection",
+    "rule": "Orange 600V trailing power cables must be elevated on insulated A-frames during ground-level water pooling events to prevent arc-flash electrocution hazards to nearby ground personnel.",
+    "risk_score": 9.4,
+    "cognitive_level": "Evaluate",
+    "estimated_response_time": 60,
+    "revision_version": "2.5"
+  },
+  {
+    "id": "REG-015",
+    "section": "High-Voltage Systems",
+    "sub_category": "Inverter Maintenance",
+    "rule": "Allow exactly 15 minutes of discharge time after powering down the main AC inverter before opening the housing panel to ensure internal capacitors have fully bled their lethal residual charge.",
+    "risk_score": 9.9,
+    "cognitive_level": "Analyze",
+    "estimated_response_time": 900,
+    "revision_version": "2.2"
+  },
+  {
+    "id": "REG-016",
+    "section": "High-Voltage Systems",
+    "sub_category": "PPE Requirements",
+    "rule": "Class 2 electrically insulated gloves with leather protectors and a 40 cal/cm2 arc flash face shield are strictly mandatory when racking in or out the main heavy machinery power contactors.",
+    "risk_score": 9.1,
+    "cognitive_level": "Understand",
+    "estimated_response_time": 45,
+    "revision_version": "3.3"
+  },
+  {
+    "id": "REG-017",
+    "section": "Hazardous Materials",
+    "sub_category": "Spill Containment",
+    "rule": "In the event of a hydraulic fluid rupture exceeding 50 liters, immediately deploy the polyacrylate chemical booms to isolate the spill from site drainage grates before notifying the environmental officer.",
+    "risk_score": 8.2,
+    "cognitive_level": "Apply",
+    "estimated_response_time": 120,
+    "revision_version": "1.4"
+  },
+  {
+    "id": "REG-018",
+    "section": "Hazardous Materials",
+    "sub_category": "Battery Acid Exposure",
+    "rule": "If lead-acid battery electrolyte makes contact with the operator's skin or eyes, proceed instantly to the emergency deluge shower and flush the affected area continuously for a minimum of 15 minutes.",
+    "risk_score": 9.6,
+    "cognitive_level": "Remember",
+    "estimated_response_time": 10,
+    "revision_version": "2.8"
+  },
+  {
+    "id": "REG-019",
+    "section": "Hazardous Materials",
+    "sub_category": "Asbestos Protocol",
+    "rule": "When servicing legacy braking components suspected of containing asbestos friction material, wet-wipe methods with HEPA vacuums must be utilized; compressed air cleaning is strictly prohibited by federal law.",
+    "risk_score": 9.0,
+    "cognitive_level": "Evaluate",
+    "estimated_response_time": 240,
+    "revision_version": "4.1"
+  },
+  {
+    "id": "REG-020",
+    "section": "Hazardous Materials",
+    "sub_category": "Fueling Procedure",
+    "rule": "During diesel refueling operations, the dispensing nozzle must remain in continuous metal-to-metal contact with the filler neck to dissipate static electricity buildup and prevent vapor ignition.",
+    "risk_score": 8.7,
+    "cognitive_level": "Apply",
+    "estimated_response_time": 40,
+    "revision_version": "1.9"
+  }
+]

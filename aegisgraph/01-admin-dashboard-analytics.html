@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="generator" content="inspoai-v3"/>
+<meta name="inspoai-dna" content="soft-productivity"/>
+<meta name="inspoai-platform" content="web"/>
+<meta name="inspoai-taste" content="v2"/>
+<title>AegisGraph — Admin Dashboard Analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config = {"theme":{"extend":{"colors":{"base":"#F9F9F8","surface":"#FFFFFF","raised":"#F1F1EF","line":"#E4E4E1","ink":"#1C1C1A","muted":"#71716C","accent":"#2563EB","accentInk":"#FFFFFF","accent2":"#0D9488"},"fontFamily":{"display":["Inter Tight","sans-serif"],"body":["Inter","sans-serif"],"mono":["IBM Plex Mono","monospace"]},"borderRadius":{"card":"0.625rem"}}}};</script>
+<script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+<style>
+  html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  body { font-family: 'Inter', sans-serif; background: #F9F9F8; color: #1C1C1A; }
+  /* Canvas embed: the canvas auto-sizes the iframe to the page's full height,
+  so 100vh sections would balloon with it (measure → grow → re-expand loop).
+  When embedded, pin *-screen sections to a fixed desktop viewport instead. */
+  .v3-embedded .h-screen { height: 900px !important; }
+  .v3-embedded .min-h-screen { min-height: 900px !important; }
+  ::selection { background: #2563EB33; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #E4E4E1; border-radius: 8px; border: 2px solid #F9F9F8; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  iconify-icon { display: inline-block; vertical-align: middle; }
+  /* Photos must never distort: cover-crop instead of stretch when a sized
+     container disagrees with the image's aspect ratio (browser default is
+     "fill"). Images without forced dimensions are unaffected. */
+  img { object-fit: cover; }
+  [x-cloak] { display: none !important; }
+  input, textarea, select, button { font-family: inherit; }
+  html { scroll-behavior: smooth; }
+  /* Inline text editing (canvas editor only — the shell script arms it when embedded) */
+  .v3-editing { outline: 2px dashed #2563EB; outline-offset: 3px; border-radius: 4px; cursor: text !important; }
+  /* Scroll-reveal (auto-applied by the shell script below).
+     Taste v2: content is NEVER hidden waiting for a reveal (the anti-slop
+     law's invisible-content trap — a failed observer, a screenshot pass or an
+     export must still show the full page). The motion becomes a settle from a
+     small offset: always readable, never opacity-gated. */
+  @media (prefers-reduced-motion: no-preference) {
+    .v3-reveal { transform: translateY(16px); }
+    .v3-reveal.v3-in { transform: none; transition: transform 0.65s cubic-bezier(0.22,1,0.36,1); }
+    a, button { transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease; }
+  }
+  /* One-time confetti burst (auto-armed by [data-confetti] — see script below) */
+  @keyframes v3-confetti-burst {
+    0% { transform: translate(0,0) rotate(0deg) scale(1); opacity: 1; }
+    100% { transform: translate(var(--v3cx), var(--v3cy)) rotate(var(--v3cr)) scale(0.4); opacity: 0; }
+  }
+  .v3-confetti-piece {
+    position: fixed; top: 0; left: 0; width: 8px; height: 8px; pointer-events: none; z-index: 9999;
+    animation: v3-confetti-burst 1.1s cubic-bezier(0.15,0.7,0.3,1) forwards;
+  }
+  /* Shared film-grain texture for the photo treatment layer (lint.js) — one
+     data-URI noise tile, reused via mix-blend-mode + opacity, never
+     regenerated per image. */
+  .v3-grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 140px 140px;
+    mix-blend-mode: overlay;
+  }
+</style>
+<script>
+  // Embedded documents (canvas iframes): the canvas auto-sizes the iframe to
+  // the page's full height, so any vh-based sizing would balloon with it
+  // (measure -> grow -> re-expand loop). Pin EVERY vh-derived Tailwind class
+  // to a fixed 900px reference viewport via inline styles (beats everything).
+  // Real tabs (live preview, downloaded code) keep true viewport units.
+  // AI-generated images (pollinations renders on demand) can time out or 502
+  // under burst load: retry once with a cache-buster, then swap to a stock
+  // fallback — a broken-image icon must never ship.
+  document.addEventListener('error', function (e) {
+    var el = e.target;
+    if (!el || el.tagName !== 'IMG' || !el.src) return;
+    var n = +(el.getAttribute('data-v3-retry') || 0);
+    el.setAttribute('data-v3-retry', String(n + 1));
+    if (n < 2) {
+      // 429s need breathing room: 3s, then 8s, staggered per image
+      var src = el.src.replace(/[?&]v3r=d+/, '');
+      var wait = (n === 0 ? 3000 : 8000) + Math.random() * 2000;
+      setTimeout(function () { el.src = src + (src.indexOf('?') > -1 ? '&' : '?') + 'v3r=' + Date.now(); }, wait);
+    } else {
+      var h = 0, s = el.src;
+      for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+      el.src = 'https://picsum.photos/seed/v3' + h + '/1200/900';
+    }
+  }, true);
+
+  window.__v3FixVh = function () {};
+  if (window.self !== window.top) {
+    document.documentElement.classList.add('v3-embedded');
+    window.__v3FixVh = function () {
+      var PX_PER_VH = 9; // 900px reference viewport
+      document.querySelectorAll('[class]').forEach(function (el) {
+        el.classList.forEach(function (c) {
+          var m;
+          if (/^h-(screen|dvh|svh|lvh)$/.test(c)) el.style.setProperty('height', '900px', 'important');
+          else if (/^min-h-(screen|dvh|svh|lvh)$/.test(c)) el.style.setProperty('min-height', '900px', 'important');
+          else if (/^max-h-(screen|dvh|svh|lvh)$/.test(c)) el.style.setProperty('max-height', '900px', 'important');
+          else if ((m = c.match(/^h-[(d+)(?:d|s|l)?vh]$/))) el.style.setProperty('height', (m[1] * PX_PER_VH) + 'px', 'important');
+          else if ((m = c.match(/^min-h-[(d+)(?:d|s|l)?vh]$/))) el.style.setProperty('min-height', (m[1] * PX_PER_VH) + 'px', 'important');
+          else if ((m = c.match(/^max-h-[(d+)(?:d|s|l)?vh]$/))) el.style.setProperty('max-height', (m[1] * PX_PER_VH) + 'px', 'important');
+        });
+        // Inline style="...vh" from the model gets the same treatment
+        var st = el.getAttribute('style');
+        if (st && /d(?:d|s|l)?vh/.test(st)) {
+          el.setAttribute('style', st.replace(/(d+(?:.d+)?)(?:d|s|l)?vh/g, function (_, n) { return (parseFloat(n) * PX_PER_VH) + 'px'; }));
+        }
+      });
+    };
+    addEventListener('DOMContentLoaded', window.__v3FixVh);
+
+    // Inline text editing: double-click any pure-text element to edit it in
+    // place. On commit the new text is posted to the canvas, which patches the
+    // stored document (the live DOM already shows the edit — no reload).
+    var v3EditEl = null, v3EditOrig = '', v3EditOrigHtml = '', v3EditIdx = 0;
+    var v3Norm = function (s) { return String(s || '').replace(/\s+/g, ' ').trim(); };
+    // Editable = text with at most <br> line breaks inside (multi-line
+    // headlines) — anything with real child markup keeps its styling safe.
+    var v3Editable = function (el) {
+      if (!v3Norm(el.textContent)) return false;
+      for (var i = 0; i < el.children.length; i++) {
+        if (el.children[i].tagName !== 'BR') return false;
+      }
+      return true;
+    };
+    function v3EndEdit(commit) {
+      var el = v3EditEl; if (!el) return; v3EditEl = null;
+      el.removeAttribute('contenteditable');
+      el.classList.remove('v3-editing');
+      if (!commit) { el.innerHTML = v3EditOrigHtml; return; }
+      if (el.innerHTML === v3EditOrigHtml) return;
+      parent.postMessage({
+        type: 'v3-edit',
+        tag: el.tagName.toLowerCase(),
+        origText: v3EditOrig,
+        newText: el.textContent,
+        newHtml: el.innerHTML,
+        matchIndex: v3EditIdx
+      }, '*');
+    }
+    document.addEventListener('dblclick', function (e) {
+      var t = e.target && e.target.closest && e.target.closest('h1,h2,h3,h4,h5,h6,p,a,button,span,li,td,th,dt,dd,blockquote,figcaption,label,legend,summary');
+      if (!t || t === v3EditEl) return;
+      if (!v3Editable(t)) return;
+      e.preventDefault(); e.stopPropagation();
+      if (v3EditEl) v3EndEdit(true);
+      v3EditEl = t; v3EditOrig = t.textContent; v3EditOrigHtml = t.innerHTML;
+      // Which duplicate is this? (e.g. two "Learn more" buttons) — lets the
+      // canvas patch the right one in the source document.
+      var same = [].filter.call(document.querySelectorAll(t.tagName), function (n) {
+        return v3Editable(n) && v3Norm(n.textContent) === v3Norm(v3EditOrig);
+      });
+      v3EditIdx = Math.max(0, [].indexOf.call(same, t));
+      try { t.contentEditable = 'plaintext-only'; } catch (_) { t.contentEditable = 'true'; }
+      t.classList.add('v3-editing');
+      t.focus();
+    }, true);
+    document.addEventListener('focusout', function (e) { if (v3EditEl && e.target === v3EditEl) v3EndEdit(true); }, true);
+    document.addEventListener('keydown', function (e) {
+      if (!v3EditEl) return;
+      if (e.key === 'Escape') { e.preventDefault(); v3EndEdit(false); }
+      else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); v3EditEl.blur(); }
+    }, true);
+    // While editing a link/button, a click must not navigate or toggle anything
+    document.addEventListener('click', function (e) {
+      if (v3EditEl && v3EditEl.contains(e.target)) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
+  }
+  // Live-build channel: the canvas injects streamed body updates without
+  // reloading the document (a reload would re-fetch Tailwind/fonts each time).
+  addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'v3-body' && typeof e.data.html === 'string') {
+      document.body.innerHTML = e.data.html;
+      window.__v3FixVh();
+    } else if (e.data && e.data.type === 'v3-html' && typeof e.data.html === 'string') {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(e.data.html, 'text/html');
+        
+        // 1. Update body contents
+        document.body.innerHTML = doc.body.innerHTML;
+        document.body.className = doc.body.className;
+        if (doc.body.style.cssText) {
+          document.body.style.cssText = doc.body.style.cssText;
+        }
+        
+        // 2. Update Tailwind config dynamically
+        const configScript = doc.querySelector('script:not([src])');
+        if (configScript && window.tailwind) {
+          try {
+            const match = configScript.innerHTML.match(/tailwind.configs*=s*([sS]*)/);
+            if (match) {
+              const configObj = new Function('return ' + match[1].trim())();
+              tailwind.config = configObj;
+            }
+          } catch (err) {
+            console.error('Tailwind config re-evaluation failed:', err);
+          }
+        }
+        
+        // 3. Update Google Fonts link
+        const oldFontLink = document.querySelector('link[href*="fonts.googleapis.com"]');
+        const newFontLink = doc.querySelector('link[href*="fonts.googleapis.com"]');
+        if (oldFontLink && newFontLink) {
+          oldFontLink.href = newFontLink.href;
+        }
+        
+        // 4. Update head style tag (scrollbars, selection colors)
+        const oldStyle = document.querySelector('style');
+        const newStyle = doc.querySelector('style');
+        if (oldStyle && newStyle) {
+          oldStyle.innerHTML = newStyle.innerHTML;
+        }
+        window.__v3FixVh();
+      } catch (err) {
+        console.error('v3-html instant retheme failed:', err);
+      }
+    }
+  });
+</script>
+<script>
+  // Framer-motion-style entrance: top-level sections/cards fade-slide in with
+  // a stagger as they scroll into view; on marketing pages each section's own
+  // content (headlines, copy, images, cards) staggers in too. Deterministic —
+  // never model-written.
+  addEventListener('DOMContentLoaded', () => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    // App chrome (sidebars, navs, tab bars, headers) must NEVER be animated —
+    // only page content. In app shells animate the main column's children;
+    // on marketing pages animate top-level sections.
+    const isAppShell = !!document.querySelector('aside, [class*="h-screen"]');
+    let targets;
+    if (isAppShell) {
+      const main = document.querySelector('main') || document.body;
+      targets = Array.from(main.children).filter(el => !['HEADER', 'NAV', 'ASIDE'].includes(el.tagName));
+      // If main has a single content wrapper, animate its children instead
+      if (targets.length === 1 && targets[0].children.length > 1) targets = Array.from(targets[0].children);
+    } else {
+      const roots = document.querySelectorAll('body > section, body > footer, body > div > section, body > div > footer, main > section');
+      targets = roots.length > 1 ? Array.from(roots) : [];
+    }
+    // Marketing sections: stagger the section's content row-by-row. Descend
+    // through single-wrapper containers to the real content children.
+    const markChildren = (section) => {
+      let root = section;
+      while (root.children.length === 1 && root.children[0].children.length) root = root.children[0];
+      const kids = Array.from(root.children).filter(k => !['SCRIPT', 'STYLE'].includes(k.tagName)).slice(0, 10);
+      if (kids.length < 2) return;
+      kids.forEach((k, i) => {
+        k.classList.add('v3-reveal');
+        k.style.transitionDelay = Math.min(i * 80, 480) + 'ms';
+      });
+    };
+    let order = 0;
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        const el = e.target;
+        setTimeout(() => {
+          el.classList.add('v3-in');
+          el.querySelectorAll('.v3-reveal').forEach(k => k.classList.add('v3-in'));
+        }, (order++ % 4) * 90);
+        io.unobserve(el);
+      }
+    }, { threshold: 0.08, rootMargin: '0px 0px -6% 0px' });
+    targets.forEach(el => {
+      if (['SCRIPT', 'STYLE', 'NAV', 'ASIDE', 'HEADER'].includes(el.tagName)) return;
+      el.classList.add('v3-reveal');
+      if (!isAppShell) markChildren(el);
+      io.observe(el);
+    });
+    // Safety: anything hidden but already inside the viewport after 1.5s
+    // becomes visible. Below-the-fold content stays armed so the reveal
+    // still plays when the user scrolls to it.
+    setTimeout(() => {
+      document.querySelectorAll('.v3-reveal:not(.v3-in)').forEach(el => {
+        const r = el.getBoundingClientRect();
+        if (r.top < innerHeight && r.bottom > 0) el.classList.add('v3-in');
+      });
+    }, 1500);
+    // Buttery inertia scrolling (Lenis) on marketing pages — app shells keep
+    // native scrolling for their inner panels.
+    if (!isAppShell && document.body.scrollHeight > innerHeight * 1.2) {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/lenis@1.3.4/dist/lenis.min.js';
+      s.onload = () => {
+        try {
+          document.documentElement.style.scrollBehavior = 'auto'; // Lenis replaces CSS smooth scroll
+          const lenis = new Lenis({ duration: 1.1, smoothWheel: true, anchors: true });
+          const raf = (t) => { lenis.raf(t); requestAnimationFrame(raf); };
+          requestAnimationFrame(raf);
+        } catch (err) { /* native scrolling still works */ }
+      };
+      document.head.appendChild(s);
+    }
+  });
+</script>
+<script>
+  // One-time confetti burst for celebration/success moments. The model marks
+  // the moment with a bare data-confetti attribute — no JS, no external
+  // library (Lottie/canvas-confetti CDNs are never loaded in this shell and
+  // would render broken/static). Fires exactly once per element, on-brand
+  // colors, self-cleans — never a loop.
+  addEventListener('DOMContentLoaded', () => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const v3ConfettiColors = ['#2563EB', '#0D9488', '#2563EB', '#1C1C1A'];
+    document.querySelectorAll('[data-confetti]').forEach((el) => {
+      el.removeAttribute('data-confetti');
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+      const pieces = [];
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < 26; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 60 + Math.random() * 120;
+        const p = document.createElement('span');
+        p.className = 'v3-confetti-piece';
+        p.style.left = cx + 'px';
+        p.style.top = cy + 'px';
+        p.style.background = v3ConfettiColors[i % v3ConfettiColors.length];
+        p.style.borderRadius = i % 3 === 0 ? '50%' : '2px';
+        p.style.setProperty('--v3cx', Math.cos(angle) * dist + 'px');
+        p.style.setProperty('--v3cy', (Math.sin(angle) * dist - 40) + 'px');
+        p.style.setProperty('--v3cr', (Math.random() * 480 - 240) + 'deg');
+        p.style.animationDelay = (Math.random() * 120) + 'ms';
+        frag.appendChild(p);
+        pieces.push(p);
+      }
+      document.body.appendChild(frag);
+      setTimeout(() => pieces.forEach((p) => p.remove()), 1500);
+    });
+  });
+</script>
+<script>
+  // Selective hero background: a lightweight Canvas2D animated gradient-blob
+  // field (never WebGL/Three.js — deliberately cheap, deterministic, and
+  // impossible for the model to get wrong since it never writes the canvas
+  // code itself). The model only opts a hero section in via a bare
+  // data-hero-canvas attribute; this mounts and animates it in this DNA's
+  // own accent colors. z-index:-1 keeps it behind normal in-flow content
+  // without needing to touch the model's own markup.
+  addEventListener('DOMContentLoaded', () => {
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const heroColors = ['#2563EB', '#0D9488', '#2563EB'];
+    document.querySelectorAll('[data-hero-canvas]').forEach((el) => {
+      el.removeAttribute('data-hero-canvas');
+      if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+      const canvas = document.createElement('canvas');
+      canvas.style.cssText = 'position:absolute;inset:0;z-index:-1;pointer-events:none;filter:blur(60px);';
+      el.prepend(canvas);
+      const ctx = canvas.getContext('2d');
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      function resize() {
+        canvas.width = Math.max(1, el.clientWidth * dpr);
+        canvas.height = Math.max(1, el.clientHeight * dpr);
+        canvas.style.width = el.clientWidth + 'px';
+        canvas.style.height = el.clientHeight + 'px';
+      }
+      resize();
+      addEventListener('resize', resize);
+      const blobs = heroColors.map(() => ({
+        color: heroColors[Math.floor(Math.random() * heroColors.length)],
+        baseX: 0.2 + Math.random() * 0.6,
+        baseY: 0.2 + Math.random() * 0.6,
+        r: 0.32 + Math.random() * 0.22,
+        speed: 0.00012 + Math.random() * 0.00008,
+        phase: Math.random() * Math.PI * 2,
+        driftX: 0.12 + Math.random() * 0.08,
+        driftY: 0.10 + Math.random() * 0.06
+      }));
+      function paint(t) {
+        const w = canvas.width, h = canvas.height;
+        if (!w || !h) return;
+        ctx.clearRect(0, 0, w, h);
+        blobs.forEach((b) => {
+          const x = (b.baseX + Math.sin(t * b.speed + b.phase) * b.driftX) * w;
+          const y = (b.baseY + Math.cos(t * b.speed * 0.8 + b.phase) * b.driftY) * h;
+          const r = b.r * Math.max(w, h);
+          const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+          g.addColorStop(0, b.color + '55');
+          g.addColorStop(1, b.color + '00');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+      if (reduceMotion) {
+        paint(0);
+      } else {
+        const loop = (t) => { paint(t); requestAnimationFrame(loop); };
+        requestAnimationFrame(loop);
+      }
+    });
+  });
+</script>
+</head>
+<body class="font-body">
+<aside class="fixed left-0 top-0 z-30 flex h-screen w-60 flex-col border-r border-line bg-surface">
+    <div class="flex items-center gap-2.5 border-b border-line px-5 py-5">
+      <div class="grid h-8 w-8 shrink-0 place-items-center rounded-card bg-accent">
+        <span class="text-xs font-bold text-accentInk">AE</span>
+      </div>
+      <span class="font-display text-lg font-semibold tracking-tight text-ink truncate">AegisGraph</span>
+    </div>
+    <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+      <a href="#" class="flex items-center gap-3 rounded-card px-3 py-2.5 text-sm font-medium transition bg-accent/10 text-accent">
+        <iconify-icon icon="lucide:gauge" class="text-lg"></iconify-icon>
+        Dashboard
+      </a>
+      <a href="#" class="flex items-center gap-3 rounded-card px-3 py-2.5 text-sm font-medium transition text-muted hover:bg-raised hover:text-ink">
+        <iconify-icon icon="lucide:file-text" class="text-lg"></iconify-icon>
+        Manuals
+      </a>
+      <a href="#" class="flex items-center gap-3 rounded-card px-3 py-2.5 text-sm font-medium transition text-muted hover:bg-raised hover:text-ink">
+        <iconify-icon icon="lucide:clipboard-list" class="text-lg"></iconify-icon>
+        Assessments
+      </a>
+      <a href="#" class="flex items-center gap-3 rounded-card px-3 py-2.5 text-sm font-medium transition text-muted hover:bg-raised hover:text-ink">
+        <iconify-icon icon="lucide:users" class="text-lg"></iconify-icon>
+        Employees
+      </a>
+      <a href="#" class="flex items-center gap-3 rounded-card px-3 py-2.5 text-sm font-medium transition text-muted hover:bg-raised hover:text-ink">
+        <iconify-icon icon="lucide:building-2" class="text-lg"></iconify-icon>
+        Departments
+      </a>
+      <a href="#" class="flex items-center gap-3 rounded-card px-3 py-2.5 text-sm font-medium transition text-muted hover:bg-raised hover:text-ink">
+        <iconify-icon icon="lucide:badge-check" class="text-lg"></iconify-icon>
+        Certificates
+      </a>
+      <a href="#" class="flex items-center gap-3 rounded-card px-3 py-2.5 text-sm font-medium transition text-muted hover:bg-raised hover:text-ink">
+        <iconify-icon icon="lucide:monitor-check" class="text-lg"></iconify-icon>
+        Exam Hub
+      </a>
+    </nav>
+    <div class="border-t border-line px-4 py-4">
+      <div class="flex items-center gap-3">
+        <img src="https://i.pravatar.cc/150?u=priya-aegisgraph" alt="Priya Raman" class="h-9 w-9 shrink-0 rounded-full border border-line">
+        <p class="min-w-0 flex-1 truncate text-sm font-medium text-ink">Priya Raman</p>
+      </div>
+    </div>
+  </aside><main class="ml-60"><div class="min-h-screen bg-base font-body text-ink" x-data="{ facility: 'Ashgrove Steel Works, Unit 3', period: '1 Jan 2026 to 30 Jun 2026', feedFilter: 'All events', showEmptyRules: false }">
+
+  <!-- PAGE HEADER -->
+  
+    <div class="flex items-center justify-between gap-6 px-8 py-4">
+      <div>
+        <div class="flex items-center gap-2 text-xs text-muted">
+          <span>Compliance</span>
+          <iconify-icon icon="lucide:chevron-right" class="text-xs"></iconify-icon>
+          <span class="text-ink">Dashboard</span>
+        </div>
+        <h1 class="font-display text-xl font-semibold tracking-tight text-ink">Facility Compliance Overview</h1>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <!-- Facility selector -->
+        <div class="relative" x-data="{ open: false }">
+          <button @click="open = !open" class="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink hover:border-ink/20">
+            <iconify-icon icon="lucide:factory" class="text-muted"></iconify-icon>
+            <span class="max-w-[200px] truncate" x-text="facility"></span>
+            <iconify-icon icon="lucide:chevron-down" class="text-muted"></iconify-icon>
+          </button>
+          <div x-show="open" @click.outside="open = false" x-transition.opacity="" class="absolute right-0 z-40 mt-2 w-72 rounded-card border border-line bg-surface p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
+            <p class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted">Facility</p>
+            <template x-for="f in ['Ashgrove Steel Works, Unit 3','Ashgrove Steel Works, Unit 7','Ridgemont Foundry, Bay 2','Ridgemont Foundry, Bay 5']">
+              <button @click="facility = f; open = false" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-raised">
+                <span x-text="f"></span>
+                <iconify-icon icon="lucide:check" x-show="facility === f" class="text-accent"></iconify-icon>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <!-- Reporting period -->
+        <div class="relative" x-data="{ open: false }">
+          <button @click="open = !open" class="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink hover:border-ink/20">
+            <iconify-icon icon="lucide:calendar-range" class="text-muted"></iconify-icon>
+            <span x-text="period"></span>
+            <iconify-icon icon="lucide:chevron-down" class="text-muted"></iconify-icon>
+          </button>
+          <div x-show="open" @click.outside="open = false" x-transition.opacity="" class="absolute right-0 z-40 mt-2 w-64 rounded-card border border-line bg-surface p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
+            <p class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted">Reporting period</p>
+            <template x-for="p in ['Last 30 days','Last 90 days','Year to date','Custom']">
+              <button @click="period = p; open = false" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-raised">
+                <span x-text="p"></span>
+                <iconify-icon icon="lucide:check" x-show="period === p" class="text-accent"></iconify-icon>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <button class="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accentInk shadow-[0_1px_2px_rgba(28,28,26,0.10),0_4px_4px_rgba(28,28,26,0.09),0_9px_6px_rgba(28,28,26,0.05),0_17px_7px_rgba(28,28,26,0.01),inset_0_2px_8px_rgba(255,255,255,0.6)] hover:bg-accent/90">
+          <iconify-icon icon="lucide:download"></iconify-icon>
+          Export report
+        </button>
+      </div>
+    </div>
+
+    <!-- Company code strip -->
+    <div class="flex items-center gap-3 border-t border-line bg-surface px-8 py-2.5">
+      <span class="text-xs font-semibold uppercase tracking-wider text-muted">Company code</span>
+      <span class="font-mono text-xs font-medium text-ink">AGX-4471-KM</span>
+      <span class="text-xs text-muted">Share this code with operators to link their kiosk profile.</span>
+      <span class="ml-auto flex items-center gap-1.5 text-xs text-muted">
+        <span class="h-1.5 w-1.5 rounded-full bg-accent2"></span>
+        3 facilities linked
+      </span>
+    </div>
+  
+
+  <!-- MAIN CONTENT -->
+  <div class="p-8">
+
+    <!-- KPI TILES ROW -->
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <!-- Total Employees -->
+      <div class="rounded-card border border-line bg-surface p-5 shadow-[0_1px_2px_rgba(28,28,26,0.05),0_1px_1px_rgba(28,28,26,0.03)]">
+        <div class="flex items-start justify-between">
+          <div class="grid h-10 w-10 place-items-center rounded-lg border border-line bg-raised text-ink">
+            <iconify-icon icon="lucide:users" class="text-lg"></iconify-icon>
+          </div>
+          <span class="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">+46</span>
+        </div>
+        <p class="mt-4 text-xs font-medium uppercase tracking-wider text-muted">Total Employees</p>
+        <p class="mt-1 font-display text-3xl font-bold tracking-tight text-ink tabular-nums">1,284</p>
+        <p class="mt-1 text-xs text-muted">+ 46 since 1 Jan 2026</p>
+        <p class="mt-0.5 text-xs text-muted">Across 3 facilities</p>
+      </div>
+
+      <!-- Certified -->
+      <div class="rounded-card border border-line bg-surface p-5 shadow-[0_1px_2px_rgba(28,28,26,0.05),0_1px_1px_rgba(28,28,26,0.03)]">
+        <div class="flex items-start justify-between">
+          <div class="grid h-10 w-10 place-items-center rounded-lg border border-line bg-raised text-ink">
+            <iconify-icon icon="lucide:badge-check" class="text-lg"></iconify-icon>
+          </div>
+          <span class="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">+82</span>
+        </div>
+        <p class="mt-4 text-xs font-medium uppercase tracking-wider text-muted">Certified</p>
+        <p class="mt-1 font-display text-3xl font-bold tracking-tight text-ink tabular-nums">1,097</p>
+        <p class="mt-1 text-xs text-muted">+ 82 since 1 Jan 2026</p>
+        <p class="mt-0.5 text-xs text-muted">85.4% of workforce</p>
+      </div>
+
+      <!-- Compliance Rate -->
+      <div class="rounded-card border border-line bg-surface p-5 shadow-[0_1px_2px_rgba(28,28,26,0.05),0_1px_1px_rgba(28,28,26,0.03)]">
+        <div class="flex items-start justify-between">
+          <div class="grid h-10 w-10 place-items-center rounded-lg border border-line bg-raised text-ink">
+            <iconify-icon icon="lucide:shield-check" class="text-lg"></iconify-icon>
+          </div>
+          <span class="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">-1.3 pts</span>
+        </div>
+        <p class="mt-4 text-xs font-medium uppercase tracking-wider text-muted">Compliance Rate</p>
+        <p class="mt-1 font-display text-3xl font-bold tracking-tight text-ink tabular-nums">91.6%</p>
+        <p class="mt-1 text-xs text-muted">- 1.3 pts since last quarter</p>
+        <div class="mt-2 flex items-center gap-2">
+          <div class="h-1.5 flex-1 rounded-full bg-raised">
+            <div class="h-1.5 rounded-full bg-accent" style="width: 91.6%"></div>
+          </div>
+          <span class="text-xs text-muted">Target: 95.0%</span>
+        </div>
+      </div>
+
+      <!-- Avg Risk Score (radial dial) -->
+      <div class="rounded-card border border-line bg-surface p-5 shadow-[0_1px_2px_rgba(28,28,26,0.05),0_1px_1px_rgba(28,28,26,0.03)]">
+        <div class="flex items-start justify-between">
+          <div class="grid h-10 w-10 place-items-center rounded-lg border border-line bg-raised text-ink">
+            <iconify-icon icon="lucide:activity" class="text-lg"></iconify-icon>
+          </div>
+          <span class="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">-6</span>
+        </div>
+        <p class="mt-4 text-xs font-medium uppercase tracking-wider text-muted">Avg Risk Score</p>
+        <div class="mt-3 flex items-center gap-4">
+          <div class="relative h-16 w-16 shrink-0">
+            <svg viewBox="0 0 36 36" class="h-16 w-16 -rotate-90">
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#F1F1EF" stroke-width="3.5"></circle>
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#0D9488" stroke-width="3.5" stroke-dasharray="38 100" stroke-linecap="round"></circle>
+            </svg>
+            <div class="absolute inset-0 grid place-items-center">
+              <span class="font-display text-base font-bold text-ink tabular-nums">38</span>
+            </div>
+          </div>
+          <div>
+            <p class="text-xs text-muted">Down from 44 in December</p>
+            <p class="mt-0.5 text-xs text-muted">Scale 0 to 100, lower is safer</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN GRID: Rule distribution + Facility risk gauge + Activity feed -->
+    <div class="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-12">
+
+      <!-- LEFT: Rule distribution + Facility risk gauge -->
+      <div class="space-y-5 xl:col-span-8">
+
+        <!-- Rule distribution by safety section -->
+        <div class="rounded-card border border-line bg-surface p-6 shadow-[0_1px_2px_rgba(28,28,26,0.05),0_1px_1px_rgba(28,28,26,0.03)]">
+          <div class="mb-5 flex items-center justify-between">
+            <div>
+              <h2 class="font-display text-[15px] font-semibold text-ink">Rule distribution by safety section</h2>
+              <p class="mt-0.5 text-xs text-muted">Rules ingested across 6 active safety sections</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-xs text-muted">955 total</span>
+              <button class="grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface text-muted hover:border-ink/20 hover:text-ink">
+                <iconify-icon icon="lucide:circle"></iconify-icon>
+              </button>
+            </div>
+          </div>
+
+          <!-- Empty state toggle for demo -->
+          <div x-show="showEmptyRules" class="py-10">
+            <img src="https://image.pollinations.ai/prompt/professional%20editorial%20product%20illustration%2C%20sophisticated%20and%20restrained%2C%20the%20quality%20of%20a%20premium%20app%20onboarding%20screen%2C%20minimal%20still-life%20composition%3A%20a%20single%20open%20empty%20box%20on%20a%20clean%20surface%2C%20generous%20negative%20space%2C%20clean%20professional%20editorial%20illustration%2C%20restrained%20neutral%20palette%20with%20one%20blue%20accent%2C%20soft%20ambient%20light%2C%20fine%20grain%2C%20strict%20two-tone%20palette%3A%20neutral%20warm%20off-white%20(%23F9F9F8)%20plus%20the%20single%20accent%20color%20%232563EB%20%E2%80%94%20no%20other%20hues%20anywhere%2C%20flat%20solid%20%23F9F9F8%20background%20filling%20the%20entire%20canvas%20edge%20to%20edge%2C%20absolutely%20no%20cartoon%20style%2C%20no%20childish%20characters%2C%20no%20mascots%2C%20no%20toys%2C%20no%20teddy%20bears%2C%20no%20stuffed%20animals%2C%20no%20faces%20on%20objects%2C%20no%20anthropomorphic%20objects%2C%20no%20smileys%2C%20no%203d%20render%2C%20no%20photograph%2C%20no%20text%2C%20no%20words%2C%20no%20logo%2C%20no%20border%2C%20no%20frame?width=640&amp;height=640&amp;model=flux&amp;nologo=true&amp;seed=52589" data-v3-illus="empty-generic" alt="empty-generic illustration" width="180" height="180" loading="lazy" class="rounded-card object-cover mx-auto">
+            <p class="mt-4 text-center font-display text-sm font-semibold text-ink">No rules ingested yet</p>
+            <p class="mt-1 text-center text-xs text-muted">Upload a safety manual to build your rule set.</p>
+            <div class="mt-4 flex justify-center">
+              <button class="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accentInk hover:bg-accent/90">Go to Manuals</button>
+            </div>
+          </div>
+
+          <div x-show="!showEmptyRules" class="space-y-4">
+            <template x-for="row in [
+              { section: 'Lockout / Tagout', count: 214, pct: 22.4 },
+              { section: 'Confined Space Entry', count: 186, pct: 19.5 },
+              { section: 'Fall Protection', count: 161, pct: 16.9 },
+              { section: 'Hazardous Materials', count: 148, pct: 15.5 },
+              { section: 'Machine Guarding', count: 132, pct: 13.8 },
+              { section: 'Electrical Safety', count: 114, pct: 11.9 }
+            ]">
+              <div class="flex items-center gap-4">
+                <div class="w-44 shrink-0 text-sm text-ink" x-text="row.section"></div>
+                <div class="flex-1">
+                  <div class="h-2.5 w-full rounded-full bg-raised">
+                    <div class="h-2.5 rounded-full bg-accent" :style="'width: ' + (row.pct / 22.4 * 100) + '%'"></div>
+                  </div>
+                </div>
+                <div class="w-16 shrink-0 text-right font-mono text-xs tabular-nums text-ink" x-text="row.count"></div>
+                <div class="w-14 shrink-0 text-right font-mono text-xs tabular-nums text-muted" x-text="row.pct + '%'"></div>
+              </div>
+            </template>
+          </div>
+
+          <div class="mt-5 flex items-center justify-between border-t border-line pt-3">
+            <span class="text-xs text-muted">Axis: Rules ingested</span>
+            <div class="flex items-center gap-4 font-mono text-xs text-muted">
+              <span>0</span>
+              <span>50</span>
+              <span>100</span>
+              <span>150</span>
+              <span>200</span>
+              <span>250</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Facility risk gauge -->
+        <div class="rounded-card border border-line bg-surface p-6 shadow-[0_1px_2px_rgba(28,28,26,0.05),0_1px_1px_rgba(28,28,26,0.03)]">
+          <div class="mb-2 flex items-center justify-between">
+            <div>
+              <h2 class="font-display text-[15px] font-semibold text-ink">Facility risk gauge</h2>
+              <p class="mt-0.5 text-xs text-muted">Recalculated hourly from exam results and incident reports.</p>
+            </div>
+            <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">Moderate</span>
+          </div>
+
+          <div class="grid grid-cols-1 gap-6 lg:grid-cols-5">
+            <div class="lg:col-span-3">
+              <svg viewBox="0 0 200 120" fill="none" xmlns="http://www.w3.org/2000/svg" width="320" height="192" class="mx-auto max-w-md">
+  <defs>
+    <path id="dialArc" d="M 20 100 A 80 80 0 0 1 180 100"></path>
+  </defs>
+
+  <!-- warm-paper surface -->
+  <rect x="0" y="0" width="200" height="120" rx="10" fill="currentColor" fill-opacity="0.06"></rect>
+
+  <!-- track -->
+  <path d="M 20 100 A 80 80 0 0 1 180 100" stroke="currentColor" stroke-opacity="0.18" stroke-width="6" stroke-linecap="round"></path>
+
+  <!-- emerald safe band (left, 0deg -> 72deg of 180) -->
+  <path d="M 20 100 A 80 80 0 0 1 95.6 33.6" stroke="currentColor" stroke-opacity="0.35" stroke-width="6" stroke-linecap="butt"></path>
+
+  <!-- amber caution band (72deg -> 126deg) -->
+  <path d="M 95.6 33.6 A 80 80 0 0 1 154.7 55.3" stroke="currentColor" stroke-opacity="0.6" stroke-width="6" stroke-linecap="butt"></path>
+
+  <!-- hairline ticks -->
+  <g stroke="currentColor" stroke-opacity="0.45" stroke-width="1">
+    <line x1="20" y1="100" x2="26" y2="100"></line>
+    <line x1="30.6" y1="66.4" x2="36.3" y2="68.9"></line>
+    <line x1="58.6" y1="41.4" x2="62.5" y2="45.3"></line>
+    <line x1="95.6" y1="33.6" x2="95.6" y2="39.6"></line>
+    <line x1="132.6" y1="41.4" x2="128.7" y2="45.3"></line>
+    <line x1="160.6" y1="66.4" x2="154.9" y2="68.9"></line>
+    <line x1="180" y1="100" x2="174" y2="100"></line>
+  </g>
+
+  <!-- axis labels -->
+  <g fill="currentColor" fill-opacity="0.55" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="7" text-anchor="middle">
+    <text x="20" y="112">0</text>
+    <text x="100" y="24">50</text>
+    <text x="180" y="112">100</text>
+  </g>
+
+  <!-- pivot -->
+  <circle cx="100" cy="100" r="5" fill="currentColor" fill-opacity="0.85"></circle>
+
+  <!-- needle: set --asset-angle (0deg = min/left, 180deg = max/right) -->
+  <!-- CSS custom property: --asset-angle -->
+  <g id="needle" style="transform-origin:100px 100px; transform: rotate(var(--asset-angle, 0deg));">
+    <polygon points="100,100 97,100 100,34 103,100" fill="currentColor"></polygon>
+    <circle cx="100" cy="100" r="2.5" fill="currentColor" fill-opacity="0.4"></circle>
+  </g>
+
+  <!-- numeric risk readout -->
+  <text x="100" y="86" text-anchor="middle" fill="currentColor" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="600">42</text>
+  <text x="100" y="96" text-anchor="middle" fill="currentColor" fill-opacity="0.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="6" letter-spacing="1">RISK</text>
+</svg>
+            </div>
+
+            <div class="lg:col-span-2 flex flex-col justify-center space-y-4">
+              <div class="flex items-center gap-3">
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-accent2"></span>
+                <div>
+                  <p class="text-sm font-medium text-ink">Low risk</p>
+                  <p class="font-mono text-xs text-muted">0 to 33</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500"></span>
+                <div>
+                  <p class="text-sm font-medium text-ink">Moderate risk</p>
+                  <p class="font-mono text-xs text-muted">34 to 66</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500"></span>
+                <div>
+                  <p class="text-sm font-medium text-ink">High risk</p>
+                  <p class="font-mono text-xs text-muted">67 to 100</p>
+                </div>
+              </div>
+
+              <div class="mt-2 rounded-lg border border-line bg-raised p-3">
+                <p class="text-xs text-muted">Current band</p>
+                <p class="mt-0.5 font-display text-lg font-semibold text-ink">Moderate · 38</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Activity feed rail -->
+      <div class="xl:col-span-4">
+        <div class="rounded-card border border-line bg-surface shadow-[0_1px_2px_rgba(28,28,26,0.05),0_1px_1px_rgba(28,28,26,0.03)]">
+          <div class="flex items-center justify-between border-b border-line px-5 py-4">
+            <h2 class="font-display text-[15px] font-semibold text-ink">Recent activity</h2>
+            <div class="relative" x-data="{ open: false }">
+              <button @click="open = !open" class="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs text-muted hover:border-ink/20 hover:text-ink">
+                <iconify-icon icon="lucide:filter"></iconify-icon>
+                <span x-text="feedFilter"></span>
+              </button>
+              <div x-show="open" @click.outside="open = false" x-transition.opacity="" class="absolute right-0 z-40 mt-2 w-44 rounded-card border border-line bg-surface p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.08)]">
+                <template x-for="opt in ['All events','Exams','Certificates','Manuals','Verification']">
+                  <button @click="feedFilter = opt; open = false" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-xs text-ink hover:bg-raised">
+                    <span x-text="opt"></span>
+                    <iconify-icon icon="lucide:check" x-show="feedFilter === opt" class="text-accent"></iconify-icon>
+                  </button>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <div class="divide-y divide-line">
+            <!-- Event 1 -->
+            <div class="flex gap-3 px-5 py-3.5 hover:bg-raised">
+              <div class="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-raised text-ink">
+                <iconify-icon icon="lucide:badge-check" class="text-base"></iconify-icon>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm leading-snug text-ink">Priya Raghunathan passed Confined Space Entry, Level 2</p>
+                <p class="mt-1 font-mono text-xs text-muted">2:14 PM, 28 Jun 2026</p>
+              </div>
+            </div>
+
+            <!-- Event 2 -->
+            <div class="flex gap-3 px-5 py-3.5 hover:bg-raised">
+              <div class="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-raised text-ink">
+                <iconify-icon icon="lucide:book-open" class="text-base"></iconify-icon>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm leading-snug text-ink">Manual ingested: Overhead Crane Inspection, Rev 6</p>
+                <p class="mt-1 font-mono text-xs text-muted">11:47 AM, 28 Jun 2026</p>
+              </div>
+            </div>
+
+            <!-- Event 3 -->
+            <div class="flex gap-3 px-5 py-3.5 hover:bg-raised">
+              <div class="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-raised text-ink">
+                <iconify-icon icon="lucide:scan-line" class="text-base"></iconify-icon>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm leading-snug text-ink">Badge verified at Gate 4 for Marcus Oyelaran</p>
+                <p class="mt-1 font-mono text-xs text-muted">9:02 AM, 28 Jun 2026</p>
+              </div>
+            </div>
+
+            <!-- Event 4 -->
+            <div class="flex gap-3 px-5 py-3.5 hover:bg-raised">
+              <div class="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-raised text-ink">
+                <iconify-icon icon="lucide:clipboard-list" class="text-base"></iconify-icon>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm leading-snug text-ink">Fall Protection recertification assigned to 12 operators</p>
+                <p class="mt-1 font-mono text-xs text-muted">4:31 PM, 27 Jun 2026</p>
+              </div>
+            </div>
+
+            <!-- Event 5 (alert) -->
+            <div class="flex gap-3 px-5 py-3.5 hover:bg-raised">
+              <div class="grid h-9 w-9 shrink-0 place-items-center rounded-lg border bg-raised text-ink border border-line">
+                <iconify-icon icon="lucide:circle" class="text-base"></iconify-icon>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm leading-snug text-ink">Compliance rate for Unit 7 dropped below 90%</p>
+                <p class="mt-1 font-mono text-xs text-muted">8:15 AM, 27 Jun 2026</p>
+              </div>
+            </div>
+
+            <!-- Event 6 -->
+            <div class="flex gap-3 px-5 py-3.5 hover:bg-raised">
+              <div class="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-raised text-ink">
+                <iconify-icon icon="lucide:file-badge" class="text-base"></iconify-icon>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm leading-snug text-ink">Certificate AGX-C-00318 issued to Dana Kowalczyk</p>
+                <p class="mt-1 font-mono text-xs text-muted">3:48 PM, 26 Jun 2026</p>
+              </div>
+            </div>
+
+            <!-- Event 7 -->
+            <div class="flex gap-3 px-5 py-3.5 hover:bg-raised">
+              <div class="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-raised text-ink">
+                <iconify-icon icon="lucide:clipboard-check" class="text-base"></iconify-icon>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm leading-snug text-ink">Hazardous Materials exam session completed, 24 of 26 passed</p>
+                <p class="mt-1 font-mono text-xs text-muted">10:22 AM, 26 Jun 2026</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="border-t border-line px-5 py-3">
+            <button class="flex w-full items-center justify-center gap-1.5 text-xs font-medium text-muted hover:text-ink">
+              View all activity
+              <iconify-icon icon="lucide:arrow-right"></iconify-icon>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PERSISTENT STATUS FOOTER -->
+    <div class="mt-5 flex items-center justify-between rounded-card border border-line bg-surface px-5 py-3 shadow-[0_1px_2px_rgba(28,28,26,0.05),0_1px_1px_rgba(28,28,26,0.03)]">
+      <div class="flex items-center gap-6">
+        <span class="flex items-center gap-2 text-xs font-medium text-ink">
+          <span class="h-2 w-2 rounded-full bg-accent2"></span>
+          System Operational
+        </span>
+        <span class="flex items-center gap-2 text-xs text-muted">
+          <iconify-icon icon="lucide:wifi-off" class="text-xs"></iconify-icon>
+          100% Offline
+        </span>
+      </div>
+      <span class="font-mono text-xs text-muted">Last sync: 28 Jun 2026, 2:20 PM</span>
+    </div>
+
+  </div>
+</div></main>
+</body>
+</html>

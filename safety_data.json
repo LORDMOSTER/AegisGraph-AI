@@ -1,0 +1,1102 @@
+[
+    {
+        "id": "REG-001",
+        "section": "Emergency Protocol",
+        "sub_category": "Critical Shutdown",
+        "rule": "In the event of a hydraulic pressure surge exceeding 2500 PSI, the operator must immediately strike the primary Red E-Stop plunger located on the left-side console panel.",
+        "risk_score": 9.8,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 30,
+        "revision_version": "2.1"
+    },
+    {
+        "id": "REG-002",
+        "section": "Emergency Protocol",
+        "sub_category": "Fire Suppression",
+        "rule": "If an engine compartment thermal sensor triggers an alarm, park the heavy machinery away from high-combustible areas, lower all ground attachments, and activate the cabin-mounted fire suppression switch.",
+        "risk_score": 9.5,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 45,
+        "revision_version": "2.0"
+    },
+    {
+        "id": "REG-003",
+        "section": "Routine Check",
+        "sub_category": "Pre-Shift Inspection",
+        "rule": "Before starting the machine engine, the operator must perform a physical walkaround to inspect the undercarriage tread lines for structural fracturing or missing retention pins.",
+        "risk_score": 6.5,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 60,
+        "revision_version": "1.8"
+    },
+    {
+        "id": "REG-004",
+        "section": "Routine Check",
+        "sub_category": "Fluid Metrics",
+        "rule": "Verify that transmission and coolant reservoir fluid sight glasses indicate levels within the marked optimal running boundaries when the engine block is completely cold.",
+        "risk_score": 5.5,
+        "cognitive_level": "Evaluate",
+        "estimated_response_time": 90,
+        "revision_version": "1.5"
+    },
+    {
+        "id": "REG-005",
+        "section": "Maintenance",
+        "sub_category": "Lubrication",
+        "rule": "The secondary articulation knuckles must be grease-injected using the pneumatic lubrication tool every 50 operating hours to mitigate friction welding risks.",
+        "risk_score": 7.2,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 75,
+        "revision_version": "1.9"
+    },
+    {
+        "id": "REG-006",
+        "section": "Emergency Protocol",
+        "sub_category": "Evacuation Procedure",
+        "rule": "Upon receiving a site-wide evacuation signal, all operators must immediately park their machines on stable level ground, set the parking brake, and proceed to the designated muster point via the marked egress routes.",
+        "risk_score": 9.0,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 40,
+        "revision_version": "2.2"
+    },
+    {
+        "id": "REG-007",
+        "section": "Routine Check",
+        "sub_category": "Visibility Systems",
+        "rule": "All camera feeds, proximity radar displays, and mirror alignment must be confirmed operational before commencing any reversing or blind-spot traversal operations.",
+        "risk_score": 7.8,
+        "cognitive_level": "Evaluate",
+        "estimated_response_time": 55,
+        "revision_version": "1.7"
+    },
+    {
+        "id": "REG-008",
+        "section": "Maintenance",
+        "sub_category": "Brake System",
+        "rule": "Dynamic braking performance tests must be conducted every 200 operational hours on all load-bearing axle assemblies and results logged in the digital maintenance registry.",
+        "risk_score": 8.5,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 120,
+        "revision_version": "2.0"
+    },
+    {
+        "id": "REG-009",
+        "section": "Emergency Protocol",
+        "sub_category": "Power Failure",
+        "rule": "In the event of a complete electrical system failure, engage the mechanical backup brake lever before attempting any communication via the emergency radio beacon located beneath the operator seat.",
+        "risk_score": 9.2,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 35,
+        "revision_version": "2.3"
+    },
+    {
+        "id": "REG-010",
+        "section": "Maintenance",
+        "sub_category": "Filter Replacement",
+        "rule": "Hydraulic oil filters must be replaced with manufacturer-certified components every 500 operating hours or immediately upon detection of metal particulates in the oil sample analysis.",
+        "risk_score": 6.8,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 80,
+        "revision_version": "1.6"
+    },
+    {
+        "id": "REG-1001",
+        "section": "High-Voltage Systems",
+        "sub_category": "PPE Requirements",
+        "rule": "Before servicing high-voltage contactors, the LOTO padlock must be thrown and verified via zero-energy test meter.",
+        "risk_score": 6.5,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 30,
+        "revision_version": "4.7"
+    },
+    {
+        "id": "REG-1002",
+        "section": "Maintenance",
+        "sub_category": "Brake System",
+        "rule": "Replace load-bearing axle assemblies with OEM-certified parts 500 operating hours or upon detection of microscopic stress fractures.",
+        "risk_score": 8.4,
+        "cognitive_level": "Create",
+        "estimated_response_time": 120,
+        "revision_version": "2.4"
+    },
+    {
+        "id": "REG-1003",
+        "section": "Routine Check",
+        "sub_category": "Visibility Systems",
+        "rule": "Ensure fluid reservoir levels is inspected for structural fracturing prior to heavy lifting.",
+        "risk_score": 9.6,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 300,
+        "revision_version": "4.0"
+    },
+    {
+        "id": "REG-1004",
+        "section": "Maintenance",
+        "sub_category": "Sensor Calibration",
+        "rule": "Perform a load stress test on articulation knuckles annually to identify calibration drift.",
+        "risk_score": 9.4,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 300,
+        "revision_version": "4.1"
+    },
+    {
+        "id": "REG-1005",
+        "section": "Routine Check",
+        "sub_category": "Pre-Shift Inspection",
+        "rule": "Manually gauge the 360-degree camera feeds and confirm it is within acceptable operational limits.",
+        "risk_score": 6.8,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 15,
+        "revision_version": "2.9"
+    },
+    {
+        "id": "REG-1006",
+        "section": "Emergency Protocol",
+        "sub_category": "Toxic Gas Detection",
+        "rule": "During a communication loss, operators must strictly initiate evacuation and refrain from UNKNOWN.",
+        "risk_score": 4.7,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 60,
+        "revision_version": "1.7"
+    },
+    {
+        "id": "REG-1007",
+        "section": "Hazardous Materials",
+        "sub_category": "Asbestos Protocol",
+        "rule": "If hydraulic fluid makes contact with skin or eyes, proceed instantly to the emergency deluge shower and flush for at least 20 minutes.",
+        "risk_score": 9.5,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 45,
+        "revision_version": "1.4"
+    },
+    {
+        "id": "REG-1008",
+        "section": "Hazardous Materials",
+        "sub_category": "Asbestos Protocol",
+        "rule": "In the event of a acid discharge exceeding reportable quantities, immediately evacuate the immediate area before UNKNOWN.",
+        "risk_score": 4.7,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 30,
+        "revision_version": "2.6"
+    },
+    {
+        "id": "REG-1009",
+        "section": "High-Voltage Systems",
+        "sub_category": "Inverter Maintenance",
+        "rule": "Trailing power cables must be opening the housing panel during thunderstorms to prevent arc-flash electrocution hazards.",
+        "risk_score": 4.7,
+        "cognitive_level": "Create",
+        "estimated_response_time": 15,
+        "revision_version": "3.9"
+    },
+    {
+        "id": "REG-1010",
+        "section": "High-Voltage Systems",
+        "sub_category": "Lockout/Tagout (LOTO)",
+        "rule": "dielectric overboots is strictly mandatory when performing maintenance.",
+        "risk_score": 3.0,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 180,
+        "revision_version": "2.8"
+    },
+    {
+        "id": "REG-1011",
+        "section": "Emergency Protocol",
+        "sub_category": "Power Failure",
+        "rule": "In the event of a thermal runaway, the operator must immediately don emergency breathing apparatus.",
+        "risk_score": 6.1,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 45,
+        "revision_version": "3.6"
+    },
+    {
+        "id": "REG-1012",
+        "section": "Routine Check",
+        "sub_category": "Fluid Metrics",
+        "rule": "Before starting the shift, the operator must verify that undercarriage tread lines are fully responsive.",
+        "risk_score": 8.7,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 60,
+        "revision_version": "3.2"
+    },
+    {
+        "id": "REG-1013",
+        "section": "Routine Check",
+        "sub_category": "Visibility Systems",
+        "rule": "Before starting the shift, the operator must verify that joystick calibration show no signs of leakage.",
+        "risk_score": 4.4,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 180,
+        "revision_version": "4.0"
+    },
+    {
+        "id": "REG-1014",
+        "section": "High-Voltage Systems",
+        "sub_category": "Lockout/Tagout (LOTO)",
+        "rule": "Allow at least 30 minutes of discharge time after powering down electric drive motors before thrown.",
+        "risk_score": 4.2,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 180,
+        "revision_version": "2.1"
+    },
+    {
+        "id": "REG-1015",
+        "section": "Emergency Protocol",
+        "sub_category": "Critical Shutdown",
+        "rule": "If the pressure gauge triggers an alarm indicating structural failure, UNKNOWN and UNKNOWN.",
+        "risk_score": 8.1,
+        "cognitive_level": "Create",
+        "estimated_response_time": 45,
+        "revision_version": "3.9"
+    },
+    {
+        "id": "REG-1016",
+        "section": "Maintenance",
+        "sub_category": "Filter Replacement",
+        "rule": "Replace primary lifting boom welds with OEM-certified parts 200 operational hours or upon detection of seal degradation.",
+        "risk_score": 9.5,
+        "cognitive_level": "Create",
+        "estimated_response_time": 30,
+        "revision_version": "4.0"
+    },
+    {
+        "id": "REG-1017",
+        "section": "Emergency Protocol",
+        "sub_category": "Evacuation Procedure",
+        "rule": "Upon detecting hazardous levels exceeding acceptable limits, UNKNOWN.",
+        "risk_score": 3.4,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 300,
+        "revision_version": "1.9"
+    },
+    {
+        "id": "REG-1018",
+        "section": "Routine Check",
+        "sub_category": "Pre-Shift Inspection",
+        "rule": "Ensure fluid reservoir levels is inspected for excessive wear prior to engine startup.",
+        "risk_score": 5.1,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 60,
+        "revision_version": "2.2"
+    },
+    {
+        "id": "REG-1019",
+        "section": "Hazardous Materials",
+        "sub_category": "Battery Acid Exposure",
+        "rule": "If industrial solvent makes contact with skin or eyes, proceed instantly to the medical bay and flush for a minimum of 15 minutes.",
+        "risk_score": 7.1,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 45,
+        "revision_version": "3.4"
+    },
+    {
+        "id": "REG-1020",
+        "section": "Hazardous Materials",
+        "sub_category": "Battery Acid Exposure",
+        "rule": "In the event of a diesel fuel spill exceeding 10 gallons, immediately deploy polyacrylate chemical booms before UNKNOWN.",
+        "risk_score": 7.1,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 60,
+        "revision_version": "4.4"
+    },
+    {
+        "id": "REG-1021",
+        "section": "Routine Check",
+        "sub_category": "Visibility Systems",
+        "rule": "Before starting the shift, the operator must verify that fluid reservoir levels are free of debris.",
+        "risk_score": 6.1,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 180,
+        "revision_version": "3.9"
+    },
+    {
+        "id": "REG-1022",
+        "section": "Emergency Protocol",
+        "sub_category": "Power Failure",
+        "rule": "Upon detecting structural failure exceeding acceptable limits, UNKNOWN.",
+        "risk_score": 7.9,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 180,
+        "revision_version": "1.8"
+    },
+    {
+        "id": "REG-1023",
+        "section": "Hazardous Materials",
+        "sub_category": "Spill Containment",
+        "rule": "In the event of a diesel fuel spill exceeding 50 liters, immediately evacuate the immediate area before UNKNOWN.",
+        "risk_score": 5.9,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 300,
+        "revision_version": "4.1"
+    },
+    {
+        "id": "REG-1024",
+        "section": "High-Voltage Systems",
+        "sub_category": "Lockout/Tagout (LOTO)",
+        "rule": "Allow at least 30 minutes of discharge time after powering down electric drive motors before elevated on insulated A-frames.",
+        "risk_score": 4.6,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 15,
+        "revision_version": "3.4"
+    },
+    {
+        "id": "REG-1025",
+        "section": "High-Voltage Systems",
+        "sub_category": "Inverter Maintenance",
+        "rule": "a 40 cal/cm2 arc flash face shield is strictly mandatory when racking in or out power contactors.",
+        "risk_score": 8.9,
+        "cognitive_level": "Create",
+        "estimated_response_time": 90,
+        "revision_version": "1.7"
+    },
+    {
+        "id": "REG-1026",
+        "section": "High-Voltage Systems",
+        "sub_category": "Cable Inspection",
+        "rule": "a 40 cal/cm2 arc flash face shield is strictly mandatory when racking in or out power contactors.",
+        "risk_score": 3.6,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 45,
+        "revision_version": "3.0"
+    },
+    {
+        "id": "REG-1027",
+        "section": "Emergency Protocol",
+        "sub_category": "Evacuation Procedure",
+        "rule": "During a system failure, operators must strictly initiate evacuation and refrain from UNKNOWN.",
+        "risk_score": 7.9,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 300,
+        "revision_version": "3.3"
+    },
+    {
+        "id": "REG-1028",
+        "section": "Maintenance",
+        "sub_category": "Filter Replacement",
+        "rule": "Perform a pressure decay test on articulation knuckles 50 operating hours to identify calibration drift.",
+        "risk_score": 8.9,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 30,
+        "revision_version": "1.6"
+    },
+    {
+        "id": "REG-1029",
+        "section": "Emergency Protocol",
+        "sub_category": "Critical Shutdown",
+        "rule": "In the event of a thermal runaway, the operator must immediately engage the emergency stop.",
+        "risk_score": 3.2,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 300,
+        "revision_version": "1.3"
+    },
+    {
+        "id": "REG-1030",
+        "section": "Maintenance",
+        "sub_category": "Sensor Calibration",
+        "rule": "Dynamic performance tests must be conducted on load-bearing axle assemblies 50 operating hours and results logged.",
+        "risk_score": 4.3,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 90,
+        "revision_version": "2.1"
+    },
+    {
+        "id": "REG-1031",
+        "section": "Emergency Protocol",
+        "sub_category": "Fire Suppression",
+        "rule": "During a thermal runaway, operators must strictly engage the emergency stop and refrain from UNKNOWN.",
+        "risk_score": 9.7,
+        "cognitive_level": "Create",
+        "estimated_response_time": 30,
+        "revision_version": "3.4"
+    },
+    {
+        "id": "REG-1032",
+        "section": "High-Voltage Systems",
+        "sub_category": "Inverter Maintenance",
+        "rule": "Before servicing main AC inverter, the master battery disconnect switch must be opening the housing panel and verified via secondary isolation point.",
+        "risk_score": 9.1,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 180,
+        "revision_version": "1.7"
+    },
+    {
+        "id": "REG-1033",
+        "section": "Maintenance",
+        "sub_category": "Filter Replacement",
+        "rule": "Dynamic performance tests must be conducted on articulation knuckles 200 operational hours and results logged.",
+        "risk_score": 7.4,
+        "cognitive_level": "Evaluate",
+        "estimated_response_time": 45,
+        "revision_version": "4.2"
+    },
+    {
+        "id": "REG-1034",
+        "section": "Routine Check",
+        "sub_category": "Control Calibration",
+        "rule": "All fluid reservoir levels must be confirmed operational before commencing heavy lifting.",
+        "risk_score": 10.0,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 30,
+        "revision_version": "4.9"
+    },
+    {
+        "id": "REG-1035",
+        "section": "High-Voltage Systems",
+        "sub_category": "Lockout/Tagout (LOTO)",
+        "rule": "Allow exactly 15 minutes of discharge time after powering down main AC inverter before applied.",
+        "risk_score": 7.2,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 120,
+        "revision_version": "3.4"
+    },
+    {
+        "id": "REG-1036",
+        "section": "Emergency Protocol",
+        "sub_category": "Toxic Gas Detection",
+        "rule": "If the thermal sensor triggers an alarm indicating critical threshold, UNKNOWN and UNKNOWN.",
+        "risk_score": 4.5,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 45,
+        "revision_version": "3.3"
+    },
+    {
+        "id": "REG-1037",
+        "section": "Routine Check",
+        "sub_category": "Fluid Metrics",
+        "rule": "All 360-degree camera feeds must be confirmed operational before commencing high-speed transport.",
+        "risk_score": 5.6,
+        "cognitive_level": "Create",
+        "estimated_response_time": 300,
+        "revision_version": "4.7"
+    },
+    {
+        "id": "REG-1038",
+        "section": "Maintenance",
+        "sub_category": "Lubrication",
+        "rule": "Perform a visual inspection on load-bearing axle assemblies 200 operational hours to identify metal particulates.",
+        "risk_score": 4.6,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 45,
+        "revision_version": "4.2"
+    },
+    {
+        "id": "REG-1039",
+        "section": "Emergency Protocol",
+        "sub_category": "Rollover Response",
+        "rule": "During a communication loss, operators must strictly brace for impact and refrain from UNKNOWN.",
+        "risk_score": 3.3,
+        "cognitive_level": "Create",
+        "estimated_response_time": 90,
+        "revision_version": "3.9"
+    },
+    {
+        "id": "REG-1040",
+        "section": "Emergency Protocol",
+        "sub_category": "Power Failure",
+        "rule": "During a pressure surge, operators must strictly don emergency breathing apparatus and refrain from UNKNOWN.",
+        "risk_score": 4.7,
+        "cognitive_level": "Create",
+        "estimated_response_time": 30,
+        "revision_version": "1.7"
+    },
+    {
+        "id": "REG-1041",
+        "section": "Emergency Protocol",
+        "sub_category": "Power Failure",
+        "rule": "If the pressure gauge triggers an alarm indicating structural failure, UNKNOWN and UNKNOWN.",
+        "risk_score": 9.6,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 60,
+        "revision_version": "4.0"
+    },
+    {
+        "id": "REG-1042",
+        "section": "Hazardous Materials",
+        "sub_category": "Fueling Procedure",
+        "rule": "When servicing components containing asbestos friction material, approved containment bags must be utilized; dry sweeping is strictly prohibited.",
+        "risk_score": 6.1,
+        "cognitive_level": "Evaluate",
+        "estimated_response_time": 15,
+        "revision_version": "2.6"
+    },
+    {
+        "id": "REG-1043",
+        "section": "Emergency Protocol",
+        "sub_category": "Power Failure",
+        "rule": "Upon detecting hazardous levels exceeding acceptable limits, UNKNOWN.",
+        "risk_score": 8.3,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 180,
+        "revision_version": "1.1"
+    },
+    {
+        "id": "REG-1044",
+        "section": "Routine Check",
+        "sub_category": "Pneumatic Pressure",
+        "rule": "All 360-degree camera feeds must be confirmed operational before commencing high-speed transport.",
+        "risk_score": 8.3,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 90,
+        "revision_version": "1.6"
+    },
+    {
+        "id": "REG-1045",
+        "section": "Hazardous Materials",
+        "sub_category": "Fueling Procedure",
+        "rule": "In the event of a hydraulic fluid rupture exceeding 10 gallons, immediately deploy polyacrylate chemical booms before UNKNOWN.",
+        "risk_score": 5.3,
+        "cognitive_level": "Evaluate",
+        "estimated_response_time": 90,
+        "revision_version": "2.8"
+    },
+    {
+        "id": "REG-1046",
+        "section": "Routine Check",
+        "sub_category": "Pneumatic Pressure",
+        "rule": "Before starting the shift, the operator must verify that fluid reservoir levels are fully responsive.",
+        "risk_score": 8.4,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 180,
+        "revision_version": "4.9"
+    },
+    {
+        "id": "REG-1047",
+        "section": "Hazardous Materials",
+        "sub_category": "Chemical Storage",
+        "rule": "When servicing components containing hydraulic fluid, wet-wipe methods with HEPA vacuums must be utilized; dry sweeping is strictly prohibited.",
+        "risk_score": 9.4,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 15,
+        "revision_version": "2.1"
+    },
+    {
+        "id": "REG-1048",
+        "section": "High-Voltage Systems",
+        "sub_category": "Arc Flash",
+        "rule": "Before servicing battery banks, the master battery disconnect switch must be elevated on insulated A-frames and verified via visual inspection.",
+        "risk_score": 7.3,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 300,
+        "revision_version": "1.5"
+    },
+    {
+        "id": "REG-1049",
+        "section": "Emergency Protocol",
+        "sub_category": "Rollover Response",
+        "rule": "Upon detecting loss of containment exceeding acceptable limits, UNKNOWN.",
+        "risk_score": 8.7,
+        "cognitive_level": "Evaluate",
+        "estimated_response_time": 30,
+        "revision_version": "2.0"
+    },
+    {
+        "id": "REG-1050",
+        "section": "Maintenance",
+        "sub_category": "Brake System",
+        "rule": "Replace hydraulic oil filters with OEM-certified parts monthly or upon detection of microscopic stress fractures.",
+        "risk_score": 3.2,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 90,
+        "revision_version": "3.7"
+    },
+    {
+        "id": "REG-1051",
+        "section": "Routine Check",
+        "sub_category": "Visibility Systems",
+        "rule": "Ensure fluid reservoir levels is inspected for missing retention pins prior to engine startup.",
+        "risk_score": 7.8,
+        "cognitive_level": "Evaluate",
+        "estimated_response_time": 120,
+        "revision_version": "3.4"
+    },
+    {
+        "id": "REG-1052",
+        "section": "Emergency Protocol",
+        "sub_category": "Power Failure",
+        "rule": "During a unrecoverable tipping event, operators must strictly don emergency breathing apparatus and refrain from UNKNOWN.",
+        "risk_score": 9.3,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 120,
+        "revision_version": "1.8"
+    },
+    {
+        "id": "REG-1053",
+        "section": "Hazardous Materials",
+        "sub_category": "Spill Containment",
+        "rule": "In the event of a diesel fuel spill exceeding 50 liters, immediately isolate the spill from site drainage grates before UNKNOWN.",
+        "risk_score": 6.9,
+        "cognitive_level": "Create",
+        "estimated_response_time": 15,
+        "revision_version": "4.6"
+    },
+    {
+        "id": "REG-1054",
+        "section": "Routine Check",
+        "sub_category": "Pre-Shift Inspection",
+        "rule": "Ensure tire pressure is inspected for structural fracturing prior to high-speed transport.",
+        "risk_score": 7.7,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 60,
+        "revision_version": "4.7"
+    },
+    {
+        "id": "REG-1055",
+        "section": "Emergency Protocol",
+        "sub_category": "Critical Shutdown",
+        "rule": "Upon detecting loss of containment exceeding acceptable limits, UNKNOWN.",
+        "risk_score": 3.0,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 30,
+        "revision_version": "2.9"
+    },
+    {
+        "id": "REG-1056",
+        "section": "Emergency Protocol",
+        "sub_category": "Evacuation Procedure",
+        "rule": "Upon detecting structural failure exceeding acceptable limits, UNKNOWN.",
+        "risk_score": 8.8,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 60,
+        "revision_version": "3.5"
+    },
+    {
+        "id": "REG-1057",
+        "section": "Hazardous Materials",
+        "sub_category": "Asbestos Protocol",
+        "rule": "In the event of a hydraulic fluid rupture exceeding reportable quantities, immediately evacuate the immediate area before UNKNOWN.",
+        "risk_score": 4.4,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 60,
+        "revision_version": "1.9"
+    },
+    {
+        "id": "REG-1058",
+        "section": "Routine Check",
+        "sub_category": "Control Calibration",
+        "rule": "Ensure joystick calibration is inspected for missing retention pins prior to high-speed transport.",
+        "risk_score": 8.0,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 60,
+        "revision_version": "1.3"
+    },
+    {
+        "id": "REG-1059",
+        "section": "Emergency Protocol",
+        "sub_category": "Fire Suppression",
+        "rule": "During a thermal runaway, operators must strictly brace for impact and refrain from UNKNOWN.",
+        "risk_score": 9.5,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 90,
+        "revision_version": "3.4"
+    },
+    {
+        "id": "REG-1060",
+        "section": "Routine Check",
+        "sub_category": "Control Calibration",
+        "rule": "Manually gauge the tire pressure and confirm it is within acceptable operational limits.",
+        "risk_score": 8.5,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 15,
+        "revision_version": "3.5"
+    },
+    {
+        "id": "REG-1061",
+        "section": "High-Voltage Systems",
+        "sub_category": "Lockout/Tagout (LOTO)",
+        "rule": "dielectric overboots is strictly mandatory when inspecting live terminals.",
+        "risk_score": 6.5,
+        "cognitive_level": "Create",
+        "estimated_response_time": 300,
+        "revision_version": "1.1"
+    },
+    {
+        "id": "REG-1062",
+        "section": "Emergency Protocol",
+        "sub_category": "Critical Shutdown",
+        "rule": "If the thermal sensor triggers an alarm indicating hazardous levels, UNKNOWN and UNKNOWN.",
+        "risk_score": 6.7,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 300,
+        "revision_version": "4.0"
+    },
+    {
+        "id": "REG-1063",
+        "section": "Routine Check",
+        "sub_category": "Pre-Shift Inspection",
+        "rule": "Ensure joystick calibration is inspected for missing retention pins prior to engine startup.",
+        "risk_score": 7.8,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 15,
+        "revision_version": "1.2"
+    },
+    {
+        "id": "REG-1064",
+        "section": "Maintenance",
+        "sub_category": "Lubrication",
+        "rule": "Replace proximity sensors with OEM-certified parts 500 operating hours or upon detection of seal degradation.",
+        "risk_score": 3.7,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 30,
+        "revision_version": "1.3"
+    },
+    {
+        "id": "REG-1065",
+        "section": "High-Voltage Systems",
+        "sub_category": "Lockout/Tagout (LOTO)",
+        "rule": "Before servicing high-voltage contactors, the isolation breaker must be opening the housing panel and verified via secondary isolation point.",
+        "risk_score": 4.7,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 90,
+        "revision_version": "3.7"
+    },
+    {
+        "id": "REG-1066",
+        "section": "Maintenance",
+        "sub_category": "Filter Replacement",
+        "rule": "The proximity sensors must be inspected every annually to mitigate friction welding.",
+        "risk_score": 5.4,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 15,
+        "revision_version": "3.5"
+    },
+    {
+        "id": "REG-1067",
+        "section": "High-Voltage Systems",
+        "sub_category": "Inverter Maintenance",
+        "rule": "dielectric overboots is strictly mandatory when inspecting live terminals.",
+        "risk_score": 3.1,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 60,
+        "revision_version": "4.6"
+    },
+    {
+        "id": "REG-1068",
+        "section": "Routine Check",
+        "sub_category": "Fluid Metrics",
+        "rule": "All 360-degree camera feeds must be confirmed operational before commencing high-speed transport.",
+        "risk_score": 8.1,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 60,
+        "revision_version": "3.5"
+    },
+    {
+        "id": "REG-1069",
+        "section": "High-Voltage Systems",
+        "sub_category": "Lockout/Tagout (LOTO)",
+        "rule": "Trailing power cables must be elevated on insulated A-frames during routine operation to prevent arc-flash electrocution hazards.",
+        "risk_score": 8.3,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 60,
+        "revision_version": "4.2"
+    },
+    {
+        "id": "REG-1070",
+        "section": "Maintenance",
+        "sub_category": "Structural Integrity",
+        "rule": "Dynamic performance tests must be conducted on hydraulic oil filters 50 operating hours and results logged.",
+        "risk_score": 5.6,
+        "cognitive_level": "Evaluate",
+        "estimated_response_time": 300,
+        "revision_version": "2.4"
+    },
+    {
+        "id": "REG-1071",
+        "section": "Emergency Protocol",
+        "sub_category": "Fire Suppression",
+        "rule": "In the event of a system failure, the operator must immediately brace for impact.",
+        "risk_score": 4.5,
+        "cognitive_level": "Create",
+        "estimated_response_time": 300,
+        "revision_version": "4.5"
+    },
+    {
+        "id": "REG-1072",
+        "section": "High-Voltage Systems",
+        "sub_category": "PPE Requirements",
+        "rule": "Before servicing main AC inverter, the master battery disconnect switch must be thrown and verified via visual inspection.",
+        "risk_score": 5.9,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 45,
+        "revision_version": "4.7"
+    },
+    {
+        "id": "REG-1073",
+        "section": "High-Voltage Systems",
+        "sub_category": "PPE Requirements",
+        "rule": "Allow at least 30 minutes of discharge time after powering down battery banks before applied.",
+        "risk_score": 6.6,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 120,
+        "revision_version": "3.0"
+    },
+    {
+        "id": "REG-1074",
+        "section": "Hazardous Materials",
+        "sub_category": "Spill Containment",
+        "rule": "When servicing components containing lead-acid battery electrolyte, full PPE suits must be utilized; compressed air cleaning is strictly prohibited.",
+        "risk_score": 4.2,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 15,
+        "revision_version": "1.3"
+    },
+    {
+        "id": "REG-1075",
+        "section": "Maintenance",
+        "sub_category": "Brake System",
+        "rule": "The load-bearing axle assemblies must be grease-injected every 500 operating hours to mitigate friction welding.",
+        "risk_score": 6.9,
+        "cognitive_level": "Evaluate",
+        "estimated_response_time": 90,
+        "revision_version": "4.2"
+    },
+    {
+        "id": "REG-1076",
+        "section": "Emergency Protocol",
+        "sub_category": "Power Failure",
+        "rule": "If the thermal sensor triggers an alarm indicating loss of containment, UNKNOWN and UNKNOWN.",
+        "risk_score": 4.6,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 30,
+        "revision_version": "3.7"
+    },
+    {
+        "id": "REG-1077",
+        "section": "Emergency Protocol",
+        "sub_category": "Rollover Response",
+        "rule": "In the event of a communication loss, the operator must immediately don emergency breathing apparatus.",
+        "risk_score": 9.8,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 30,
+        "revision_version": "2.6"
+    },
+    {
+        "id": "REG-1078",
+        "section": "Hazardous Materials",
+        "sub_category": "Spill Containment",
+        "rule": "When servicing components containing hydraulic fluid, full PPE suits must be utilized; dry sweeping is strictly prohibited.",
+        "risk_score": 5.6,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 30,
+        "revision_version": "1.3"
+    },
+    {
+        "id": "REG-1079",
+        "section": "High-Voltage Systems",
+        "sub_category": "Lockout/Tagout (LOTO)",
+        "rule": "Allow at least 30 minutes of discharge time after powering down electric drive motors before elevated on insulated A-frames.",
+        "risk_score": 4.7,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 120,
+        "revision_version": "4.5"
+    },
+    {
+        "id": "REG-1080",
+        "section": "Hazardous Materials",
+        "sub_category": "Battery Acid Exposure",
+        "rule": "During refueling operations, the transfer pump must isolate the spill from site drainage grates to prevent static electricity buildup.",
+        "risk_score": 4.2,
+        "cognitive_level": "Evaluate",
+        "estimated_response_time": 45,
+        "revision_version": "4.5"
+    },
+    {
+        "id": "REG-1081",
+        "section": "Maintenance",
+        "sub_category": "Filter Replacement",
+        "rule": "Perform a visual inspection on primary lifting boom welds 50 operating hours to identify seal degradation.",
+        "risk_score": 5.8,
+        "cognitive_level": "Create",
+        "estimated_response_time": 120,
+        "revision_version": "1.4"
+    },
+    {
+        "id": "REG-1082",
+        "section": "Maintenance",
+        "sub_category": "Brake System",
+        "rule": "Perform a load stress test on proximity sensors 50 operating hours to identify microscopic stress fractures.",
+        "risk_score": 6.6,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 120,
+        "revision_version": "3.4"
+    },
+    {
+        "id": "REG-1083",
+        "section": "High-Voltage Systems",
+        "sub_category": "Lockout/Tagout (LOTO)",
+        "rule": "Before servicing main AC inverter, the LOTO padlock must be thrown and verified via visual inspection.",
+        "risk_score": 4.1,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 15,
+        "revision_version": "4.4"
+    },
+    {
+        "id": "REG-1084",
+        "section": "Routine Check",
+        "sub_category": "Pneumatic Pressure",
+        "rule": "Manually gauge the fluid reservoir levels and confirm it is within acceptable operational limits.",
+        "risk_score": 9.1,
+        "cognitive_level": "Create",
+        "estimated_response_time": 60,
+        "revision_version": "4.1"
+    },
+    {
+        "id": "REG-1085",
+        "section": "Hazardous Materials",
+        "sub_category": "Asbestos Protocol",
+        "rule": "In the event of a coolant leak exceeding 10 gallons, immediately deploy polyacrylate chemical booms before UNKNOWN.",
+        "risk_score": 7.3,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 15,
+        "revision_version": "1.6"
+    },
+    {
+        "id": "REG-1086",
+        "section": "Hazardous Materials",
+        "sub_category": "Spill Containment",
+        "rule": "In the event of a acid discharge exceeding reportable quantities, immediately evacuate the immediate area before UNKNOWN.",
+        "risk_score": 5.5,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 90,
+        "revision_version": "4.7"
+    },
+    {
+        "id": "REG-1087",
+        "section": "Routine Check",
+        "sub_category": "Pre-Shift Inspection",
+        "rule": "All fluid reservoir levels must be confirmed operational before commencing engine startup.",
+        "risk_score": 4.9,
+        "cognitive_level": "Evaluate",
+        "estimated_response_time": 30,
+        "revision_version": "4.7"
+    },
+    {
+        "id": "REG-1088",
+        "section": "Routine Check",
+        "sub_category": "Control Calibration",
+        "rule": "Before starting the shift, the operator must verify that undercarriage tread lines are free of debris.",
+        "risk_score": 7.8,
+        "cognitive_level": "Create",
+        "estimated_response_time": 15,
+        "revision_version": "4.8"
+    },
+    {
+        "id": "REG-1089",
+        "section": "Maintenance",
+        "sub_category": "Sensor Calibration",
+        "rule": "Replace proximity sensors with OEM-certified parts monthly or upon detection of calibration drift.",
+        "risk_score": 9.7,
+        "cognitive_level": "Evaluate",
+        "estimated_response_time": 60,
+        "revision_version": "4.2"
+    },
+    {
+        "id": "REG-1090",
+        "section": "Emergency Protocol",
+        "sub_category": "Critical Shutdown",
+        "rule": "In the event of a system failure, the operator must immediately don emergency breathing apparatus.",
+        "risk_score": 4.6,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 45,
+        "revision_version": "3.0"
+    },
+    {
+        "id": "REG-1091",
+        "section": "Maintenance",
+        "sub_category": "Sensor Calibration",
+        "rule": "Replace articulation knuckles with OEM-certified parts 50 operating hours or upon detection of seal degradation.",
+        "risk_score": 7.4,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 30,
+        "revision_version": "3.5"
+    },
+    {
+        "id": "REG-1092",
+        "section": "Emergency Protocol",
+        "sub_category": "Rollover Response",
+        "rule": "In the event of a system failure, the operator must immediately engage the emergency stop.",
+        "risk_score": 8.5,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 15,
+        "revision_version": "3.4"
+    },
+    {
+        "id": "REG-1093",
+        "section": "Emergency Protocol",
+        "sub_category": "Critical Shutdown",
+        "rule": "If the proximity radar triggers an alarm indicating loss of containment, UNKNOWN and UNKNOWN.",
+        "risk_score": 4.0,
+        "cognitive_level": "Understand",
+        "estimated_response_time": 60,
+        "revision_version": "4.2"
+    },
+    {
+        "id": "REG-1094",
+        "section": "Routine Check",
+        "sub_category": "Pre-Shift Inspection",
+        "rule": "Before starting the shift, the operator must verify that fluid reservoir levels show no signs of leakage.",
+        "risk_score": 6.3,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 90,
+        "revision_version": "2.6"
+    },
+    {
+        "id": "REG-1095",
+        "section": "Routine Check",
+        "sub_category": "Control Calibration",
+        "rule": "Before starting the shift, the operator must verify that joystick calibration indicate levels within marked boundaries.",
+        "risk_score": 4.4,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 45,
+        "revision_version": "4.7"
+    },
+    {
+        "id": "REG-1096",
+        "section": "Hazardous Materials",
+        "sub_category": "Fueling Procedure",
+        "rule": "In the event of a coolant leak exceeding 10 gallons, immediately isolate the spill from site drainage grates before UNKNOWN.",
+        "risk_score": 7.1,
+        "cognitive_level": "Create",
+        "estimated_response_time": 60,
+        "revision_version": "1.5"
+    },
+    {
+        "id": "REG-1097",
+        "section": "Maintenance",
+        "sub_category": "Brake System",
+        "rule": "Replace load-bearing axle assemblies with OEM-certified parts annually or upon detection of calibration drift.",
+        "risk_score": 3.2,
+        "cognitive_level": "Analyze",
+        "estimated_response_time": 45,
+        "revision_version": "4.7"
+    },
+    {
+        "id": "REG-1098",
+        "section": "Routine Check",
+        "sub_category": "Pneumatic Pressure",
+        "rule": "Ensure 360-degree camera feeds is inspected for excessive wear prior to high-speed transport.",
+        "risk_score": 3.1,
+        "cognitive_level": "Remember",
+        "estimated_response_time": 15,
+        "revision_version": "3.5"
+    },
+    {
+        "id": "REG-1099",
+        "section": "Routine Check",
+        "sub_category": "Fluid Metrics",
+        "rule": "All joystick calibration must be confirmed operational before commencing reversing operations.",
+        "risk_score": 4.9,
+        "cognitive_level": "Create",
+        "estimated_response_time": 90,
+        "revision_version": "4.2"
+    },
+    {
+        "id": "REG-1100",
+        "section": "High-Voltage Systems",
+        "sub_category": "PPE Requirements",
+        "rule": "Allow at least 30 minutes of discharge time after powering down main AC inverter before opening the housing panel.",
+        "risk_score": 8.6,
+        "cognitive_level": "Apply",
+        "estimated_response_time": 45,
+        "revision_version": "4.0"
+    }
+]
