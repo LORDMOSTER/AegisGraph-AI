@@ -1,7 +1,7 @@
 import re
 from typing import Set
 
-from app.schemas.generation import QuestionVariant
+from app.schemas.generation import QuestionVariantGen
 
 
 def extract_numbers_and_units(text: str) -> Set[str]:
@@ -28,7 +28,7 @@ def extract_numbers_and_units(text: str) -> Set[str]:
     return entities
 
 
-def verify_grounding(source_rule: str, generated_variant: QuestionVariant) -> bool:
+def verify_grounding(source_rule: str, generated_variant: QuestionVariantGen) -> bool:
     """
     Mathematically verifies that the LLM did not hallucinate numbers or units.
     Returns False if the generated variant contains any numerical entity or unit 
@@ -37,7 +37,7 @@ def verify_grounding(source_rule: str, generated_variant: QuestionVariant) -> bo
     source_entities = extract_numbers_and_units(source_rule)
     
     # Combine the generated stem and options into one string for extraction
-    generated_text = generated_variant.stem + " " + " ".join(generated_variant.options)
+    generated_text = generated_variant.question_text + " " + " ".join(generated_variant.options)
     generated_entities = extract_numbers_and_units(generated_text)
     
     # Check for hallucinated entities (entities in generated but not in source)

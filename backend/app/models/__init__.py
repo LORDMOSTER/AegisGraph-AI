@@ -5,7 +5,7 @@ from app.models.assessment_session import AssessmentSession, SessionStatus
 from app.models.test_attempt import TestAttempt
 from app.models.audit_log import ComplianceAuditLog
 from app.models.hierarchy import Manual, Section, SubCategory, Rule
-from app.models.question_bank import QuestionBank, QuestionStatus
+from app.models.question_bank import QuestionVariant
 
 # Export Base and all models to ensure Alembic can discover them
 __all__ = [
@@ -21,6 +21,5 @@ __all__ = [
     "Section",
     "SubCategory",
     "Rule",
-    "QuestionBank",
-    "QuestionStatus",
+    "QuestionVariant",
 ]

@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 from app.api.deps import get_db_session
 from app.models.schemas import AnalyticsSummary
 from app.models.hierarchy import Manual, Section, Rule
-from app.models.question_bank import QuestionBank
+from app.models.question_bank import QuestionVariant
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -25,8 +25,8 @@ async def get_analytics_summary(db: AsyncSession = Depends(get_db_session)) -> A
     
     # Get question variants grouped by status
     qb_counts = await db.execute(
-        select(QuestionBank.status, func.count(QuestionBank.id))
-        .group_by(QuestionBank.status)
+        select(QuestionVariant.review_status, func.count(QuestionVariant.id))
+        .group_by(QuestionVariant.review_status)
     )
     
     question_bank_counts = {}

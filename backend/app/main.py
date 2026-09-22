@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import assessment, ingest, analytics
+from app.api import assessment, ingest, analytics, question_bank
 from app.core.config import settings
 from app.core.logging import configure_logging
 
@@ -27,6 +27,7 @@ app.add_middleware(
 app.include_router(assessment.router, prefix="/api/assessment", tags=["Assessment"])
 app.include_router(ingest.router,     prefix="/api/ingest",     tags=["Ingestion"])
 app.include_router(analytics.router,  prefix="/api/analytics",  tags=["Analytics"])
+app.include_router(question_bank.router, prefix="/api/questions", tags=["Question Bank"])
 
 from app.api.v1.api import api_router as v1_router
 app.include_router(v1_router, prefix="/api/v1")

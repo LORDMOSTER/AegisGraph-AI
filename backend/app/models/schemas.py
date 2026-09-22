@@ -1,5 +1,6 @@
+import uuid
 from enum import Enum
-from typing import Optional
+from typing import Optional, List, Any
 
 from pydantic import BaseModel, Field
 
@@ -94,14 +95,47 @@ class RuleRecord(BaseModel):
     revision_version: str = "1.0"
 
 
-class AssessmentResponse(BaseModel):
-    """Full response from the assessment pipeline."""
+class AssessmentManifestItem(BaseModel):
+    rule_id: uuid.UUID
+    question_variant_id: uuid.UUID
 
-    rules: list[RuleRecord]
-    assessment: str
-    total_rules: int
-    query_duration_ms: float
-    inference_latency_ms: float
+class AssessmentResponse(BaseModel):
+    status: str
+    manifest: list[AssessmentManifestItem]
+    missing_questions_for_rules: Optional[list[uuid.UUID]] = None
+    message: Optional[str] = None
+    assessment_id: Optional[uuid.UUID] = None
+
+
+# ---------------------------------------------------------------------------
+# Question Bank schemas
+# ---------------------------------------------------------------------------
+
+class QuestionVariantResponse(BaseModel):
+    id: uuid.UUID
+    rule_id: uuid.UUID
+    question_text: str
+    options: list[str]
+    correct_option_index: int
+    bloom_level: str
+    confidence: float
+    review_status: str
+
+    class Config:
+        from_attributes = True
+
+class QuestionVariantUpdate(BaseModel):
+    question_text: Optional[str] = None
+    options: Optional[list[str]] = None
+    correct_option_index: Optional[int] = None
+    review_status: Optional[str] = None
+
+class FlatQuestionVariantResponse(QuestionVariantResponse):
+    manualTitle: str
+    sectionName: str
+    subcategoryName: str
+    rule_text: str
+    rule_code: str
 
 
 # ---------------------------------------------------------------------------

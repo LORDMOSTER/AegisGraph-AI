@@ -18,12 +18,17 @@ export interface RuleRecord {
   revision_version: string;
 }
 
+export interface AssessmentManifestItem {
+  rule_id: string;
+  question_variant_id: string;
+}
+
 export interface AssessmentResponse {
-  rules: RuleRecord[];
-  assessment: string;
-  total_rules: number;
-  query_duration_ms: number;
-  inference_latency_ms: number;
+  status: string;
+  manifest: AssessmentManifestItem[];
+  missing_questions_for_rules?: string[];
+  message?: string;
+  assessment_id?: string;
 }
 
 export interface RuleIngest {
@@ -193,48 +198,41 @@ export async function checkHealth(): Promise<{ status: string; engine: string }>
 // Question Bank — Review Interface Types & API
 // ---------------------------------------------------------------------------
 
-export interface QuestionOption {
-  id: string;
-  text: string;
-}
-
 export interface QuestionVariant {
   id: string;
   rule_id: string;
-  stem: string;
-  options: QuestionOption[];
-  correct_answer: string;
+  question_text: string;
+  options: string[];
+  correct_option_index: number;
   bloom_level: string;
-  grounding_verified: boolean;
-  status: "DRAFT" | "APPROVED" | "REJECTED";
-  reviewer_notes: string | null;
+  confidence: number;
+  review_status: string;
+  manualTitle?: string;
+  sectionName?: string;
+  subcategoryName?: string;
+  rule_text?: string;
+  rule_code?: string;
 }
 
-/** GET /api/v1/questions/pending-review */
-export async function fetchPendingReview(
-  skip = 0,
-  limit = 20
-): Promise<QuestionVariant[]> {
-  return fetchWithRetry<QuestionVariant[]>(
-    `${BASE}/v1/questions/pending-review?skip=${skip}&limit=${limit}`,
-    { method: "GET" }
-  );
+/** GET /api/questions */
+export async function getQuestions(): Promise<QuestionVariant[]> {
+  return fetchWithRetry<QuestionVariant[]>(`${BASE}/questions/`, { method: "GET" });
 }
 
-/** PATCH /api/v1/questions/{question_id}/status */
-export async function updateQuestionStatus(
-  questionId: string,
-  status: "APPROVED" | "REJECTED",
-  reviewerNotes?: string
-): Promise<QuestionVariant> {
-  return fetchWithRetry<QuestionVariant>(
-    `${BASE}/v1/questions/${questionId}/status`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, reviewer_notes: reviewerNotes ?? null }),
-    }
-  );
+/** PUT /api/questions/{id} */
+export async function updateQuestion(id: string, data: Partial<QuestionVariant>): Promise<QuestionVariant> {
+  return fetchWithRetry<QuestionVariant>(`${BASE}/questions/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+/** POST /api/questions/generate/{rule_id} */
+export async function generateQuestionVariants(ruleId: string, count: number = 3): Promise<{message: string, rule_id: string}> {
+  return fetchWithRetry<{message: string, rule_id: string}>(`${BASE}/questions/generate/${ruleId}?count=${count}`, {
+    method: "POST"
+  });
 }
 
 // ---------------------------------------------------------------------------

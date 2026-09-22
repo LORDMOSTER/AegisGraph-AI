@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getHierarchyTree, getFilteredBlocks, promoteFilteredBlock, FilteredBlockResponse, RuleResponse, updateRule } from "../api";
+import { getHierarchyTree, getFilteredBlocks, promoteFilteredBlock, FilteredBlockResponse, RuleResponse, updateRule, generateQuestionVariants } from "../api";
 
 interface FlatRule extends RuleResponse {
   manualTitle: string;
@@ -13,6 +13,7 @@ export function Rules() {
   const [filteredBlocks, setFilteredBlocks] = useState<FilteredBlockResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingRule, setEditingRule] = useState<FlatRule | null>(null);
+  const [generatingFor, setGeneratingFor] = useState<string | null>(null);
 
   const handleSaveRule = async (updatedRule: FlatRule) => {
     try {
@@ -75,6 +76,19 @@ export function Rules() {
       await loadData();
     } catch (err) {
       alert("Failed to promote block.");
+    }
+  };
+
+  const handleGenerateQuestions = async (ruleId: string) => {
+    setGeneratingFor(ruleId);
+    try {
+      await generateQuestionVariants(ruleId, 3);
+      alert("Successfully generated questions. Check the Question Bank tab.");
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Failed to generate questions. Ensure Ollama is running and rule is approved.");
+    } finally {
+      setGeneratingFor(null);
     }
   };
 
@@ -144,12 +158,23 @@ export function Rules() {
                       </span>
                     </td>
                     <td>
-                      <button 
-                        onClick={() => setEditingRule(rule)}
-                        style={{ padding: '6px 12px', fontSize: 12, borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer' }}
-                      >
-                        View / Edit
-                      </button>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button 
+                          onClick={() => setEditingRule(rule)}
+                          style={{ padding: '6px 12px', fontSize: 12, borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer' }}
+                        >
+                          View / Edit
+                        </button>
+                        {rule.review_status === 'approved' && (
+                          <button 
+                            onClick={() => handleGenerateQuestions(rule.id)}
+                            disabled={generatingFor === rule.id}
+                            style={{ padding: '6px 12px', fontSize: 12, borderRadius: 4, border: 'none', background: 'var(--emerald)', color: '#000', cursor: generatingFor === rule.id ? 'not-allowed' : 'pointer' }}
+                          >
+                            {generatingFor === rule.id ? 'Generating...' : 'Generate Qs'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

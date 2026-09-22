@@ -19,6 +19,7 @@ import { Certificates } from "./pages/Certificates";
 import { AuthLayout } from "./components/AuthLayout";
 import { VerifyCertificate } from "./pages/VerifyCertificate";
 import { Rules } from "./pages/Rules";
+import { QuestionBank } from "./pages/QuestionBank";
 import { Settings } from "./pages/Settings";
 import { ThemeToggle } from "./components/ThemeToggle";
 import SpecularButton from "./components/SpecularButton";
@@ -31,6 +32,7 @@ export type Tab =
   | "dashboard"
   | "manuals"
   | "rules"
+  | "question-bank"
   | "departments"
   | "employees"
   | "assessments"
@@ -48,6 +50,7 @@ const adminTabs: { id: Tab; label: string; icon: string }[] = [
   { id: "dashboard",    label: "Dashboard",    icon: "gauge" },
   { id: "manuals",      label: "Manuals",      icon: "file-text" },
   { id: "rules",        label: "Rules",        icon: "list-checks" },
+  { id: "question-bank",label: "Question Bank",icon: "library" },
   { id: "departments",  label: "Departments",  icon: "building-2" },
   { id: "employees",    label: "Employees",    icon: "users" },
   { id: "assessments",  label: "Assessments",  icon: "clipboard-list" },
@@ -100,6 +103,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<AssessmentResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [incompleteData, setIncompleteData] = useState<{message: string, missingRules: string[]} | null>(null);
   const [backendOnline, setBackendOnline] = useState(false);
 
   // Apply theme to <html>
@@ -143,8 +147,15 @@ export default function App() {
 
     try {
       const data = await generateAssessment(active, difficultyProfile);
-      setResult(data);
-      setActiveTab("results");
+      if (data.status === "incomplete") {
+        setIncompleteData({
+          message: data.message || "Not enough approved questions.",
+          missingRules: data.missing_questions_for_rules || []
+        });
+      } else {
+        setResult(data);
+        setActiveTab("results");
+      }
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Unexpected error.");
     } finally {
@@ -209,6 +220,11 @@ export default function App() {
                 isLoading={isLoading}
                 isDisabled={totalRequested === 0}
                 onGenerate={handleGenerate}
+                incompleteData={incompleteData}
+                onNavigateToBank={() => {
+                  setIncompleteData(null);
+                  setActiveTab("rules"); // the button to generate is in rules for now, or Question Bank
+                }}
               />
             </div>
           </motion.div>
@@ -246,6 +262,12 @@ export default function App() {
         {activeTab === "rules" && (
           <motion.div key="rules" {...pageVariants}>
             <Rules />
+          </motion.div>
+        )}
+
+        {activeTab === "question-bank" && (
+          <motion.div key="question-bank" {...pageVariants}>
+            <QuestionBank />
           </motion.div>
         )}
 

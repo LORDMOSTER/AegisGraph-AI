@@ -58,7 +58,7 @@ class Rule(Base, TimestampMixin, UUIDMixin):
     page_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     subcategory: Mapped["SubCategory"] = relationship("SubCategory", back_populates="rules")
-    questions: Mapped[List["QuestionBank"]] = relationship("QuestionBank", back_populates="rule", cascade="all, delete-orphan")
+    questions: Mapped[List["QuestionVariant"]] = relationship("QuestionVariant", back_populates="rule", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_rules_subcat_active", "subcategory_id", "is_active"),
