@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload, joinedload
 
 from app.models.company import Company
 from app.models.hierarchy import Manual, Section, SubCategory, Rule, FilteredBlock
-from app.models.question_bank import QuestionBank, QuestionStatus
+from app.models.question_bank import QuestionVariant
 
 
 class HierarchyService:
@@ -69,7 +69,7 @@ class HierarchyService:
                     for rule in subcat.rules:
                         if rule.is_active:
                             active_rules_count += 1
-                            approved_q = sum(1 for q in rule.questions if q.status == QuestionStatus.APPROVED)
+                            approved_q = sum(1 for q in rule.questions if q.review_status == "approved")
                             sc_dict["rules"].append({
                                 "id": str(rule.id),
                                 "rule_code": rule.rule_code,
@@ -163,14 +163,14 @@ class HierarchyService:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_approved_questions_for_rule(self, rule_id: uuid.UUID) -> List[QuestionBank]:
+    async def get_approved_questions_for_rule(self, rule_id: uuid.UUID) -> List[QuestionVariant]:
         """
         Retrieve all APPROVED questions for a specific rule.
         """
         stmt = (
-            select(QuestionBank)
-            .where(QuestionBank.rule_id == rule_id)
-            .where(QuestionBank.status == QuestionStatus.APPROVED)
+            select(QuestionVariant)
+            .where(QuestionVariant.rule_id == rule_id)
+            .where(QuestionVariant.review_status == "approved")
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
@@ -182,14 +182,14 @@ class HierarchyService:
         stmt = (
             select(
                 Section.id,
-                QuestionBank.status,
-                func.count(QuestionBank.id).label("count")
+                QuestionVariant.review_status.label("status"),
+                func.count(QuestionVariant.id).label("count")
             )
             .select_from(Section)
             .join(SubCategory, SubCategory.section_id == Section.id)
             .join(Rule, Rule.subcategory_id == SubCategory.id)
-            .join(QuestionBank, QuestionBank.rule_id == Rule.id)
-            .group_by(Section.id, QuestionBank.status)
+            .join(QuestionVariant, QuestionVariant.rule_id == Rule.id)
+            .group_by(Section.id, QuestionVariant.review_status)
         )
         
         if manual_id:
@@ -204,7 +204,7 @@ class HierarchyService:
             status_val = row.status.value if hasattr(row.status, 'value') else row.status
             
             if sec_id not in counts:
-                counts[sec_id] = {"DRAFT": 0, "APPROVED": 0, "REJECTED": 0}
+                counts[sec_id] = {"pending": 0, "approved": 0, "rejected": 0}
                 
             if status_val in counts[sec_id]:
                 counts[sec_id][status_val] = row.count

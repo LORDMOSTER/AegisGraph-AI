@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  fetchPendingReview,
-  updateQuestionStatus,
+  getQuestions,
+  updateQuestion,
   type QuestionVariant,
-  type QuestionOption,
 } from '../../api';
 import './QuestionReviewer.css';
 
@@ -119,7 +118,7 @@ const BLOOM_COLOR: Record<string, string> = {
 const VariantCard: React.FC<VariantCardProps> = ({
   variant, cardIndex, onApprove, onRequestReject, onEdit, actionInFlight,
 }) => {
-  const isHallucinated = !variant.grounding_verified;
+  const isHallucinated = variant.confidence < 0.8;
   const isLoading = actionInFlight === variant.id;
   const bloomColor = BLOOM_COLOR[variant.bloom_level.toLowerCase()] ?? 'var(--text-secondary)';
 
@@ -137,7 +136,7 @@ const VariantCard: React.FC<VariantCardProps> = ({
           </span>
         </div>
         <div className="qr-card-header-right">
-          {variant.grounding_verified ? (
+          {!isHallucinated ? (
             <span className="qr-grounding-badge qr-grounding-badge--pass">
               <IconShield /> Grounded
             </span>
@@ -161,19 +160,19 @@ const VariantCard: React.FC<VariantCardProps> = ({
       )}
 
       {/* Question Stem */}
-      <div className="qr-stem">{variant.stem}</div>
+      <div className="qr-stem">{variant.question_text}</div>
 
       {/* Options */}
       <ol className="qr-options" type="A">
-        {variant.options.map((opt: QuestionOption, idx: number) => {
-          const isCorrect = opt.text === variant.correct_answer;
+        {variant.options.map((optText: string, idx: number) => {
+          const isCorrect = idx === variant.correct_option_index;
           return (
             <li
-              key={opt.id ?? idx}
+              key={idx}
               className={`qr-option ${isCorrect ? 'qr-option--correct' : ''}`}
             >
               <span className="qr-option-label">{String.fromCharCode(65 + idx)}</span>
-              <span className="qr-option-text">{opt.text}</span>
+              <span className="qr-option-text">{optText}</span>
               {isCorrect && <span className="qr-option-target">KEY</span>}
             </li>
           );
@@ -237,8 +236,8 @@ export const QuestionReviewer: React.FC = () => {
   const loadVariants = useCallback(async () => {
     try {
       setError(null);
-      const data = await fetchPendingReview(0, 20);
-      setVariants(data);
+      const data = await getQuestions();
+      setVariants(data.filter((v: QuestionVariant) => v.review_status === 'pending' || v.review_status === 'DRAFT'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load review queue.');
     } finally {
@@ -251,7 +250,7 @@ export const QuestionReviewer: React.FC = () => {
   const handleApprove = async (id: string) => {
     setActionInFlight(id);
     try {
-      await updateQuestionStatus(id, 'APPROVED');
+      await updateQuestion(id, { review_status: 'approved' });
       setVariants(prev => prev.filter(v => v.id !== id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Approval failed.');
@@ -264,7 +263,7 @@ export const QuestionReviewer: React.FC = () => {
     setRejectTargetId(null);
     setActionInFlight(id);
     try {
-      await updateQuestionStatus(id, 'REJECTED', notes);
+      await updateQuestion(id, { review_status: 'rejected' });
       setVariants(prev => prev.filter(v => v.id !== id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Rejection failed.');

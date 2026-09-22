@@ -3,7 +3,9 @@ from typing import List
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+import json
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -106,4 +108,75 @@ async def generate_variants_for_rule_endpoint(
         new_variants.append(qv)
         
     await db.commit()
-    return {"message": f"Generated {len(new_variants)} variants", "rule_id": rule.id}
+    
+    return {"message": f"Successfully generated {len(new_variants)} questions"}
+
+@router.post("/bulk-generate")
+async def bulk_generate_questions(
+    manual_id: str = None,
+    section_name: str = None,
+    db: AsyncSession = Depends(get_db_session)
+):
+    stmt = (
+        select(Rule)
+        .options(
+            selectinload(Rule.variants),
+            selectinload(Rule.subcategory).selectinload(SubCategory.section)
+        )
+        .where(Rule.review_status == "approved")
+    )
+    
+    result = await db.execute(stmt)
+    rules = result.scalars().all()
+    
+    # Filter in python (easier than complex joins if we already fetched them, but joining is better, let's filter in python for now)
+    filtered_rules = []
+    for r in rules:
+        if r.variants:
+            # Skip if has any variants
+            continue
+            
+        if manual_id:
+            try:
+                if str(r.subcategory.section.manual_id) != manual_id:
+                    continue
+            except:
+                pass
+                
+        if section_name:
+            if r.subcategory.section.name != section_name:
+                continue
+                
+        filtered_rules.append(r)
+        
+    async def event_generator():
+        try:
+            total = len(filtered_rules)
+            yield f"data: {json.dumps({'message': f'Found {total} approved rules without questions.'})}\n\n"
+            
+            generated_count = 0
+            for i, rule in enumerate(filtered_rules):
+                yield f"data: {json.dumps({'message': f'Generating question {i+1} of {total}...', 'progress': (i/total)*100})}\n\n"
+                
+                variants_data = await generate_question_variants(rule.text, rule.risk_score, rule.cognitive_level, count=3)
+                if variants_data:
+                    for vd in variants_data:
+                        qv = QuestionVariant(
+                            rule_id=rule.id,
+                            question_text=vd["question_text"],
+                            options=vd["options"],
+                            correct_option_index=vd["correct_option_index"],
+                            bloom_level=vd["bloom_level"],
+                            confidence=0.8,
+                            review_status="pending"
+                        )
+                        db.add(qv)
+                    generated_count += len(variants_data)
+                    await db.commit()
+                    
+            yield f"data: {json.dumps({'message': f'Complete! {generated_count} questions generated.', 'done': True, 'count': generated_count})}\n\n"
+        except Exception as e:
+            logger.error(f"Bulk generate failed: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

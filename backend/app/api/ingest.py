@@ -54,9 +54,25 @@ async def ingest_pdf(
             detail="Only PDF files are accepted."
         )
 
+    # Duplicate check
+    stmt = select(Manual).where(Manual.company_id == current_user.company_id, Manual.title == file.filename)
+    result = await db.execute(stmt)
+    if result.scalars().first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A manual with this filename has already been uploaded."
+        )
+
     # Need to read to temp file immediately
     content = await file.read()
     suffix = f"_{uuid.uuid4().hex[:8]}.pdf"
+    
+    UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    saved_file_path = os.path.join(UPLOAD_DIR, f"{current_user.company_id}_{file.filename}")
+    with open(saved_file_path, "wb") as f:
+        f.write(content)
+
     
     async def event_generator():
         tmp_path = None
@@ -84,7 +100,8 @@ async def ingest_pdf(
             manual = Manual(
                 company_id=current_user.company_id,
                 title=file.filename,
-                version="1.0"
+                version="1.0",
+                file_path=saved_file_path
             )
             db.add(manual)
             await db.flush()

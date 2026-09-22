@@ -68,8 +68,7 @@ export function Login({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.6, delay: 0.2 }}
-      className="card"
-      style={{ width: "100%", maxWidth: 440, padding: 48 }}
+      style={{ width: "100%" }}
     >
           <div style={{ marginBottom: 32 }}>
             <h2 style={{ fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 600, color: "var(--ink)", marginBottom: 8, letterSpacing: "-0.02em" }}>

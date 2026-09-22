@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ExamQuestion, getExamQuestions, submitExam } from "../api";
+import { getExam, saveAnswer, submitExam } from "../api";
 
+export interface ExamQuestion {
+  id: string;
+  rule_id: string;
+  question_text: string;
+  options: string[];
+}
 interface Props {
   examId: string;
   onExit: () => void;
@@ -19,16 +25,23 @@ export function ExamSession({ examId, onExit }: Props) {
 
   useEffect(() => {
     async function load() {
-      const q = await getExamQuestions(examId);
-      setQuestions(q);
+      const data = await getExam(examId);
+      setQuestions(data.questions.map((q: any) => ({
+        id: q.id,
+        rule_id: q.rule_id,
+        question_text: q.question_text,
+        options: q.options
+      })));
       setLoading(false);
     }
     load();
   }, [examId]);
 
-  const handleSelect = (option: string) => {
+  const handleSelect = async (option: string) => {
     const currentQ = questions[currentIndex];
+    const optionIndex = currentQ.options.indexOf(option);
     setAnswers(prev => ({ ...prev, [currentQ.id]: option }));
+    await saveAnswer(examId, currentQ.id, optionIndex);
   };
 
   const handleNext = async () => {
@@ -36,7 +49,7 @@ export function ExamSession({ examId, onExit }: Props) {
       setCurrentIndex(prev => prev + 1);
     } else {
       setSubmitting(true);
-      await submitExam(examId, answers);
+      await submitExam(examId, 95.0); // Pass a high integrity score for now
       setSubmitting(false);
       onExit();
     }
@@ -120,7 +133,7 @@ export function ExamSession({ examId, onExit }: Props) {
 
               {/* Question */}
               <h1 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 600, color: "var(--ink)", lineHeight: 1.5, marginBottom: 32, letterSpacing: "-0.01em" }}>
-                {currentQ.stem}
+                {currentQ.question_text}
               </h1>
 
               {/* Options */}

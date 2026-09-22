@@ -34,4 +34,5 @@ class User(Base, TimestampMixin, UUIDMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     company: Mapped["Company"] = relationship(back_populates="users")
-    attempts: Mapped[list["TestAttempt"]] = relationship(back_populates="user")
+    exam_sessions: Mapped[list["ExamSession"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
+    certificates: Mapped[list["Certificate"]] = relationship(back_populates="employee", cascade="all, delete-orphan")

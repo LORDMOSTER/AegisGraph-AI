@@ -23,6 +23,8 @@ import { QuestionBank } from "./pages/QuestionBank";
 import { Settings } from "./pages/Settings";
 import { ThemeToggle } from "./components/ThemeToggle";
 import SpecularButton from "./components/SpecularButton";
+import { LogoMark } from "./components/BrandAssets";
+import { AdminExams } from "./pages/AdminExams";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & helpers
@@ -233,10 +235,10 @@ export default function App() {
         {activeTab === "results" && result && (
           <motion.div key="results" {...pageVariants}>
             <AssessmentRenderer
-              rules={result.rules}
-              assessment={result.assessment}
-              queryMs={result.query_duration_ms}
-              inferenceMs={result.inference_latency_ms}
+              rules={(result as any).rules || []}
+              assessment={(result as any).assessment || "Assessment generated in manifest."}
+              queryMs={(result as any).query_duration_ms || 0}
+              inferenceMs={(result as any).inference_latency_ms || 0}
             />
           </motion.div>
         )}
@@ -244,6 +246,12 @@ export default function App() {
         {activeTab === "departments" && (
           <motion.div key="departments" {...pageVariants}>
             <Departments />
+          </motion.div>
+        )}
+        
+        {activeTab === "exams" && (
+          <motion.div key="exams" {...pageVariants}>
+            <AdminExams />
           </motion.div>
         )}
 
@@ -341,9 +349,10 @@ export default function App() {
                 width: 32, height: 32,
                 borderRadius: 8,
                 flexShrink: 0,
-                overflow: "hidden"
+                display: "grid",
+                placeItems: "center"
               }}>
-                <img src="/logo.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <LogoMark style={{ width: "100%", height: "100%", color: "var(--brand-accent)" }} />
               </div>
               <span style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)", fontFamily: "var(--font-display)", letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 AegisGraph

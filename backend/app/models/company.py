@@ -14,5 +14,5 @@ class Company(Base, TimestampMixin, UUIDMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     users: Mapped[List["User"]] = relationship(back_populates="company", cascade="all, delete-orphan")
-    sessions: Mapped[List["AssessmentSession"]] = relationship(back_populates="company", cascade="all, delete-orphan")
+    assessments: Mapped[List["Assessment"]] = relationship(back_populates="company", cascade="all, delete-orphan")
     audit_logs: Mapped[List["ComplianceAuditLog"]] = relationship(back_populates="company")

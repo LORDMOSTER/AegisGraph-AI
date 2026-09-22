@@ -84,6 +84,7 @@ export function IngestionTerminal() {
   const [result, setResult]           = useState<IngestResult | null>(null);
   const [logs, setLogs]               = useState<LogLine[]>([]);
   const [error, setError]             = useState<string | null>(null);
+  const [progress, setProgress]       = useState<{current: number, total: number} | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logEndRef    = useRef<HTMLDivElement>(null);
 
@@ -119,6 +120,7 @@ export function IngestionTerminal() {
     setResult(null);
     setLogs([]);
     setError(null);
+    setProgress(null);
 
     addLog(`Initiating PDF ingestion pipeline for: ${selectedFile.name}`);
     addLog(`File size: ${(selectedFile.size / 1024).toFixed(1)} KB`);
@@ -163,6 +165,10 @@ export function IngestionTerminal() {
                }
                if (data.message) {
                  addLog(data.message, "success");
+                 const match = data.message.match(/Structuring rule (\d+) of (\d+)/);
+                 if (match) {
+                   setProgress({ current: parseInt(match[1], 10), total: parseInt(match[2], 10) });
+                 }
                }
                if (data.done) {
                  setResult({
@@ -196,6 +202,7 @@ export function IngestionTerminal() {
     setResult(null);
     setLogs([]);
     setError(null);
+    setProgress(null);
   };
 
   return (
@@ -296,11 +303,26 @@ export function IngestionTerminal() {
             style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}
           >
             <div>
-              <p className="eyebrow" style={{ marginBottom: 4 }}>Ready for Extraction</p>
-              <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                pdfplumber will extract text chunks from{" "}
-                <span style={{ color: "var(--violet-400)", fontWeight: 600 }}>{selectedFile.name}</span>
+              <p className="eyebrow" style={{ marginBottom: 4 }}>
+                {isUploading ? "Extraction in Progress" : "Ready for Extraction"}
               </p>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                {isUploading && progress ? (
+                  <>Structuring rule <strong style={{color: "var(--emerald)"}}>{progress.current}</strong> of {progress.total}</>
+                ) : (
+                  <>pdfplumber will extract text chunks from <span style={{ color: "var(--violet-400)", fontWeight: 600 }}>{selectedFile.name}</span></>
+                )}
+              </p>
+              {isUploading && progress && (
+                <div style={{ marginTop: 12, height: 6, background: "var(--void-3)", borderRadius: 3, overflow: "hidden", width: "100%", maxWidth: 300 }}>
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${(progress.current / progress.total) * 100}%` }}
+                    transition={{ type: "spring", bounce: 0, duration: 0.5 }}
+                    style={{ height: "100%", background: "var(--emerald)" }}
+                  />
+                </div>
+              )}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button

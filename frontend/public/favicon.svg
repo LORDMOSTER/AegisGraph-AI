@@ -1,17 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="12" fill="#07070e"/>
-  <!-- Outer ring -->
-  <circle cx="50" cy="50" r="44" fill="none" stroke="#1e1e2e" stroke-width="1.5"/>
-  <!-- Graph nodes -->
-  <circle cx="50" cy="18" r="9" fill="#06b6d4"/>
-  <circle cx="78" cy="66" r="9" fill="#10b981"/>
-  <circle cx="22" cy="66" r="9" fill="#f59e0b"/>
-  <!-- Edges with glow -->
-  <line x1="50" y1="27" x2="71" y2="58" stroke="#06b6d4" stroke-width="2" stroke-opacity="0.6"/>
-  <line x1="50" y1="27" x2="29" y2="58" stroke="#f59e0b" stroke-width="2" stroke-opacity="0.6"/>
-  <line x1="31" y1="66" x2="69" y2="66" stroke="#10b981" stroke-width="2" stroke-opacity="0.6"/>
-  <!-- Node center dots -->
-  <circle cx="50" cy="18" r="4" fill="#07070e"/>
-  <circle cx="78" cy="66" r="4" fill="#07070e"/>
-  <circle cx="22" cy="66" r="4" fill="#07070e"/>
+<svg viewBox="0 0 100 100" fill="none" stroke="#B4FF39" stroke-width="4" xmlns="http://www.w3.org/2000/svg">
+    <path d="M50 20 L25 80 M50 20 L75 80 M35 60 L65 60" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M75 35 A 30 30 0 1 0 75 75 L75 55 L55 55" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

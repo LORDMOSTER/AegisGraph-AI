@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { VerificationResult, verifyCertificate } from "../api";
+import { LogoLockup, CornerMotif } from "../components/BrandAssets";
 
 interface Props {
   certId: string;
@@ -17,18 +18,19 @@ export function VerifyCertificate({ certId }: Props) {
   }, [certId]);
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--base)", fontFamily: "var(--font-sans)", color: "var(--ink)" }}>
-      <div style={{ maxWidth: 680, margin: "0 auto", padding: "40px 24px" }}>
+    <div style={{ minHeight: "100vh", background: "#FFFFFF", fontFamily: "var(--font-sans)", color: "#111", position: "relative", overflow: "hidden" }}>
+      
+      {/* Decorative Corner Motif */}
+      <CornerMotif 
+        style={{ position: 'absolute', top: -50, right: -50, width: 300, height: 300, color: 'var(--brand-accent)', opacity: 0.7, zIndex: 0 }} 
+      />
+
+      <div style={{ maxWidth: 800, margin: "0 auto", padding: "60px 24px", position: "relative", zIndex: 10 }}>
 
         {/* Brand header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--line)", paddingBottom: 20, marginBottom: 32 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: "var(--ink)", display: "grid", placeItems: "center" }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--base)", fontFamily: "var(--font-display)" }}>A</span>
-            </div>
-            <span style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.01em" }}>AegisGraph</span>
-          </div>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>Safety certification, verified.</span>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 48 }}>
+          <LogoLockup style={{ transform: 'scale(0.8)', transformOrigin: 'left top' }} />
+          <span style={{ fontSize: 14, color: "#666", fontWeight: 500 }}>Safety certification, verified.</span>
         </div>
 
         {/* Loading */}
@@ -41,14 +43,15 @@ export function VerifyCertificate({ certId }: Props) {
 
         {/* Result */}
         {result && (
-          <>
+          <div style={{ display: 'contents' }}>
             {/* Main status card */}
+            {/* Main framed card */}
             <div style={{
-              background: "var(--surface)",
-              border: "1px solid var(--line)",
-              borderRadius: "var(--card-radius)",
-              padding: 24,
-              boxShadow: "var(--shadow-card)",
+              background: "#FFFFFF",
+              border: "3px solid var(--brand-accent)",
+              borderRadius: 32,
+              padding: 48,
+              boxShadow: "0 20px 40px rgba(0,0,0,0.05)",
               marginBottom: 16,
             }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 20 }}>
@@ -135,22 +138,22 @@ export function VerifyCertificate({ certId }: Props) {
             )}
 
             {/* Trust footer */}
-            <div style={{ background: "var(--raised)", border: "1px solid var(--line)", borderRadius: "var(--card-radius)", padding: "16px 20px" }}>
+            <div style={{ borderTop: "1px solid #eee", paddingTop: 24, marginTop: 24 }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 8, background: "var(--surface)", border: "1px solid var(--line)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-                  <iconify-icon icon="lucide:wifi-off" style={{ fontSize: 18, color: "var(--ink)" }} />
+                <div style={{ width: 40, height: 40, borderRadius: 8, background: "#f8f8f8", border: "1px solid #eee", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <iconify-icon icon="lucide:shield-check" style={{ fontSize: 18, color: "#111" }} />
                 </div>
                 <div>
-                  <p style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)", marginBottom: 4 }}>
+                  <p style={{ fontSize: 13, fontWeight: 500, color: "#111", marginBottom: 4 }}>
                     Verified at {new Date().toLocaleTimeString()}, {new Date().toLocaleDateString()}
                   </p>
-                  <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>
+                  <p style={{ fontSize: 12, color: "#666", lineHeight: 1.6 }}>
                     This verification ran offline against a signed local copy of the certificate registry. Ed25519 signature validation.
                   </p>
                 </div>
               </div>
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>

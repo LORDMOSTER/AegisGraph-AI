@@ -169,6 +169,46 @@ export async function generateAssessment(
   });
 }
 
+export async function getAssessments(): Promise<any[]> {
+  return fetchWithRetry<any[]>(`${BASE}/assessment/assessments`);
+}
+
+export async function assignExam(assessmentId: string, employeeIds: string[]): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/assessment/assign`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ assessment_id: assessmentId, employee_ids: employeeIds })
+  });
+}
+
+export async function getMyExams(): Promise<any[]> {
+  return fetchWithRetry<any[]>(`${BASE}/assessment/my-exams`);
+}
+
+export async function getExam(examId: string): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/assessment/exam/${examId}`);
+}
+
+export async function saveAnswer(examId: string, variantId: string, index: number): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/assessment/exam/${examId}/answer`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question_variant_id: variantId, selected_option_index: index })
+  });
+}
+
+export async function submitExam(examId: string, integrityScore: number): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/assessment/exam/${examId}/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ integrity_score: integrityScore })
+  });
+}
+
+export async function getMyCertificates(): Promise<any[]> {
+  return fetchWithRetry<any[]>(`${BASE}/assessment/certificates`);
+}
+
 /** POST /api/ingest/batch */
 export async function batchIngest(
   request: BatchIngestRequest
@@ -234,6 +274,55 @@ export async function generateQuestionVariants(ruleId: string, count: number = 3
     method: "POST"
   });
 }
+
+/** POST /api/questions/bulk-generate (SSE) */
+export async function bulkGenerateQuestions(
+  onMessage: (msg: any) => void,
+  manualId?: string,
+  sectionName?: string
+): Promise<void> {
+  const url = new URL(`${window.location.origin}/api/v1/questions/bulk-generate`);
+  if (manualId) url.searchParams.append("manual_id", manualId);
+  if (sectionName) url.searchParams.append("section_name", sectionName);
+
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      "Accept": "text/event-stream"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Bulk generate failed: ${response.status}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No readable stream");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        try {
+          const data = JSON.parse(line.slice(6));
+          onMessage(data);
+        } catch (e) {
+          console.error("Failed to parse SSE data", line);
+        }
+      }
+    }
+  }
+}
+
 
 // ---------------------------------------------------------------------------
 // Auth & Onboarding Mock API (LocalStorage)

@@ -13,6 +13,7 @@ class Manual(Base, TimestampMixin, UUIDMixin):
     company_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"), index=True, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     version: Mapped[str] = mapped_column(String(32), default="1.0", nullable=False)
+    file_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
 
     company: Mapped["Company"] = relationship("Company")
     sections: Mapped[List["Section"]] = relationship("Section", back_populates="manual", cascade="all, delete-orphan")

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { getHierarchyTree, getFilteredBlocks, promoteFilteredBlock, FilteredBlockResponse, RuleResponse, updateRule, generateQuestionVariants } from "../api";
+import { getHierarchyTree, getFilteredBlocks, promoteFilteredBlock, FilteredBlockResponse, RuleResponse, updateRule, generateQuestionVariants, bulkGenerateQuestions } from "../api";
+import { useNavigate } from "react-router-dom";
 
 interface FlatRule extends RuleResponse {
+  manualId: string;
   manualTitle: string;
   sectionName: string;
   subcategoryName: string;
@@ -14,6 +16,12 @@ export function Rules() {
   const [loading, setLoading] = useState(true);
   const [editingRule, setEditingRule] = useState<FlatRule | null>(null);
   const [generatingFor, setGeneratingFor] = useState<string | null>(null);
+
+  const [filterManual, setFilterManual] = useState<string>("All");
+  const [filterSection, setFilterSection] = useState<string>("All");
+  const [bulkGenerating, setBulkGenerating] = useState<boolean>(false);
+  const [bulkProgress, setBulkProgress] = useState<{message: string, progress?: number, done?: boolean, count?: number} | null>(null);
+  const navigate = useNavigate();
 
   const handleSaveRule = async (updatedRule: FlatRule) => {
     try {
@@ -48,6 +56,7 @@ export function Rules() {
             subcat.rules.forEach(rule => {
               flatRules.push({
                 ...rule,
+                manualId: manual.id,
                 manualTitle: manual.title,
                 sectionName: section.name,
                 subcategoryName: subcat.name
@@ -92,6 +101,42 @@ export function Rules() {
     }
   };
 
+  const handleBulkGenerate = async () => {
+    setBulkGenerating(true);
+    setBulkProgress({ message: "Starting bulk generation..." });
+    
+    let targetManualId = undefined;
+    let targetSectionName = undefined;
+    
+    if (filterManual !== "All") {
+      targetManualId = filterManual;
+    }
+    if (filterSection !== "All") {
+      targetSectionName = filterSection;
+    }
+    
+    try {
+      await bulkGenerateQuestions((data) => {
+        setBulkProgress(data);
+      }, targetManualId, targetSectionName);
+    } catch (e) {
+      console.error(e);
+      alert("Bulk generation failed. Please check logs.");
+      setBulkGenerating(false);
+    }
+  };
+
+  const uniqueManuals = Array.from(new Map(rules.map(r => [r.manualId, r.manualTitle])).entries());
+  const uniqueSections = filterManual === "All" 
+    ? Array.from(new Set(rules.map(r => r.sectionName))) 
+    : Array.from(new Set(rules.filter(r => r.manualId === filterManual).map(r => r.sectionName)));
+    
+  const displayedRules = rules.filter(r => {
+    if (filterManual !== "All" && r.manualId !== filterManual) return false;
+    if (filterSection !== "All" && r.sectionName !== filterSection) return false;
+    return true;
+  });
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, height: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -115,6 +160,30 @@ export function Rules() {
         </div>
       </div>
 
+      {activeTab === 'active' && (
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', background: 'var(--surface)', padding: 16, borderRadius: 'var(--card-radius)', border: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)' }}>Manual</label>
+            <select className="field-select" style={{ width: 200 }} value={filterManual} onChange={e => { setFilterManual(e.target.value); setFilterSection('All'); }}>
+              <option value="All">All Manuals</option>
+              {uniqueManuals.map(([id, title]) => <option key={id} value={id}>{title}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)' }}>Section</label>
+            <select className="field-select" style={{ width: 200 }} value={filterSection} onChange={e => setFilterSection(e.target.value)}>
+              <option value="All">All Sections</option>
+              {uniqueSections.map(sec => <option key={sec} value={sec}>{sec}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: 1 }} />
+          <button className="btn btn-primary" onClick={handleBulkGenerate}>
+            <iconify-icon icon="lucide:zap" />
+            Generate Questions for All Approved Rules
+          </button>
+        </div>
+      )}
+
       <div className="table-container">
         {loading ? (
           <div style={{ padding: 40, textAlign: "center", color: "var(--text-tertiary)" }}>Loading...</div>
@@ -131,14 +200,14 @@ export function Rules() {
               </tr>
             </thead>
             <tbody>
-              {rules.length === 0 ? (
+              {displayedRules.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ textAlign: "center", padding: 40, color: "var(--text-tertiary)" }}>
-                    No rules found. Try uploading a manual first.
+                    No rules found matching filters.
                   </td>
                 </tr>
               ) : (
-                rules.map(rule => (
+                displayedRules.map(rule => (
                   <tr key={rule.id}>
                     <td>
                       <span className="mono" style={{ fontSize: 12, color: "var(--cyan)" }}>
@@ -169,9 +238,9 @@ export function Rules() {
                           <button 
                             onClick={() => handleGenerateQuestions(rule.id)}
                             disabled={generatingFor === rule.id}
-                            style={{ padding: '6px 12px', fontSize: 12, borderRadius: 4, border: 'none', background: 'var(--emerald)', color: '#000', cursor: generatingFor === rule.id ? 'not-allowed' : 'pointer' }}
+                            style={{ padding: '6px 12px', fontSize: 12, borderRadius: 4, border: '1px solid var(--line)', background: 'transparent', color: 'var(--muted)', cursor: generatingFor === rule.id ? 'not-allowed' : 'pointer' }}
                           >
-                            {generatingFor === rule.id ? 'Generating...' : 'Generate Qs'}
+                            {generatingFor === rule.id ? 'Generating...' : 'Regenerate'}
                           </button>
                         )}
                       </div>
@@ -299,6 +368,34 @@ export function Rules() {
                 Save Changes
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {bulkGenerating && bulkProgress && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2000 }}>
+          <div className="clay-card" style={{ width: 400, padding: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, backgroundColor: 'var(--surface)', borderRadius: 16, boxShadow: 'var(--shadow-dropdown)' }}>
+            <h3 style={{ fontSize: 18, margin: 0, color: 'var(--ink)' }}>Bulk Generating</h3>
+            <p style={{ fontSize: 14, color: 'var(--muted)', textAlign: 'center' }}>{bulkProgress.message}</p>
+            
+            {bulkProgress.progress !== undefined && (
+              <div style={{ width: '100%', height: 6, background: 'var(--raised)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ width: `${bulkProgress.progress}%`, height: '100%', background: 'var(--accent)', transition: 'width 0.3s ease' }} />
+              </div>
+            )}
+            
+            {bulkProgress.done && (
+              <button 
+                className="btn btn-primary"
+                onClick={() => {
+                  setBulkGenerating(false);
+                  navigate('/question-bank');
+                }}
+                style={{ width: '100%', marginTop: 8 }}
+              >
+                Go to Question Bank
+              </button>
+            )}
           </div>
         </div>
       )}

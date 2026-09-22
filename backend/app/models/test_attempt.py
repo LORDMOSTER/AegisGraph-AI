@@ -1,3 +1,4 @@
+import enum
 import uuid
 from datetime import datetime
 
@@ -7,23 +8,31 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base, TimestampMixin, UUIDMixin
 
+class ExamStatus(str, enum.Enum):
+    ASSIGNED = "assigned"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    PENDING_REVIEW = "pending_supervisor_review"
+    FAILED = "failed"
 
-class TestAttempt(Base, TimestampMixin, UUIDMixin):
-    __tablename__ = "test_attempts"
+class ExamSession(Base, TimestampMixin, UUIDMixin):
+    __tablename__ = "exam_sessions"
 
-    session_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("assessment_sessions.id", ondelete="CASCADE"), index=True, nullable=False
+    assessment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("assessments.id", ondelete="CASCADE"), index=True, nullable=False
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    employee_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
     
-    raw_score: Mapped[float] = mapped_column(Float, nullable=False)
-    percentage: Mapped[float] = mapped_column(Float, nullable=False)
-    grade: Mapped[str] = mapped_column(String(8), nullable=False)
-    anomaly_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
-    verified_responses: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[ExamStatus] = mapped_column(default=ExamStatus.ASSIGNED, nullable=False)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    responses: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
-    session: Mapped["AssessmentSession"] = relationship(back_populates="attempts")
-    user: Mapped["User"] = relationship(back_populates="attempts")
+    assessment: Mapped["Assessment"] = relationship(back_populates="exam_sessions")
+    employee: Mapped["User"] = relationship(back_populates="exam_sessions")
+    certificates: Mapped[list["Certificate"]] = relationship(back_populates="exam_session", cascade="all, delete-orphan")

@@ -62,8 +62,7 @@ export function RegisterCompany({ onNavigate }: { onNavigate: (route: "login" | 
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
-          className="card"
-          style={{ width: "100%", maxWidth: 520, padding: 48 }}
+          style={{ width: "100%" }}
         >
           <div style={{ marginBottom: 32 }}>
             <h2 style={{ fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 600, color: "var(--ink)", marginBottom: 8, letterSpacing: "-0.02em" }}>
@@ -165,8 +164,7 @@ export function RegisterCompany({ onNavigate }: { onNavigate: (route: "login" | 
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
-          className="card"
-          style={{ width: "100%", maxWidth: 520, padding: 48 }}
+          style={{ width: "100%" }}
         >
           <div style={{ marginBottom: 32, position: "relative" }}>
             <button 
@@ -261,8 +259,7 @@ export function RegisterCompany({ onNavigate }: { onNavigate: (route: "login" | 
           key="success"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="card"
-          style={{ width: "100%", maxWidth: 440, padding: 48, textAlign: "center" }}
+          style={{ width: "100%", textAlign: "center" }}
         >
           <div style={{ width: 64, height: 64, borderRadius: "50%", background: "var(--green-dim)", color: "var(--green)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 32 }}>
             <iconify-icon icon="lucide:check-circle-2" />

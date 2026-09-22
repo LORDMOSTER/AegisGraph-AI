@@ -1,7 +1,19 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { AssignedExam, Certificate, getEmployeeExams, getEmployeeCertificates } from "../api";
+import { getMyExams, getMyCertificates } from "../api";
 
+export interface AssignedExam {
+  id: string;
+  title: string;
+  topics: string[];
+  totalQuestions: number;
+}
+
+export interface Certificate {
+  id: string;
+  title: string;
+  issueDate: string;
+}
 interface Props {
   onStartExam: (examId: string) => void;
 }
@@ -15,9 +27,18 @@ export function ExamDashboard({ onStartExam }: Props) {
 
   useEffect(() => {
     async function load() {
-      const [e, c] = await Promise.all([getEmployeeExams(), getEmployeeCertificates()]);
-      setExams(e);
-      setCerts(c);
+      const [e, c] = await Promise.all([getMyExams(), getMyCertificates()]);
+      setExams(e.map(exam => ({
+        id: exam.exam_session_id,
+        title: exam.assessment_name,
+        topics: ["General Safety"],
+        totalQuestions: exam.total_questions
+      })));
+      setCerts(c.map(cert => ({
+        id: cert.id,
+        title: cert.assessment_name + " Certificate",
+        issueDate: cert.issued_at
+      })));
       setLoading(false);
     }
     load();
