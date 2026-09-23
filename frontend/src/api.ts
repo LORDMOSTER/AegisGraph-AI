@@ -101,7 +101,7 @@ export class ApiError extends Error {
 
 async function fetchWithRetry<T>(
   url: string,
-  options: RequestInit,
+  options: RequestInit = {},
   maxRetries = 3,
   baseDelayMs = 800
 ): Promise<T> {
@@ -137,8 +137,14 @@ async function fetchWithRetry<T>(
       }
       return res.json() as Promise<T>;
     } catch (err) {
-      lastError = err instanceof Error ? err : new Error("Unknown error");
-      if (err instanceof ApiError && err.status >= 400 && err.status < 500) throw err;
+      if (err instanceof ApiError) {
+        lastError = err;
+        if (err.status >= 400 && err.status < 500) throw err;
+      } else if (err instanceof TypeError && err.message === "Failed to fetch") {
+        lastError = new Error("Backend server is unreachable. Please ensure it is running.");
+      } else {
+        lastError = err instanceof Error ? err : new Error("Unknown error");
+      }
 
       if (attempt < maxRetries - 1) {
         const delay = baseDelayMs * Math.pow(2, attempt);
@@ -269,8 +275,8 @@ export async function updateQuestion(id: string, data: Partial<QuestionVariant>)
 }
 
 /** POST /api/questions/generate/{rule_id} */
-export async function generateQuestionVariants(ruleId: string, count: number = 3): Promise<{message: string, rule_id: string}> {
-  return fetchWithRetry<{message: string, rule_id: string}>(`${BASE}/questions/generate/${ruleId}?count=${count}`, {
+export async function generateQuestionVariants(ruleId: string, count: number = 3, questionType: string = "multiple_choice"): Promise<{message: string, rule_id: string}> {
+  return fetchWithRetry<{message: string, rule_id: string}>(`${BASE}/questions/generate/${ruleId}?count=${count}&question_type=${questionType}`, {
     method: "POST"
   });
 }
@@ -279,11 +285,13 @@ export async function generateQuestionVariants(ruleId: string, count: number = 3
 export async function bulkGenerateQuestions(
   onMessage: (msg: any) => void,
   manualId?: string,
-  sectionName?: string
+  sectionName?: string,
+  questionType: string = "multiple_choice"
 ): Promise<void> {
   const url = new URL(`${window.location.origin}/api/v1/questions/bulk-generate`);
   if (manualId) url.searchParams.append("manual_id", manualId);
   if (sectionName) url.searchParams.append("section_name", sectionName);
+  url.searchParams.append("question_type", questionType);
 
   const response = await fetch(url.toString(), {
     method: "POST",
@@ -629,11 +637,7 @@ export async function getExamQuestions(_examId: string): Promise<ExamQuestion[]>
   ];
 }
 
-export async function submitExam(_examId: string, _answers: Record<string, string>): Promise<{ passed: boolean, score: number }> {
-  await new Promise(r => setTimeout(r, 600));
-  // Mock logic: anything submitted passes for the demo
-  return { passed: true, score: 100 };
-}
+
 
 // ---------------------------------------------------------------------------
 // Admin Certificates & Public Verification Mock API
@@ -663,57 +667,15 @@ export interface VerificationResult {
 }
 
 export async function getAdminCertificates(): Promise<AdminCertificate[]> {
-  await new Promise(r => setTimeout(r, 400));
-  const existingStr = localStorage.getItem("aegis_admin_certs");
-  
-  if (existingStr) {
-    return JSON.parse(existingStr);
-  }
-  
-  // Seed with some mock data if empty
-  const mockCerts: AdminCertificate[] = [
-    {
-      id: "CERT-8890",
-      employeeName: "John Doe",
-      employeeId: "TT01-MEC-0001",
-      score: 96,
-      issueDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(),
-      expiryDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 335).toISOString(),
-      status: "Valid"
-    },
-    {
-      id: "CERT-8891",
-      employeeName: "Jane Smith",
-      employeeId: "TT01-MEC-0002",
-      score: 82,
-      issueDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 350).toISOString(),
-      expiryDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 15).toISOString(),
-      status: "Expiring Soon"
-    },
-    {
-      id: "CERT-8892",
-      employeeName: "Robert Hawkins",
-      employeeId: "TT01-OPS-0004",
-      score: 91,
-      issueDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 100).toISOString(),
-      expiryDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 265).toISOString(),
-      status: "Revoked"
-    }
-  ];
-  localStorage.setItem("aegis_admin_certs", JSON.stringify(mockCerts));
-  return mockCerts;
+  return fetchWithRetry<AdminCertificate[]>(`${BASE}/v1/certificates/`, {
+    method: "GET"
+  });
 }
 
 export async function revokeCertificate(certId: string): Promise<void> {
-  await new Promise(r => setTimeout(r, 300));
-  const existingStr = localStorage.getItem("aegis_admin_certs") || "[]";
-  const certs: AdminCertificate[] = JSON.parse(existingStr);
-  
-  const index = certs.findIndex(c => c.id === certId);
-  if (index !== -1) {
-    certs[index].status = "Revoked";
-    localStorage.setItem("aegis_admin_certs", JSON.stringify(certs));
-  }
+  return fetchWithRetry<void>(`${BASE}/v1/certificates/${certId}`, {
+    method: "DELETE"
+  });
 }
 
 export async function verifyCertificate(certId: string): Promise<VerificationResult> {

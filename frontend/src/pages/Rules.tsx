@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { getHierarchyTree, getFilteredBlocks, promoteFilteredBlock, FilteredBlockResponse, RuleResponse, updateRule, generateQuestionVariants, bulkGenerateQuestions } from "../api";
-import { useNavigate } from "react-router-dom";
+import { getHierarchyTree, getFilteredBlocks, promoteFilteredBlock, FilteredBlockResponse, RuleResponse, updateRule } from "../api";
+
 
 interface FlatRule extends RuleResponse {
   manualId: string;
@@ -21,7 +21,7 @@ export function Rules() {
   const [filterSection, setFilterSection] = useState<string>("All");
   const [bulkGenerating, setBulkGenerating] = useState<boolean>(false);
   const [bulkProgress, setBulkProgress] = useState<{message: string, progress?: number, done?: boolean, count?: number} | null>(null);
-  const navigate = useNavigate();
+
 
   const handleSaveRule = async (updatedRule: FlatRule) => {
     try {
@@ -88,43 +88,7 @@ export function Rules() {
     }
   };
 
-  const handleGenerateQuestions = async (ruleId: string) => {
-    setGeneratingFor(ruleId);
-    try {
-      await generateQuestionVariants(ruleId, 3);
-      alert("Successfully generated questions. Check the Question Bank tab.");
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || "Failed to generate questions. Ensure Ollama is running and rule is approved.");
-    } finally {
-      setGeneratingFor(null);
-    }
-  };
 
-  const handleBulkGenerate = async () => {
-    setBulkGenerating(true);
-    setBulkProgress({ message: "Starting bulk generation..." });
-    
-    let targetManualId = undefined;
-    let targetSectionName = undefined;
-    
-    if (filterManual !== "All") {
-      targetManualId = filterManual;
-    }
-    if (filterSection !== "All") {
-      targetSectionName = filterSection;
-    }
-    
-    try {
-      await bulkGenerateQuestions((data) => {
-        setBulkProgress(data);
-      }, targetManualId, targetSectionName);
-    } catch (e) {
-      console.error(e);
-      alert("Bulk generation failed. Please check logs.");
-      setBulkGenerating(false);
-    }
-  };
 
   const uniqueManuals = Array.from(new Map(rules.map(r => [r.manualId, r.manualTitle])).entries());
   const uniqueSections = filterManual === "All" 
@@ -177,10 +141,6 @@ export function Rules() {
             </select>
           </div>
           <div style={{ flex: 1 }} />
-          <button className="btn btn-primary" onClick={handleBulkGenerate}>
-            <iconify-icon icon="lucide:zap" />
-            Generate Questions for All Approved Rules
-          </button>
         </div>
       )}
 
@@ -234,15 +194,6 @@ export function Rules() {
                         >
                           View / Edit
                         </button>
-                        {rule.review_status === 'approved' && (
-                          <button 
-                            onClick={() => handleGenerateQuestions(rule.id)}
-                            disabled={generatingFor === rule.id}
-                            style={{ padding: '6px 12px', fontSize: 12, borderRadius: 4, border: '1px solid var(--line)', background: 'transparent', color: 'var(--muted)', cursor: generatingFor === rule.id ? 'not-allowed' : 'pointer' }}
-                          >
-                            {generatingFor === rule.id ? 'Generating...' : 'Regenerate'}
-                          </button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -372,33 +323,6 @@ export function Rules() {
         </div>
       )}
 
-      {bulkGenerating && bulkProgress && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2000 }}>
-          <div className="clay-card" style={{ width: 400, padding: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, backgroundColor: 'var(--surface)', borderRadius: 16, boxShadow: 'var(--shadow-dropdown)' }}>
-            <h3 style={{ fontSize: 18, margin: 0, color: 'var(--ink)' }}>Bulk Generating</h3>
-            <p style={{ fontSize: 14, color: 'var(--muted)', textAlign: 'center' }}>{bulkProgress.message}</p>
-            
-            {bulkProgress.progress !== undefined && (
-              <div style={{ width: '100%', height: 6, background: 'var(--raised)', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ width: `${bulkProgress.progress}%`, height: '100%', background: 'var(--accent)', transition: 'width 0.3s ease' }} />
-              </div>
-            )}
-            
-            {bulkProgress.done && (
-              <button 
-                className="btn btn-primary"
-                onClick={() => {
-                  setBulkGenerating(false);
-                  navigate('/question-bank');
-                }}
-                style={{ width: '100%', marginTop: 8 }}
-              >
-                Go to Question Bank
-              </button>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -76,6 +76,7 @@ async def update_question(
 async def generate_variants_for_rule_endpoint(
     rule_id: uuid.UUID,
     count: int = 3,
+    question_type: str = "multiple_choice",
     db: AsyncSession = Depends(get_db_session)
 ):
     stmt = select(Rule).where(Rule.id == rule_id)
@@ -88,7 +89,7 @@ async def generate_variants_for_rule_endpoint(
     if rule.review_status != "approved":
         raise HTTPException(status_code=400, detail="Only approved rules can have questions generated.")
         
-    variants_data = await generate_question_variants(rule.text, rule.risk_score, rule.cognitive_level, count=count)
+    variants_data = await generate_question_variants(rule.text, rule.risk_score, rule.cognitive_level, count=count, question_type=question_type)
     
     if not variants_data:
         raise HTTPException(status_code=500, detail="Failed to generate questions via LLM")
@@ -115,12 +116,13 @@ async def generate_variants_for_rule_endpoint(
 async def bulk_generate_questions(
     manual_id: str = None,
     section_name: str = None,
+    question_type: str = "multiple_choice",
     db: AsyncSession = Depends(get_db_session)
 ):
     stmt = (
         select(Rule)
         .options(
-            selectinload(Rule.variants),
+            selectinload(Rule.questions),
             selectinload(Rule.subcategory).selectinload(SubCategory.section)
         )
         .where(Rule.review_status == "approved")
@@ -132,7 +134,7 @@ async def bulk_generate_questions(
     # Filter in python (easier than complex joins if we already fetched them, but joining is better, let's filter in python for now)
     filtered_rules = []
     for r in rules:
-        if r.variants:
+        if r.questions:
             # Skip if has any variants
             continue
             
@@ -158,7 +160,7 @@ async def bulk_generate_questions(
             for i, rule in enumerate(filtered_rules):
                 yield f"data: {json.dumps({'message': f'Generating question {i+1} of {total}...', 'progress': (i/total)*100})}\n\n"
                 
-                variants_data = await generate_question_variants(rule.text, rule.risk_score, rule.cognitive_level, count=3)
+                variants_data = await generate_question_variants(rule.text, rule.risk_score, rule.cognitive_level, count=3, question_type=question_type)
                 if variants_data:
                     for vd in variants_data:
                         qv = QuestionVariant(

@@ -167,7 +167,7 @@ export default function App() {
 
   // Common main content
   const renderMainContent = () => (
-    <main style={{ flex: 1, maxWidth: 1400, width: "100%", margin: "0 auto", padding: "32px 28px" }}>
+    <main style={{ flex: 1, maxWidth: 1400, width: "100%", margin: "0 auto", padding: "32px 28px", display: "flex", flexDirection: "column", justifyContent: "flex-start" }}>
       {/* Global error banner */}
       <AnimatePresence>
         {errorMessage && (
@@ -286,7 +286,7 @@ export default function App() {
         )}
 
         {/* Placeholders for remaining tabs */}
-        {["exams", "audit"].includes(activeTab) && (
+        {["audit"].includes(activeTab) && (
           <motion.div key={activeTab} {...pageVariants} className="qr-center" style={{ height: 400 }}>
             <div className="qr-status-card glass-panel" style={{ textAlign: "center" }}>
               <h3 className="qr-status-label" style={{ textTransform: "capitalize" }}>{activeTab}</h3>

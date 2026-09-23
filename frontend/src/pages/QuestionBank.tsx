@@ -1,11 +1,49 @@
 import React, { useState, useEffect } from "react";
-import { getQuestions, updateQuestion, QuestionVariant } from "../api";
+import { getQuestions, updateQuestion, QuestionVariant, bulkGenerateQuestions } from "../api";
 
 export function QuestionBank() {
   const [activeTab, setActiveTab] = useState<"pending" | "approved">("pending");
   const [questions, setQuestions] = useState<QuestionVariant[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingQuestion, setEditingQuestion] = useState<QuestionVariant | null>(null);
+  
+  // Bulk Generation State
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [questionType, setQuestionType] = useState<"multiple_choice" | "fill_in_blank" | "mixed">("mixed");
+  const [generating, setGenerating] = useState(false);
+  const [genProgress, setGenProgress] = useState(0);
+  const [genMessage, setGenMessage] = useState("");
+
+  const handleBulkGenerate = async () => {
+    setGenerating(true);
+    setGenProgress(0);
+    setGenMessage("Connecting...");
+    
+    try {
+      await bulkGenerateQuestions((msg) => {
+        if (msg.error) {
+          setGenMessage(`Error: ${msg.error}`);
+          setGenerating(false);
+        } else if (msg.done) {
+          setGenMessage(msg.message);
+          setGenProgress(100);
+          setTimeout(() => {
+            setShowGenerateModal(false);
+            setGenerating(false);
+            loadData(); // Reload questions after generation
+          }, 2000);
+        } else {
+          setGenMessage(msg.message);
+          if (msg.progress !== undefined) {
+            setGenProgress(msg.progress);
+          }
+        }
+      }, undefined, undefined, questionType);
+    } catch (err) {
+      setGenMessage("Failed to connect to generation service.");
+      setGenerating(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -51,6 +89,13 @@ export function QuestionBank() {
           <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>Manage pre-generated MCQ variants for approved safety rules.</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button 
+            className="btn btn-primary" 
+            onClick={() => setShowGenerateModal(true)}
+            style={{ marginRight: 16 }}
+          >
+            ✦ Auto-Generate Missing
+          </button>
           <button 
             className={`btn ${activeTab === 'pending' ? 'btn-emerald' : 'btn-ghost'}`} 
             onClick={() => setActiveTab('pending')}
@@ -208,6 +253,68 @@ export function QuestionBank() {
                 Save Changes
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showGenerateModal && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', position: 'fixed', inset: 0, zIndex: 1000 }}>
+          <div className="clay-card" style={{ width: 400, padding: 32, display: 'flex', flexDirection: 'column', gap: 20, backgroundColor: 'var(--surface)', borderRadius: 12 }}>
+            <h3 style={{ fontSize: 20, margin: 0, color: 'var(--text-primary)' }}>Generate Missing Questions</h3>
+            
+            {!generating ? (
+              <>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                  This will scan all approved rules that currently don't have questions and generate them using AI.
+                </p>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Question Style</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                    <input 
+                      type="radio" 
+                      name="qtype" 
+                      checked={questionType === "mixed"} 
+                      onChange={() => setQuestionType("mixed")}
+                    />
+                    Mixed (Both)
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                    <input 
+                      type="radio" 
+                      name="qtype" 
+                      checked={questionType === "multiple_choice"} 
+                      onChange={() => setQuestionType("multiple_choice")}
+                    />
+                    Standard Multiple Choice
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                    <input 
+                      type="radio" 
+                      name="qtype" 
+                      checked={questionType === "fill_in_blank"} 
+                      onChange={() => setQuestionType("fill_in_blank")}
+                    />
+                    Fill-in-the-Blank (Multiple Choice)
+                  </label>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
+                  <button className="btn btn-ghost" onClick={() => setShowGenerateModal(false)}>Cancel</button>
+                  <button className="btn btn-primary" onClick={handleBulkGenerate}>Start Generation</button>
+                </div>
+              </>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', padding: '20px 0' }}>
+                <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }}></div>
+                <div style={{ fontSize: 14, color: 'var(--text-primary)', textAlign: 'center' }}>
+                  {genMessage}
+                </div>
+                <div className="progress-bar" style={{ width: '100%', height: 8, marginTop: 8 }}>
+                  <div className="progress-fill" style={{ width: `${genProgress}%` }}></div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
