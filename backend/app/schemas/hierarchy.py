@@ -19,6 +19,7 @@ class RuleResponse(BaseModel):
     confidence: float
     review_status: str
     page_number: Optional[int] = None
+    reference_images: Optional[List[str]] = None
     approved_questions_count: Optional[int] = None
     
     model_config = ConfigDict(from_attributes=True)

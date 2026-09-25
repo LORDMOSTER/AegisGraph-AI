@@ -1,7 +1,7 @@
 import uuid
 from typing import List, Optional
 
-from sqlalchemy import String, Text, Integer, Boolean, ForeignKey, Index, CheckConstraint, Float
+from sqlalchemy import String, Text, Integer, Boolean, ForeignKey, Index, CheckConstraint, Float, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base, TimestampMixin, UUIDMixin
@@ -57,6 +57,7 @@ class Rule(Base, TimestampMixin, UUIDMixin):
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     review_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     page_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    reference_images: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     subcategory: Mapped["SubCategory"] = relationship("SubCategory", back_populates="rules")
     questions: Mapped[List["QuestionVariant"]] = relationship("QuestionVariant", back_populates="rule", cascade="all, delete-orphan")

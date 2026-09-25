@@ -5,6 +5,7 @@ import time
 import uuid
 import json
 import re
+import asyncio
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status, Depends
 from fastapi.responses import StreamingResponse
@@ -14,7 +15,7 @@ from sqlalchemy import select, desc
 from app.api.deps import get_db_session, get_current_active_user
 from app.models.user import User
 from app.models.hierarchy import Manual, Section, SubCategory, Rule, FilteredBlock
-from app.services.ingestion.pdf_parser import NoDigitalTextError, extract_text_from_pdf
+from app.services.ingestion.pdf_parser import NoDigitalTextError, extract_blocks_stream
 from app.services.llm.rule_extractor import extract_structured_rule
 from app.services.llm.grounding_check import verify_grounding, extract_numbers_and_units
 
@@ -40,7 +41,7 @@ async def get_next_sequence_for_section(db: AsyncSession, prefix: str) -> int:
 
 @router.post(
     "/pdf",
-    summary="Upload and parse a digital PDF manual with LLM structuring",
+    summary="Upload and parse a digital PDF manual with pipelined LLM structuring",
 )
 async def ingest_pdf(
     file: UploadFile = File(...),
@@ -63,7 +64,6 @@ async def ingest_pdf(
             detail="A manual with this filename has already been uploaded."
         )
 
-    # Need to read to temp file immediately
     content = await file.read()
     suffix = f"_{uuid.uuid4().hex[:8]}.pdf"
     
@@ -72,10 +72,13 @@ async def ingest_pdf(
     saved_file_path = os.path.join(UPLOAD_DIR, f"{current_user.company_id}_{file.filename}")
     with open(saved_file_path, "wb") as f:
         f.write(content)
+        
+    IMAGE_DIR = os.path.join(UPLOAD_DIR, "images")
+    os.makedirs(IMAGE_DIR, exist_ok=True)
 
-    
     async def event_generator():
         tmp_path = None
+        producer_task = None
         try:
             yield f"data: {json.dumps({'message': 'Initializing upload...'})}\n\n"
             
@@ -85,18 +88,9 @@ async def ingest_pdf(
 
             yield f"data: {json.dumps({'message': 'Parsing PDF structure...'})}\n\n"
             
-            try:
-                extraction_result = await extract_text_from_pdf(tmp_path)
-            except NoDigitalTextError as e:
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
-                return
+            queue = asyncio.Queue()
+            producer_task = asyncio.create_task(extract_blocks_stream(tmp_path, queue, IMAGE_DIR))
 
-            chunks = extraction_result.chunks
-            filtered_blocks = extraction_result.filtered_blocks
-            
-            yield f"data: {json.dumps({'message': f'Extracted {len(chunks)} blocks, filtered {len(filtered_blocks)} noise blocks.'})}\n\n"
-
-            # 1. Save Manual
             manual = Manual(
                 company_id=current_user.company_id,
                 title=file.filename,
@@ -106,118 +100,127 @@ async def ingest_pdf(
             db.add(manual)
             await db.flush()
 
-            # 2. Save Filtered Blocks
-            for block in filtered_blocks:
-                fb = FilteredBlock(
-                    manual_id=manual.id,
-                    source_text=block["text"],
-                    page_number=block["page_number"],
-                    reason=block["reason"]
-                )
-                db.add(fb)
-            
-            # Cache for dedup and sections
             existing_rules_normalized = set()
             sections_cache = {}
             subcats_cache = {}
 
-            # Process valid blocks
-            total = len(chunks)
-            processed_count = 0
-            
-            for i, chunk in enumerate(chunks):
-                processed_count += 1
-                source_text = chunk["text"]
-                page_num = chunk["page_number"]
-                
-                yield f"data: {json.dumps({'message': f'Structuring rule {processed_count} of {total}...'})}\n\n"
-                
-                # Deduplication check before LLM (fast path)
-                norm_src = normalize_text(source_text)
-                if norm_src in existing_rules_normalized:
-                    continue
+            structured_count = 0
 
-                structured = await extract_structured_rule(source_text)
+            while True:
+                item = await queue.get()
                 
-                if not structured or not structured.is_valid_rule or not structured.rules:
-                    # Save to filtered blocks if LLM rejects it
-                    fb = FilteredBlock(
-                        manual_id=manual.id,
-                        source_text=source_text,
-                        page_number=page_num,
-                        reason="Rejected by LLM Structuring"
-                    )
-                    db.add(fb)
-                    continue
-
-                for extracted_rule in structured.rules:
-                    rule_text = extracted_rule.rule_text
+                if item["type"] == "progress":
+                    yield f"data: {json.dumps({'message': f'Parsed page {item['page']}/{item['total']}...'})}\n\n"
+                
+                elif item["type"] == "error":
+                    yield f"data: {json.dumps({'error': item['error']})}\n\n"
+                    break
                     
-                    # Grounding check
-                    source_entities = extract_numbers_and_units(source_text)
-                    rule_entities = extract_numbers_and_units(rule_text)
-                    hallucinated = rule_entities - source_entities
+                elif item["type"] == "done":
+                    skipped_pages = item.get("pages_needing_ocr", [])
+                    msg = "Processing complete!"
+                    if skipped_pages:
+                        msg = f"Processing complete! {len(skipped_pages)} pages had no selectable text and were skipped."
                     
-                    confidence = 1.0
-                    review_status = "approved"
-                    if hallucinated:
-                        confidence = 0.4
-                        review_status = "pending"
-
-                    # Deduplication on final rule text
-                    norm_rule = normalize_text(rule_text)
-                    if norm_rule in existing_rules_normalized:
+                    await db.commit()
+                    yield f"data: {json.dumps({'message': msg, 'done': True})}\n\n"
+                    break
+                    
+                elif item["type"] == "block":
+                    source_text = item["text"]
+                    page_num = item["page_number"]
+                    is_noise = item["is_noise"]
+                    images = item.get("images", [])
+                    
+                    if is_noise:
+                        fb = FilteredBlock(
+                            manual_id=manual.id,
+                            source_text=source_text,
+                            page_number=page_num,
+                            reason=item["reason"]
+                        )
+                        db.add(fb)
                         continue
-                    existing_rules_normalized.add(norm_rule)
+                        
+                    structured_count += 1
+                    yield f"data: {json.dumps({'message': f'Structuring rule {structured_count}...'})}\n\n"
                     
-                    # Resolve Section
-                    sec_name = extracted_rule.section
-                    if sec_name not in sections_cache:
-                        sec = Section(manual_id=manual.id, name=sec_name)
-                        db.add(sec)
+                    norm_src = normalize_text(source_text)
+                    if norm_src in existing_rules_normalized:
+                        continue
+
+                    structured = await extract_structured_rule(source_text)
+                    
+                    if not structured or not structured.is_valid_rule or not structured.rules:
+                        fb = FilteredBlock(
+                            manual_id=manual.id,
+                            source_text=source_text,
+                            page_number=page_num,
+                            reason="Rejected by LLM Structuring"
+                        )
+                        db.add(fb)
+                        continue
+
+                    for extracted_rule in structured.rules:
+                        rule_text = extracted_rule.rule_text
+                        
+                        source_entities = extract_numbers_and_units(source_text)
+                        rule_entities = extract_numbers_and_units(rule_text)
+                        hallucinated = rule_entities - source_entities
+                        
+                        confidence = 1.0
+                        review_status = "approved"
+                        if hallucinated:
+                            confidence = 0.4
+                            review_status = "pending"
+
+                        norm_rule = normalize_text(rule_text)
+                        if norm_rule in existing_rules_normalized:
+                            continue
+                        existing_rules_normalized.add(norm_rule)
+                        
+                        sec_name = extracted_rule.section[:255]
+                        if sec_name not in sections_cache:
+                            sec = Section(manual_id=manual.id, name=sec_name)
+                            db.add(sec)
+                            await db.flush()
+                            sections_cache[sec_name] = sec
+                        section = sections_cache[sec_name]
+
+                        sub_name = extracted_rule.subcategory[:255]
+                        if (section.id, sub_name) not in subcats_cache:
+                            sc = SubCategory(section_id=section.id, name=sub_name)
+                            db.add(sc)
+                            await db.flush()
+                            subcats_cache[(section.id, sub_name)] = sc
+                        subcat = subcats_cache[(section.id, sub_name)]
+
+                        prefix = sec_name[:4].upper()
+                        seq = await get_next_sequence_for_section(db, prefix)
+                        rule_code = f"{prefix}-{seq:03d}"
+                        
+                        rule = Rule(
+                            subcategory_id=subcat.id,
+                            rule_code=rule_code,
+                            text=rule_text,
+                            source_text=source_text,
+                            risk_score=extracted_rule.risk_score,
+                            cognitive_level=extracted_rule.cognitive_level,
+                            response_time_sec=60,
+                            confidence=confidence,
+                            review_status=review_status,
+                            page_number=page_num,
+                            reference_images=images
+                        )
+                        db.add(rule)
                         await db.flush()
-                        sections_cache[sec_name] = sec
-                    section = sections_cache[sec_name]
-
-                    # Resolve Subcategory
-                    sub_name = extracted_rule.subcategory
-                    if (section.id, sub_name) not in subcats_cache:
-                        sc = SubCategory(section_id=section.id, name=sub_name)
-                        db.add(sc)
-                        await db.flush()
-                        subcats_cache[(section.id, sub_name)] = sc
-                    subcat = subcats_cache[(section.id, sub_name)]
-
-                    # Generate Rule Code
-                    prefix = sec_name[:4].upper()
-                    seq = await get_next_sequence_for_section(db, prefix)
-                    rule_code = f"{prefix}-{seq:03d}"
-                    
-                    # Add Rule
-                    rule = Rule(
-                        subcategory_id=subcat.id,
-                        rule_code=rule_code,
-                        text=rule_text,
-                        source_text=source_text,
-                        risk_score=extracted_rule.risk_score,
-                        cognitive_level=extracted_rule.cognitive_level,
-                        response_time_sec=60,
-                        confidence=confidence,
-                        review_status=review_status,
-                        page_number=page_num
-                    )
-                    db.add(rule)
-                    
-                    # Flush periodically or after each to ensure sequential codes are safe
-                    await db.flush()
-
-            await db.commit()
-            yield f"data: {json.dumps({'message': 'Processing complete!', 'done': True})}\n\n"
 
         except Exception as e:
             logger.error(f"Ingest failed: {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
         finally:
+            if producer_task and not producer_task.done():
+                producer_task.cancel()
             if tmp_path:
                 try:
                     os.unlink(tmp_path)

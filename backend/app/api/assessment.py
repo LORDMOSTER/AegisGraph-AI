@@ -72,6 +72,14 @@ async def generate_assessment(
     manifest_items = []
     skipped = []
     
+    rules_out = []
+    assessment_md = "## Generated Assessment\n\n"
+    answer_key_md = "\n\n## Answer Key\n\n"
+    question_idx = 1
+    
+    import time
+    start_time = time.time()
+    
     for rule in manifest_rules:
         # Get approved variants for this rule
         stmt = (
@@ -85,9 +93,38 @@ async def generate_assessment(
         if variants:
             chosen = random.choice(variants)
             manifest_items.append(AssessmentManifestItem(rule_id=rule.id, question_variant_id=chosen.id))
+            
+            rules_out.append({
+                "id": str(rule.id),
+                "text": rule.text,
+                "sub_category": rule.sub_category,
+                "risk_score": rule.risk_score,
+                "cognitive_level": rule.cognitive_level,
+                "estimated_response_time": rule.estimated_response_time,
+                "revision_version": rule.revision_version,
+            })
+            
+            assessment_md += f"**Q{question_idx}. {chosen.question_text}**\n\n"
+            for j, opt in enumerate(chosen.options):
+                assessment_md += f"- {chr(65+j)}) {opt}\n"
+            assessment_md += "\n"
+            
+            answer_key_md += f"**Q{question_idx}**: {chr(65+chosen.correct_option_index)} (Rule: {str(rule.id)[:8]})\n"
+            question_idx += 1
+            
         else:
             skipped.append(rule.id)
             
+    query_time_ms = (time.time() - start_time) * 1000
+            
+    if not manifest_items:
+        return AssessmentResponse(
+            status="incomplete",
+            manifest=[],
+            missing_questions_for_rules=skipped,
+            message=f"No approved questions were found for the requested constraints. Please approve some rules and questions in the Question Bank first."
+        )
+        
     if skipped:
         return AssessmentResponse(
             status="incomplete",
@@ -111,7 +148,11 @@ async def generate_assessment(
     return AssessmentResponse(
         status="ready",
         assessment_id=assessment.id,
-        manifest=manifest_items
+        manifest=manifest_items,
+        rules=rules_out,
+        assessment=assessment_md + answer_key_md,
+        query_duration_ms=query_time_ms,
+        inference_latency_ms=0.0
     )
 
 from app.models.test_attempt import ExamSession, ExamStatus

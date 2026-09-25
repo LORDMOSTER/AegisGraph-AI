@@ -761,6 +761,7 @@ export interface RuleResponse {
   confidence: number;
   review_status: string;
   page_number?: number;
+  reference_images?: string[];
   approved_questions_count: number;
 }
 

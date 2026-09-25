@@ -3,10 +3,11 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
-from app.api.deps import get_db_session
+from app.api.deps import get_db_session, get_current_active_user
 from app.models.schemas import AnalyticsSummary
-from app.models.hierarchy import Manual, Section, Rule
+from app.models.hierarchy import Manual, Section, Rule, SubCategory
 from app.models.question_bank import QuestionVariant
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -17,15 +18,38 @@ router = APIRouter()
     status_code=status.HTTP_200_OK,
     summary="Live analytics summary from the PostgreSQL knowledge base",
 )
-async def get_analytics_summary(db: AsyncSession = Depends(get_db_session)) -> AnalyticsSummary:
+async def get_analytics_summary(
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+) -> AnalyticsSummary:
     # Get total active counts
-    total_manuals = await db.scalar(select(func.count(Manual.id)))
-    total_sections = await db.scalar(select(func.count(Section.id)))
-    total_rules = await db.scalar(select(func.count(Rule.id)).where(Rule.is_active == True))
+    total_manuals = await db.scalar(
+        select(func.count(Manual.id))
+        .where(Manual.company_id == current_user.company_id)
+    )
+    
+    total_sections = await db.scalar(
+        select(func.count(Section.id))
+        .join(Manual, Section.manual_id == Manual.id)
+        .where(Manual.company_id == current_user.company_id)
+    )
+    
+    total_rules = await db.scalar(
+        select(func.count(Rule.id))
+        .join(SubCategory, Rule.subcategory_id == SubCategory.id)
+        .join(Section, SubCategory.section_id == Section.id)
+        .join(Manual, Section.manual_id == Manual.id)
+        .where(Manual.company_id == current_user.company_id, Rule.is_active == True)
+    )
     
     # Get question variants grouped by status
     qb_counts = await db.execute(
         select(QuestionVariant.review_status, func.count(QuestionVariant.id))
+        .join(Rule, QuestionVariant.rule_id == Rule.id)
+        .join(SubCategory, Rule.subcategory_id == SubCategory.id)
+        .join(Section, SubCategory.section_id == Section.id)
+        .join(Manual, Section.manual_id == Manual.id)
+        .where(Manual.company_id == current_user.company_id)
         .group_by(QuestionVariant.review_status)
     )
     
@@ -36,17 +60,17 @@ async def get_analytics_summary(db: AsyncSession = Depends(get_db_session)) -> A
         question_bank_counts[status_key] = row[1]
     
     # Get section metrics (rule count and avg risk score per section)
-    from app.models.hierarchy import SubCategory
     section_metrics_res = await db.execute(
         select(
             Section.name,
             func.count(Rule.id).label("rule_count"),
             func.coalesce(func.avg(Rule.risk_score), 0.0).label("avg_risk_score")
         )
+        .join(Manual, Section.manual_id == Manual.id)
         .join(SubCategory, SubCategory.section_id == Section.id)
         .join(Rule, Rule.subcategory_id == SubCategory.id)
-        .where(Rule.is_active == True)
-        .group_by(Section.id)
+        .where(Manual.company_id == current_user.company_id, Rule.is_active == True)
+        .group_by(Section.id, Section.name)
     )
     
     section_metrics = [

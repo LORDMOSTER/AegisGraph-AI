@@ -5,8 +5,10 @@ import re
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
 import statistics
+import os
+import uuid
 
-import pdfplumber
+import pymupdf as fitz
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -14,26 +16,6 @@ logger = logging.getLogger(__name__)
 class NoDigitalTextError(Exception):
     """Raised when a PDF appears to be a scanned image with no selectable text."""
     pass
-
-class PDFExtractionResult(BaseModel):
-    """Pydantic model representing the result of a PDF extraction."""
-    chunks: List[Dict[str, Any]] = Field(default_factory=list, description="List of extracted text chunks with page numbers")
-    filtered_blocks: List[Dict[str, Any]] = Field(default_factory=list, description="Blocks filtered out as noise")
-    chunk_count: int = Field(default=0, description="Total number of chunks extracted")
-    extraction_time_ms: float = Field(default=0.0, description="Time taken to extract text in milliseconds")
-    file_path: str = Field(..., description="Path to the extracted PDF file")
-
-
-def _is_heading(text: str, size: float, median_size: float) -> bool:
-    if size > median_size * 1.15:
-        return True
-    
-    # Check for numbered headings like "3.1 Safety" or "1. Introduction"
-    heading_pattern = r'^\d+(\.\d+)*\s+[A-Z]'
-    if re.match(heading_pattern, text.strip()):
-        return True
-        
-    return False
 
 def _filter_noise(text: str) -> Tuple[bool, str]:
     """Returns (is_noise, reason)"""
@@ -58,119 +40,128 @@ def _filter_noise(text: str) -> Tuple[bool, str]:
         
     return False, ""
 
+HEADING_PATTERN = re.compile(r'^\d+(\.\d+)*\s+[A-Z]')
 
-def _extract_text_sync(file_path: str) -> PDFExtractionResult:
+async def extract_blocks_stream(pdf_path: str, queue: asyncio.Queue, image_dir: str):
     start_time = time.perf_counter()
-    path = Path(file_path)
     
-    if not path.exists():
-        raise FileNotFoundError(f"PDF file not found: {file_path}")
+    try:
+        doc = fitz.open(pdf_path)
+    except Exception as e:
+        await queue.put({"type": "error", "error": str(e)})
+        return
+        
+    if len(doc) == 0:
+        await queue.put({"type": "done", "pages_needing_ocr": []})
+        return
+        
+    # Sample first 5 pages for median body font size
+    sizes = []
+    for page in doc[:5]:
+        for block in page.get_text("dict").get("blocks", []):
+            for line in block.get("lines", []):
+                for span in line.get("spans", []):
+                    sizes.append(span["size"])
+    median_size = sorted(sizes)[len(sizes) // 2] if sizes else 10.0
 
-    chunks = []
-    filtered_blocks = []
+    current_heading = None
+    current_body = []
+    current_images = []
     
-    with pdfplumber.open(file_path) as pdf:
-        if not pdf.pages:
-            return PDFExtractionResult(file_path=file_path)
-
-        first_page_text = pdf.pages[0].extract_text()
-        if not first_page_text or not first_page_text.strip():
-            raise NoDigitalTextError(
-                f"No selectable text found on page 1 of {path.name}. "
-                f"OCR is currently bypassed; please provide a digital text PDF."
-            )
-
-        # Pass 1: Get median font size
-        sizes = []
-        for page in pdf.pages[:5]: # sample first 5 pages for speed
-            for char in page.chars:
-                if 'size' in char:
-                    sizes.append(char['size'])
+    pages_needing_ocr = []
+    
+    for page_num, page in enumerate(doc, start=1):
+        page_height = page.rect.height
+        crop_top, crop_bottom = page_height * 0.1, page_height * 0.9
         
-        median_size = statistics.median(sizes) if sizes else 10.0
-        
-        # Pass 2: Extract text and group by structural segmentation
-        current_heading = ""
-        current_block = ""
-        current_page = 1
-        
-        def push_block():
-            nonlocal current_block, current_heading, chunks, filtered_blocks, current_page
-            full_text = ""
-            if current_heading:
-                full_text += current_heading + "\n"
-            full_text += current_block
-            full_text = full_text.strip()
+        # Check if page has text
+        page_text = page.get_text()
+        if not page_text or not page_text.strip():
+            pages_needing_ocr.append(page_num)
+            await asyncio.sleep(0)
+            await queue.put({"type": "progress", "page": page_num, "total": len(doc)})
+            continue
             
-            if full_text:
-                is_noise, reason = _filter_noise(full_text)
-                if is_noise:
-                    filtered_blocks.append({
-                        "text": full_text,
-                        "page_number": current_page,
-                        "reason": reason
-                    })
+        page_dict = page.get_text("dict")
+        images_info = page.get_image_info(xrefs=True)
+        
+        for block in page_dict.get("blocks", []):
+            if "lines" not in block:
+                continue
+                
+            block_y0, block_y1 = block["bbox"][1], block["bbox"][3]
+            
+            for line in block.get("lines", []):
+                y_pos = line["bbox"][1]
+                if y_pos < crop_top or y_pos > crop_bottom:
+                    continue 
+
+                line_text = "".join(span["text"] for span in line.get("spans", [])).strip()
+                if not line_text:
+                    continue
+                avg_size = sum(s["size"] for s in line.get("spans", [])) / max(1, len(line.get("spans", [])))
+
+                is_heading = avg_size > median_size * 1.15 or HEADING_PATTERN.match(line_text)
+                if is_heading:
+                    if current_heading:
+                        full_text = f"{current_heading}\n{' '.join(current_body).strip()}".strip()
+                        if full_text:
+                            is_noise, reason = _filter_noise(full_text)
+                            await queue.put({
+                                "type": "block",
+                                "is_noise": is_noise,
+                                "reason": reason,
+                                "text": full_text,
+                                "page_number": page_num,
+                                "images": [img["path"] for img in current_images]
+                            })
+                    current_heading = line_text
+                    current_body = []
+                    current_images = []
                 else:
-                    chunks.append({
-                        "text": full_text,
-                        "page_number": current_page
-                    })
-            current_block = ""
-            current_heading = ""
-
-        for page in pdf.pages:
-            crop_bbox = (0, page.height * 0.1, page.width, page.height * 0.9)
-            try:
-                cropped_page = page.within_bbox(crop_bbox)
-                
-                # Extract dictionary data to get size of lines
-                words = cropped_page.extract_words(extra_attrs=["size"])
-                
-                # Group words into lines
-                lines = []
-                current_line = []
-                last_bottom = 0
-                
-                for word in words:
-                    # simplistic line grouping
-                    if current_line and abs(word['bottom'] - last_bottom) > 5:
-                        lines.append(current_line)
-                        current_line = []
-                    current_line.append(word)
-                    last_bottom = word['bottom']
-                if current_line:
-                    lines.append(current_line)
+                    current_body.append(line_text)
                     
-                for line in lines:
-                    line_text = " ".join(w['text'] for w in line)
-                    line_size = statistics.mean(w['size'] for w in line) if line else median_size
-                    
-                    if _is_heading(line_text, line_size, median_size):
-                        # Commit previous block
-                        push_block()
-                        current_heading = line_text
-                        current_page = page.page_number
-                    else:
-                        current_block += line_text + "\n"
-                        
-                # Commit at page end if needed, or keep accumulating across pages
-                # For structural logic, we can just keep accumulating until next heading
-                
-            except ValueError as e:
-                logger.warning(f"Failed to crop page {page.page_number}: {e}")
-                
-        # Push final block
-        push_block()
+            if images_info:
+                block_rect = fitz.Rect(block["bbox"])
+                for img in images_info:
+                    img_rect = fitz.Rect(img["bbox"])
+                    if abs(img_rect.y0 - block_rect.y1) < 50 or abs(block_rect.y0 - img_rect.y1) < 50 or img_rect.intersects(block_rect):
+                        xref = img["xref"]
+                        if xref not in [i["xref"] for i in current_images]:
+                            try:
+                                base_image = doc.extract_image(xref)
+                                image_bytes = base_image["image"]
+                                image_ext = base_image["ext"]
+                                img_filename = f"ref_img_{uuid.uuid4().hex[:8]}.{image_ext}"
+                                img_path = os.path.join(image_dir, img_filename)
+                                with open(img_path, "wb") as f:
+                                    f.write(image_bytes)
+                                current_images.append({
+                                    "xref": xref,
+                                    "path": img_path
+                                })
+                            except Exception:
+                                pass
+                                
+        await asyncio.sleep(0)
+        await queue.put({"type": "progress", "page": page_num, "total": len(doc)})
 
-    extraction_time_ms = (time.perf_counter() - start_time) * 1000
-    
-    return PDFExtractionResult(
-        chunks=chunks,
-        filtered_blocks=filtered_blocks,
-        chunk_count=len(chunks),
-        extraction_time_ms=extraction_time_ms,
-        file_path=file_path
-    )
+    if len(doc) > 0 and len(pages_needing_ocr) == len(doc):
+        await queue.put({"type": "error", "error": "No selectable text found in any pages. OCR is bypassed."})
+        return
 
-async def extract_text_from_pdf(file_path: str) -> PDFExtractionResult:
-    return await asyncio.to_thread(_extract_text_sync, file_path)
+    if current_heading:
+        full_text = f"{current_heading}\n{' '.join(current_body).strip()}".strip()
+        if full_text:
+            is_noise, reason = _filter_noise(full_text)
+            await queue.put({
+                "type": "block",
+                "is_noise": is_noise,
+                "reason": reason,
+                "text": full_text,
+                "page_number": len(doc),
+                "images": [img["path"] for img in current_images]
+            })
+
+    await queue.put({"type": "done", "pages_needing_ocr": pages_needing_ocr})
+

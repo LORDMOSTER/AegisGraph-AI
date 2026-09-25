@@ -1,116 +1,76 @@
-import asyncio
 import json
 import logging
-from typing import Optional, List, Dict
+import asyncio
+from typing import Any
 
-from langchain_ollama import ChatOllama
-from langchain_core.messages import SystemMessage, HumanMessage
+import ollama
 from pydantic import ValidationError
-
-from app.schemas.generation import QuestionVariantGen
-from app.services.llm.grounding_check import verify_grounding
+from app.schemas.llm_schemas import RuleExtractionResponse
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-QUESTION_GEN_PROMPT = """
-You are generating a multiple-choice safety exam question from a single
-verified safety rule. You will be given the rule's text and risk information.
+class LLMExtractionError(Exception):
+    """Custom exception raised when LLM extraction or validation fails after retries."""
+    pass
 
-Generate exactly ONE multiple-choice question as strict JSON:
-{
-  "question_text": "<a clear question testing understanding of this rule>",
-  "options": ["<correct answer>", "<plausible distractor>", "<plausible distractor>", "<plausible distractor>"],
-  "correct_option_index": 0
-}
-
-Rules:
-- Do NOT introduce any number, threshold, or fact not present in the source rule text.
-- Distractors must be plausible but clearly wrong to someone who knows the rule.
-- Make all four options approximately the same length so the correct answer does not stand out as the longest one.
-- Do not include any text outside the JSON object.
-"""
-
-FILL_IN_BLANK_GEN_PROMPT = """
-You are generating a multiple-choice "fill-in-the-blank" safety exam question from a single
-verified safety rule. You will be given the rule's text and risk information.
-
-Generate exactly ONE multiple-choice question where the question text contains a blank line (_____) for a missing critical word or phrase, as strict JSON:
-{
-  "question_text": "<sentence from the rule with a critical word/phrase replaced by _____>",
-  "options": ["<correct missing word/phrase>", "<plausible distractor>", "<plausible distractor>", "<plausible distractor>"],
-  "correct_option_index": 0
-}
-
-Rules:
-- The question_text MUST contain a blank line represented by at least five underscores (_____).
-- Do NOT introduce any number, threshold, or fact not present in the source rule text.
-- Distractors must be plausible but clearly wrong to someone who knows the rule.
-- Make all four options approximately the same length so the correct answer does not stand out as the longest one.
-- Do not include any text outside the JSON object.
-"""
-
-async def generate_question_variants(rule_text: str, risk_score: int, cognitive_level: str, count: int = 3, max_retries: int = 3, question_type: str = "multiple_choice") -> List[Dict]:
+async def generate_question_variants(rule_text: str) -> RuleExtractionResponse:
     """
-    Calls the local phi-3-mini Ollama instance to generate question variants one by one.
-    Enforces JSON output and evaluates grounding.
+    Generate 2 to 4 multiple-choice variants for a given industrial safety rule.
+    Uses an exponential backoff retry loop (up to 3 attempts) for robustness.
+    Enforces strict Pydantic parsing and exactly 4 options per variant.
     """
-    llm = ChatOllama(model="phi3:mini", temperature=0.7, format="json")
+    system_prompt = (
+        "You are a deterministic industrial safety assessor. Your task is to read the provided safety rule "
+        "and generate 2 to 4 multiple-choice question variants. "
+        "CRITICAL INSTRUCTION: Do not invent, infer, or introduce any numeric values, thresholds, "
+        "or procedural steps that are not explicitly stated in the source text. "
+        "Every correct answer must be directly supported by the text. "
+        "Output strictly as a JSON object matching the requested schema."
+    )
     
-    variants = []
-    import random
+    schema = RuleExtractionResponse.model_json_schema()
     
-    for _ in range(count):
-        # Determine prompt for this specific variant
-        current_type = question_type
-        if current_type == "mixed":
-            current_type = random.choice(["multiple_choice", "fill_in_blank"])
+    max_attempts = 3
+    base_delay = 1.0
+    
+    for attempt in range(1, max_attempts + 1):
+        try:
+            client = ollama.AsyncClient()
             
-        system_prompt = FILL_IN_BLANK_GEN_PROMPT if current_type == "fill_in_blank" else QUESTION_GEN_PROMPT
-        
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=f"RULE: {rule_text}\nRISK SCORE: {risk_score}\nBLOOM LEVEL: {cognitive_level}")
-        ]
+            response = await client.chat(
+                model=settings.ollama_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Source Safety Rule:\n{rule_text}"}
+                ],
+                format=schema,
+                options={"temperature": 0.0}
+            )
+            
+            content = response.message.content
+            parsed_data = json.loads(content)
+            
+            validated_response = RuleExtractionResponse.model_validate(parsed_data)
+            
+            # Verify strict business rules
+            for idx, variant in enumerate(validated_response.variants):
+                if len(variant.options) != 4:
+                    raise ValueError(f"Variant {idx} must have exactly 4 options, found {len(variant.options)}.")
+                if variant.correct_answer not in variant.options:
+                    raise ValueError(f"Variant {idx} correct_answer must exactly match one of the options.")
+            
+            return validated_response
+            
+        except (json.JSONDecodeError, ValidationError, ValueError) as e:
+            logger.warning(f"Validation failed on attempt {attempt}/{max_attempts}: {e}")
+            if attempt == max_attempts:
+                raise LLMExtractionError(f"Failed to extract valid JSON after {max_attempts} attempts: {e}") from e
+            await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
+            
+        except Exception as e:
+            logger.error(f"Unexpected Ollama API error on attempt {attempt}: {e}")
+            if attempt == max_attempts:
+                raise LLMExtractionError(f"Ollama generation failed: {e}") from e
+            await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
 
-        for attempt in range(1, max_retries + 1):
-            try:
-                logger.info(f"Ollama generation attempt {attempt}/{max_retries}...")
-                response = await llm.ainvoke(messages)
-                
-                content = response.content
-                if not isinstance(content, str):
-                    content = str(content)
-                    
-                content = content.strip()
-                if content.startswith("```json"):
-                    content = content[7:]
-                if content.endswith("```"):
-                    content = content[:-3]
-                content = content.strip()
-                
-                parsed_json = json.loads(content)
-                
-                # Validate schema
-                validated = QuestionVariantGen(**parsed_json)
-                
-                # Calculate confidence via grounding check
-                is_grounded = verify_grounding(rule_text, validated)
-                confidence = 1.0 if is_grounded else 0.4
-                
-                variant_dict = validated.model_dump()
-                variant_dict["confidence"] = confidence
-                
-                variants.append(variant_dict)
-                break  # break retry loop on success
-                
-            except json.JSONDecodeError as e:
-                logger.warning(f"Attempt {attempt} failed - Invalid JSON generated: {e}")
-            except ValidationError as e:
-                logger.warning(f"Attempt {attempt} failed - Pydantic schema validation error: {e}")
-            except Exception as e:
-                logger.error(f"Attempt {attempt} failed - Unexpected LLM execution error: {e}")
-                
-            if attempt < max_retries:
-                await asyncio.sleep(2 ** attempt)
-                
-    return variants

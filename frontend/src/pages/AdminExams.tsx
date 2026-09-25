@@ -1,25 +1,31 @@
 import React, { useState, useEffect } from "react";
-import { getAssessments, assignExam } from "../api";
-// Assuming there's a way to get employees, for now we will just use a hardcoded or a fetched list
-// Wait, we need to fetch employees to assign exams.
-// Let's assume there is a fetchUsers or similar. Let's check api.ts if there's a way to fetch users.
+import { getAssessments, assignExam, getEmployees, Employee } from "../api";
+import { AnimatePresence, motion } from "framer-motion";
 
 export function AdminExams() {
   const [assessments, setAssessments] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // We will just do a simple UI to list templates and a button to "Assign to All" or "Assign to Employee"
-  // For simplicity since I don't have get_users API available, I will just prompt for an employee ID.
+  // Modal State
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(new Set());
+  const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
-    loadAssessments();
+    loadData();
   }, []);
 
-  const loadAssessments = async () => {
+  const loadData = async () => {
     setLoading(true);
     try {
-      const data = await getAssessments();
-      setAssessments(data);
+      const [assessmentsData, employeesData] = await Promise.all([
+        getAssessments(),
+        getEmployees(),
+      ]);
+      setAssessments(assessmentsData);
+      setEmployees(employeesData);
     } catch (err) {
       console.error(err);
     } finally {
@@ -27,16 +33,31 @@ export function AdminExams() {
     }
   };
 
-  const handleAssign = async (assessmentId: string) => {
-    const empId = prompt("Enter Employee UUID to assign this exam to:");
-    if (!empId) return;
+  const openAssignModal = (assessmentId: string) => {
+    setSelectedAssessmentId(assessmentId);
+    setSelectedEmployeeIds(new Set());
+    setAssignModalOpen(true);
+  };
 
+  const toggleEmployee = (empId: string) => {
+    const next = new Set(selectedEmployeeIds);
+    if (next.has(empId)) next.delete(empId);
+    else next.add(empId);
+    setSelectedEmployeeIds(next);
+  };
+
+  const handleConfirmAssign = async () => {
+    if (!selectedAssessmentId || selectedEmployeeIds.size === 0) return;
+    setAssigning(true);
     try {
-      await assignExam(assessmentId, [empId]);
+      await assignExam(selectedAssessmentId, Array.from(selectedEmployeeIds));
       alert("Exam assigned successfully!");
+      setAssignModalOpen(false);
     } catch (err) {
       console.error(err);
       alert("Failed to assign exam.");
+    } finally {
+      setAssigning(false);
     }
   };
 
@@ -76,7 +97,7 @@ export function AdminExams() {
                     <td>
                       <button 
                         className="btn btn-primary"
-                        onClick={() => handleAssign(a.id)}
+                        onClick={() => openAssignModal(a.id)}
                       >
                         Assign
                       </button>
@@ -88,6 +109,76 @@ export function AdminExams() {
           </table>
         )}
       </div>
+
+      <AnimatePresence>
+        {assignModalOpen && (
+          <div className="modal-backdrop">
+            <motion.div
+              className="modal-content"
+              style={{ maxWidth: 500 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+            >
+              <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)" }}>
+                Assign Exam
+              </h3>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
+                Select employees to assign this exam to.
+              </p>
+
+              <div style={{ maxHeight: 300, overflowY: "auto", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: 8 }}>
+                {employees.length === 0 ? (
+                  <p style={{ fontSize: 13, color: "var(--text-tertiary)", textAlign: "center", padding: 16 }}>
+                    No employees found.
+                  </p>
+                ) : (
+                  employees.map(emp => (
+                    <label 
+                      key={emp.id} 
+                      style={{ 
+                        display: "flex", 
+                        alignItems: "center", 
+                        gap: 12, 
+                        padding: "8px 12px", 
+                        cursor: "pointer",
+                        borderRadius: "var(--radius)",
+                        background: selectedEmployeeIds.has(emp.id) ? "var(--bg-hover)" : "transparent"
+                      }}
+                    >
+                      <input 
+                        type="checkbox" 
+                        checked={selectedEmployeeIds.has(emp.id)}
+                        onChange={() => toggleEmployee(emp.id)}
+                      />
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text-primary)" }}>{emp.name}</div>
+                        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{emp.designation} - {emp.departmentName}</div>
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+
+              <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 24 }}>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => setAssignModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleConfirmAssign}
+                  disabled={selectedEmployeeIds.size === 0 || assigning}
+                >
+                  {assigning ? "Assigning..." : `Assign to ${selectedEmployeeIds.size} Employee(s)`}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

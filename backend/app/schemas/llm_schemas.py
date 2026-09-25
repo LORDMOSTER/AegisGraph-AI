@@ -15,10 +15,9 @@ class BloomLevel(str, Enum):
 
 class QuestionVariant(BaseModel):
     stem: str = Field(..., description="The question text.")
-    options: List[str] = Field(..., min_length=2, description="List of possible answers. Must include the correct answer.")
-    correct_answer: str = Field(..., description="The exact text of the correct answer, must match one of the options.")
-    bloom_level: BloomLevel = Field(..., description="The Bloom's Taxonomy level of the question.")
-    grounding_verified: bool = Field(default=True, description="Flag indicating if the question passed the anti-hallucination firewall.")
+    options: List[str] = Field(..., min_length=4, max_length=4, description="Exactly 4 multiple-choice options.")
+    correct_answer: str = Field(..., description="The exact string of the correct option. Must perfectly match one of the items in the options array.")
+    bloom_level: str = Field(..., description="Categorized as Remember, Understand, Apply, Analyze, or Evaluate.")
 
 
 class RuleExtractionResponse(BaseModel):

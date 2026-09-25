@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     pool_recycle: int = 1800
 
     # Local AI Inference
-    ollama_model: str = "llama3"
+    ollama_model: str = "hf.co/bartowski/Qwen2.5-3B-Instruct-GGUF:Q4_K_M"
     ollama_num_gpu: int = 0
 
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]

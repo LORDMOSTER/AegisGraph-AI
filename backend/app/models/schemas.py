@@ -105,6 +105,10 @@ class AssessmentResponse(BaseModel):
     missing_questions_for_rules: Optional[list[uuid.UUID]] = None
     message: Optional[str] = None
     assessment_id: Optional[uuid.UUID] = None
+    rules: Optional[list[dict]] = None
+    assessment: Optional[str] = None
+    query_duration_ms: Optional[float] = 0.0
+    inference_latency_ms: Optional[float] = 0.0
 
 
 # ---------------------------------------------------------------------------

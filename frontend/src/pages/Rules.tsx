@@ -180,6 +180,11 @@ export function Rules() {
                       <div style={{ overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", fontSize: 13, lineHeight: 1.4 }}>
                         {rule.text}
                       </div>
+                      {rule.reference_images && rule.reference_images.length > 0 && (
+                        <div style={{ marginTop: 4, display: 'flex', gap: 4, alignItems: 'center', fontSize: 11, color: 'var(--text-tertiary)' }}>
+                          <span>🖼️ {rule.reference_images.length} Image{rule.reference_images.length > 1 ? 's' : ''}</span>
+                        </div>
+                      )}
                     </td>
                     <td>
                       <span className={`badge ${rule.confidence >= 0.8 && rule.review_status === 'approved' ? 'badge-emerald' : 'badge-amber'}`}>
@@ -278,6 +283,30 @@ export function Rules() {
                 />
               </div>
             </div>
+            
+            {editingRule.reference_images && editingRule.reference_images.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)' }}>Reference Images</label>
+                <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
+                   {editingRule.reference_images.map((img, idx) => {
+                     const filename = img.split('\\').pop()?.split('/').pop();
+                     return (
+                       <div key={idx} style={{ width: 120, height: 120, borderRadius: 8, border: '1px solid var(--border)', overflow: 'hidden', flexShrink: 0, background: 'var(--bg-panel)', display: 'flex', flexDirection: 'column' }}>
+                         <img 
+                           src={`http://localhost:8000/uploads/images/${filename}`} 
+                           alt="Reference" 
+                           style={{ width: '100%', height: '80%', objectFit: 'cover' }}
+                           onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                         />
+                         <div style={{ padding: '4px 8px', fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-tertiary)', textAlign: 'center' }}>
+                           {filename}
+                         </div>
+                       </div>
+                     );
+                   })}
+                </div>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 20 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
