@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db_session
-from app.models.certificate import Certificate
+from app.models.certificate import Certificate, CertificateRecord
 from app.models.test_attempt import ExamSession
 from app.models.user import User
 from app.models.company import Company
@@ -16,32 +16,27 @@ router = APIRouter()
 @router.get("/", response_model=List[dict])
 async def get_certificates(db: AsyncSession = Depends(get_db_session)):
     stmt = (
-        select(Certificate)
+        select(CertificateRecord)
         .options(
-            selectinload(Certificate.employee).selectinload(User.company),
-            selectinload(Certificate.exam_session)
+            selectinload(CertificateRecord.user).selectinload(User.company)
         )
-        .order_by(Certificate.issued_at.desc())
+        .order_by(CertificateRecord.created_at.desc())
     )
     result = await db.execute(stmt)
-    certificates = result.scalars().all()
+    records = result.scalars().all()
     
     response = []
-    for cert in certificates:
-        # Define expiry as 1 year from issued_at
-        expiry = cert.issued_at + timedelta(days=365)
-        
-        status = "Valid"
-        
+    for rec in records:
         response.append({
-            "id": str(cert.id),
-            "employeeName": cert.employee.full_name or "Unknown",
-            "employeeId": cert.employee.employee_code or "Unknown",
-            "company": cert.employee.company.name if cert.employee.company else "Unknown",
-            "score": cert.exam_session.score if cert.exam_session.score is not None else 0,
-            "issueDate": cert.issued_at.isoformat(),
-            "expiryDate": expiry.isoformat(),
-            "status": status
+            "id": str(rec.id),
+            "employeeName": rec.user.full_name or "Unknown",
+            "employeeId": rec.user.employee_code or "Unknown",
+            "company": rec.user.company.name if getattr(rec.user, 'company', None) else "Unknown",
+            "score": rec.sci_score,
+            "issueDate": rec.issue_date.isoformat(),
+            "expiryDate": rec.expiry_date.isoformat(),
+            "status": "Valid",
+            "isImported": rec.is_imported
         })
         
     return response

@@ -521,8 +521,16 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   }
   
   const totalEmployees = employees.length;
-  // Mock certified count (e.g. 80% if there are employees)
-  const totalCertified = Math.floor(totalEmployees * 0.8);
+  
+  let totalCertified = 0;
+  try {
+    const certs = await getAdminCertificates();
+    const uniqueCertified = new Set(certs.filter(c => c.status !== "Revoked").map(c => c.employeeId));
+    totalCertified = uniqueCertified.size;
+  } catch (err) {
+    console.error("Failed to fetch certificates for dashboard stats", err);
+  }
+  
   const pendingExams = Math.max(0, totalEmployees - totalCertified);
   const complianceRate = totalEmployees > 0 ? Math.round((totalCertified / totalEmployees) * 100) : 0;
   
@@ -651,6 +659,7 @@ export interface AdminCertificate {
   issueDate: string;
   expiryDate: string;
   status: "Valid" | "Expiring Soon" | "Revoked";
+  isImported?: boolean;
 }
 
 export interface VerificationResult {

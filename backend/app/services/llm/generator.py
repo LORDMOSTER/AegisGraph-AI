@@ -22,7 +22,7 @@ async def generate_question_variants(rule_text: str) -> RuleExtractionResponse:
     """
     system_prompt = (
         "You are a deterministic industrial safety assessor. Your task is to read the provided safety rule "
-        "and generate 2 to 4 multiple-choice question variants. "
+        "and generate exactly 1 MCQ, 1 True/False, and 1 Fill-in-the-Blank question based strictly on the source rule. "
         "CRITICAL INSTRUCTION: Do not invent, infer, or introduce any numeric values, thresholds, "
         "or procedural steps that are not explicitly stated in the source text. "
         "Every correct answer must be directly supported by the text. "
@@ -55,10 +55,16 @@ async def generate_question_variants(rule_text: str) -> RuleExtractionResponse:
             
             # Verify strict business rules
             for idx, variant in enumerate(validated_response.variants):
-                if len(variant.options) != 4:
-                    raise ValueError(f"Variant {idx} must have exactly 4 options, found {len(variant.options)}.")
-                if variant.correct_answer not in variant.options:
-                    raise ValueError(f"Variant {idx} correct_answer must exactly match one of the options.")
+                if variant.question_type == "MCQ":
+                    if not variant.options or len(variant.options) != 4:
+                        raise ValueError(f"Variant {idx} (MCQ) must have exactly 4 options.")
+                    if variant.correct_answer not in variant.options:
+                        raise ValueError(f"Variant {idx} correct_answer must exactly match one of the options.")
+                elif variant.question_type == "TRUE_FALSE":
+                    if not variant.options or sorted(variant.options) != ["False", "True"]:
+                        raise ValueError(f"Variant {idx} (TRUE_FALSE) options must be ['True', 'False'].")
+                    if variant.correct_answer not in ["True", "False"]:
+                        raise ValueError(f"Variant {idx} correct_answer must be 'True' or 'False'.")
             
             return validated_response
             

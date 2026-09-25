@@ -14,6 +14,7 @@ from app.models.question_bank import QuestionVariant
 from app.models.hierarchy import Rule, SubCategory, Section, Manual
 from app.models.schemas import QuestionVariantResponse, QuestionVariantUpdate, FlatQuestionVariantResponse
 from app.services.llm.generator import generate_question_variants
+from app.services.llm.grounding_check import verify_grounding, verify_option_length_bias
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -96,14 +97,28 @@ async def generate_variants_for_rule_endpoint(
         
     new_variants = []
     for vd in variants_data:
+        is_grounded = verify_grounding(rule.text, vd)
+        is_unbiased = verify_option_length_bias(vd)
+        grounding_verified = is_grounded and is_unbiased
+        
+        reviewer_notes = None
+        if not is_unbiased:
+            reviewer_notes = "bias_flag: option length bias detected"
+        elif not is_grounded:
+            reviewer_notes = "grounding_flag: hallucinated entities detected"
+            
         qv = QuestionVariant(
             rule_id=rule.id,
             question_text=vd["question_text"],
-            options=vd["options"],
-            correct_option_index=vd["correct_option_index"],
+            question_type=vd.get("question_type", "MCQ"),
+            options=vd.get("options"),
+            correct_option_index=vd.get("correct_option_index"),
+            correct_answer=vd.get("correct_answer"),
             bloom_level=rule.cognitive_level,
             confidence=vd["confidence"],
-            review_status="pending"
+            review_status="pending",
+            grounding_verified=grounding_verified,
+            reviewer_notes=reviewer_notes
         )
         db.add(qv)
         new_variants.append(qv)
@@ -163,14 +178,28 @@ async def bulk_generate_questions(
                 variants_data = await generate_question_variants(rule.text, rule.risk_score, rule.cognitive_level, count=3, question_type=question_type)
                 if variants_data:
                     for vd in variants_data:
+                        is_grounded = verify_grounding(rule.text, vd)
+                        is_unbiased = verify_option_length_bias(vd)
+                        grounding_verified = is_grounded and is_unbiased
+                        
+                        reviewer_notes = None
+                        if not is_unbiased:
+                            reviewer_notes = "bias_flag: option length bias detected"
+                        elif not is_grounded:
+                            reviewer_notes = "grounding_flag: hallucinated entities detected"
+
                         qv = QuestionVariant(
                             rule_id=rule.id,
                             question_text=vd["question_text"],
-                            options=vd["options"],
-                            correct_option_index=vd["correct_option_index"],
+                            question_type=vd.get("question_type", "MCQ"),
+                            options=vd.get("options"),
+                            correct_option_index=vd.get("correct_option_index"),
+                            correct_answer=vd.get("correct_answer"),
                             bloom_level=vd["bloom_level"],
                             confidence=0.8,
-                            review_status="pending"
+                            review_status="pending",
+                            grounding_verified=grounding_verified,
+                            reviewer_notes=reviewer_notes
                         )
                         db.add(qv)
                     generated_count += len(variants_data)

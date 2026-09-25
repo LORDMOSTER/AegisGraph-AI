@@ -1,152 +1,263 @@
-import { useEffect, useState } from "react";
-import { AdminCertificate, getAdminCertificates, revokeCertificate } from "../api";
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { AdminCertificate, getEmployees, Employee } from "../api";
 
-export function Certificates() {
+// --- ICONS ---
+const ImportIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="17 8 12 3 7 8" />
+    <line x1="12" y1="3" x2="12" y2="15" />
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+const ShieldIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+
+export const Certificates: React.FC = () => {
   const [certs, setCerts] = useState<AdminCertificate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [qrModal, setQrModal] = useState<string | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
-    load();
+    import("../api").then(({ getAdminCertificates }) => {
+      getAdminCertificates().then(data => {
+        setCerts(data);
+      }).catch(err => console.error("Failed to load certificates:", err));
+    });
+    getEmployees().then(data => setEmployees(data)).catch(console.error);
   }, []);
 
-  async function load() {
-    setLoading(true);
-    const data = await getAdminCertificates();
-    setCerts(data);
-    setLoading(false);
-  }
+  // Modal State
+  const [importEmp, setImportEmp] = useState("");
+  const [importEmpId, setImportEmpId] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [importExpiry, setImportExpiry] = useState("");
+  const [importScore, setImportScore] = useState("");
 
-  const handleRevoke = async (id: string) => {
-    if (window.confirm(`Are you sure you want to revoke certificate ${id}? This action cannot be undone.`)) {
-      await revokeCertificate(id);
-      await load();
-    }
+  const today = new Date();
+  const thirtyDaysFromNow = new Date(today);
+  thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+
+  const expiringCerts = certs.filter((c) => {
+    const expDate = new Date(c.expiryDate);
+    return expDate > today && expDate <= thirtyDaysFromNow;
+  });
+
+  const handleImport = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newCert: AdminCertificate = {
+      id: `cert-${Date.now()}`,
+      employeeName: importEmp,
+      employeeId: importEmpId || "UNKNOWN",
+      company: "Imported",
+      score: parseFloat(importScore) || 0,
+      issueDate: today.toISOString(),
+      expiryDate: new Date(importExpiry).toISOString(),
+      status: "Valid",
+      isImported: true,
+    };
+    setCerts([newCert, ...certs]);
+    setIsModalOpen(false);
+    setImportEmp("");
+    setImportEmpId("");
+    setImportScore("");
+    setImportExpiry("");
   };
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+    <div style={{ padding: "40px", minHeight: "100vh" }}>
+      <header style={{ marginBottom: "40px", display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: "1px solid var(--line)", paddingBottom: "20px" }}>
         <div>
-          <h2 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)" }}>Issued Certificates</h2>
-          <p style={{ fontSize: 14, color: "var(--text-secondary)", marginTop: 4 }}>
-            Manage employee safety certifications and Ed25519 signatures.
+          <h1 style={{ fontSize: "2rem", margin: 0, fontWeight: 300, letterSpacing: "-0.02em" }}>
+            CERTIFICATE <span style={{ color: "var(--accent)", fontWeight: 600 }}>VAULT</span>
+          </h1>
+          <p className="t-secondary" style={{ marginTop: "8px", fontSize: "0.9rem" }}>
+            Manage cryptographically signed credentials and external imports.
           </p>
         </div>
-      </div>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="btn btn-primary"
+        >
+          <ImportIcon /> Import External Certificate
+        </button>
+      </header>
 
-      <div className="card data-table-container glass-panel">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Employee Name</th>
-              <th>Employee ID</th>
-              <th>Score (SCI)</th>
-              <th>Issue Date</th>
-              <th>Expiry Date</th>
-              <th>Status</th>
-              <th style={{ textAlign: "right" }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "var(--text-tertiary)" }}>
-                  Loading certificates...
-                </td>
-              </tr>
-            ) : certs.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "var(--text-tertiary)" }}>
-                  No certificates issued yet.
-                </td>
-              </tr>
-            ) : (
-              certs.map(cert => {
-                let badgeClass = "badge-emerald";
-                if (cert.status === "Expiring Soon") badgeClass = "badge-amber";
-                if (cert.status === "Revoked") badgeClass = "badge-crimson";
-
-                return (
-                  <tr key={cert.id}>
-                    <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>{cert.employeeName}</td>
-                    <td style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 13, color: "var(--text-secondary)" }}>{cert.employeeId}</td>
-                    <td>{cert.score}%</td>
-                    <td style={{ fontSize: 13, color: "var(--text-secondary)" }}>{new Date(cert.issueDate).toLocaleDateString()}</td>
-                    <td style={{ fontSize: 13, color: "var(--text-secondary)" }}>{new Date(cert.expiryDate).toLocaleDateString()}</td>
-                    <td>
-                      <span className={`badge ${badgeClass}`}>{cert.status}</span>
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                        <button 
-                          className="btn btn-ghost touch-target" 
-                          style={{ padding: "0 12px", fontSize: 12 }}
-                          onClick={() => setQrModal(cert.id)}
-                        >
-                          View QR
-                        </button>
-                        <button 
-                          className="btn btn-ghost touch-target" 
-                          style={{ padding: "0 12px", fontSize: 12 }}
-                          onClick={() => alert("Downloading PDF...")}
-                        >
-                          PDF
-                        </button>
-                        {cert.status !== "Revoked" && (
-                          <button 
-                            className="btn btn-ghost touch-target" 
-                            style={{ padding: "0 12px", fontSize: 12, color: "var(--crimson)" }}
-                            onClick={() => handleRevoke(cert.id)}
-                          >
-                            Revoke
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {qrModal && (
-        <div className="qr-modal-overlay">
-          <div className="card glass-panel" style={{ padding: 40, textAlign: "center", maxWidth: 400, width: "100%" }}>
-            <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Certificate QR</h3>
-            <p style={{ color: "var(--text-secondary)", marginBottom: 24, fontSize: 13 }}>
-              Scan to verify signature on the local network.
-            </p>
-            
-            <div style={{ width: 240, height: 240, background: "white", padding: 16, margin: "0 auto 32px", borderRadius: 16 }}>
-              {/* Mock QR Code UI */}
-              <div style={{ width: "100%", height: "100%", border: "8px solid black", position: "relative" }}>
-                 <div style={{ position: "absolute", top: 16, left: 16, width: 32, height: 32, background: "black" }} />
-                 <div style={{ position: "absolute", top: 16, right: 16, width: 32, height: 32, background: "black" }} />
-                 <div style={{ position: "absolute", bottom: 16, left: 16, width: 32, height: 32, background: "black" }} />
-                 
-                 <div style={{ position: "absolute", top: 80, left: 80, right: 80, bottom: 80, background: "black", borderRadius: 8 }} />
-                 <div style={{ position: "absolute", bottom: 16, right: 16, width: 64, height: 64, display: "flex", flexWrap: "wrap", gap: 4 }}>
-                   <div style={{ width: 14, height: 14, background: "black" }} />
-                   <div style={{ width: 14, height: 14, background: "black" }} />
-                   <div style={{ width: 14, height: 14, background: "black" }} />
-                   <div style={{ width: 14, height: 14, background: "black" }} />
-                 </div>
-              </div>
-            </div>
-
-            <p style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "var(--text-tertiary)", marginBottom: 24, wordBreak: "break-all" }}>
-              http://localhost:5173/verify/{qrModal}
-            </p>
-
-            <button className="btn btn-secondary touch-target" style={{ width: "100%", justifyContent: "center" }} onClick={() => setQrModal(null)}>
-              Close
-            </button>
+      {expiringCerts.length > 0 && (
+        <div style={{ backgroundColor: "var(--amber-dim)", border: "1px solid var(--amber)", padding: "16px 20px", marginBottom: "32px", display: "flex", alignItems: "center", gap: "12px", color: "var(--amber)", borderRadius: "var(--radius-md)" }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <div>
+            <strong>Alert:</strong> {expiringCerts.length} certificate(s) expiring within the next 30 days.
           </div>
         </div>
       )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))", gap: "24px" }}>
+        {certs.map((cert) => {
+          const expDate = new Date(cert.expiryDate).toLocaleDateString();
+          return (
+            <div key={cert.id} className="card" style={{ position: "relative" }}>
+              <div style={{ position: "absolute", top: "24px", right: "24px" }}>
+                {cert.isImported ? (
+                  <div className="badge badge-amber">
+                    IMPORTED
+                  </div>
+                ) : (
+                  <div className="badge badge-emerald">
+                    <ShieldIcon /> NATIVE
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginBottom: "24px", paddingRight: "100px" }}>
+                <h3 style={{ margin: "0 0 4px 0", fontSize: "1.2rem", fontWeight: 500 }}>{cert.employeeName}</h3>
+                <div className="t-secondary" style={{ fontSize: "0.9rem" }}>EMP-ID: {cert.employeeId}</div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", borderTop: "1px solid var(--line)", paddingTop: "16px" }}>
+                <div>
+                  <div className="label" style={{ marginBottom: "4px" }}>SCI Score</div>
+                  <div className="mono t-primary" style={{ fontSize: "1.1rem", color: "var(--accent)" }}>{cert.score.toFixed(1)}%</div>
+                </div>
+                <div>
+                  <div className="label" style={{ marginBottom: "4px" }}>Expiry</div>
+                  <div className="mono t-primary" style={{ fontSize: "0.9rem", marginTop: "2px" }}>{expDate}</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0, 0, 0, 0.5)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}
+          >
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              className="card"
+              style={{ width: "500px", padding: 0, overflow: "hidden" }}
+            >
+              <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 500 }}>Import Certificate</h2>
+                <button onClick={() => setIsModalOpen(false)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)" }}>
+                  <CloseIcon />
+                </button>
+              </div>
+
+              <form onSubmit={handleImport} style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+                <div style={{ border: "1px dashed var(--line)", padding: "32px", textAlign: "center", cursor: "pointer", borderRadius: "var(--radius-md)", backgroundColor: "var(--surface)" }}>
+                  <ImportIcon />
+                  <div style={{ marginTop: "12px", fontSize: "0.9rem" }} className="t-secondary">
+                    Drag & Drop PDF here or <span style={{ color: "var(--accent)" }}>browse</span>
+                  </div>
+                </div>
+
+                <div className="field-group" style={{ position: "relative" }}>
+                  <label className="field-label">Employee Name</label>
+                  <input 
+                    required 
+                    type="text" 
+                    placeholder="Search and select an employee..." 
+                    value={importEmp} 
+                    onChange={(e) => {
+                      setImportEmp(e.target.value);
+                      setIsDropdownOpen(true);
+                    }} 
+                    onFocus={() => setIsDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
+                    className="field-input" 
+                  />
+                  {isDropdownOpen && employees.length > 0 && (
+                    <div style={{
+                      position: "absolute",
+                      top: "100%",
+                      left: 0,
+                      right: 0,
+                      marginTop: "4px",
+                      backgroundColor: "var(--surface)",
+                      border: "1px solid var(--line)",
+                      borderRadius: "var(--radius-md)",
+                      boxShadow: "var(--shadow-dropdown)",
+                      maxHeight: "200px",
+                      overflowY: "auto",
+                      zIndex: 1000
+                    }}>
+                      {employees
+                        .filter(emp => emp.name.toLowerCase().includes(importEmp.toLowerCase()))
+                        .map(emp => (
+                          <div
+                            key={emp.id}
+                            onClick={() => {
+                              setImportEmp(emp.name);
+                              setImportEmpId(emp.id);
+                              setIsDropdownOpen(false);
+                            }}
+                            style={{
+                              padding: "10px 14px",
+                              cursor: "pointer",
+                              borderBottom: "1px solid var(--line)"
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = "var(--raised)"}
+                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                          >
+                            <div style={{ fontWeight: 500, color: "var(--ink)" }}>{emp.name}</div>
+                            <div style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{emp.designation}</div>
+                          </div>
+                      ))}
+                      {employees.filter(emp => emp.name.toLowerCase().includes(importEmp.toLowerCase())).length === 0 && (
+                        <div style={{ padding: "10px 14px", color: "var(--muted)", fontStyle: "italic", fontSize: "0.9rem" }}>
+                          No employees found.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", gap: "16px" }}>
+                  <div className="field-group" style={{ flex: 1 }}>
+                    <label className="field-label">SCI Score</label>
+                    <input required type="number" step="0.1" placeholder="85.0" value={importScore} onChange={(e) => setImportScore(e.target.value)} className="field-input" />
+                  </div>
+                  <div className="field-group" style={{ flex: 1 }}>
+                    <label className="field-label">Expiry Date</label>
+                    <input required type="date" value={importExpiry} onChange={(e) => setImportExpiry(e.target.value)} className="field-input" />
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "16px", display: "flex", justifyContent: "flex-end" }}>
+                  <button type="submit" className="btn btn-primary">
+                    Import & Save
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
-}
+};
+
+export default Certificates;
