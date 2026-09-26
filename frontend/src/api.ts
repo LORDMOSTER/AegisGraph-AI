@@ -349,22 +349,6 @@ export interface CompanyRecord extends CompanyRegistrationData {
   companyCode: string;
 }
 
-function generateCompanyCode(companyName: string, existingCodes: Set<string>): string {
-  const stopWords = new Set(["the", "inc", "llc", "corp", "corporation", "ltd", "and", "of", "co", "company"]);
-  const words = companyName.split(/[\s,.-]+/).filter(w => !stopWords.has(w.toLowerCase()) && w.length > 0);
-  const sigWords = words.slice(0, 3);
-  let prefix = sigWords.map(w => w[0].toUpperCase()).join("");
-  if (!prefix) prefix = "CMP";
-
-  let num = 1;
-  while (true) {
-    const code = `${prefix}${num.toString().padStart(2, '0')}`;
-    if (!existingCodes.has(code)) {
-      return code;
-    }
-    num++;
-  }
-}
 
 export async function registerCompany(data: CompanyRegistrationData): Promise<{ companyCode: string }> {
   const res = await fetch(`${BASE}/v1/companies/register`, {

@@ -111,6 +111,7 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
     setLoading(true);
     try {
       // Mocking the backend call to commit the AssessmentSession
+      console.log(`Assigning exam to employee: ${employeeId}`);
       await new Promise((res) => setTimeout(res, 1500));
       onClose();
     } catch (err) {
@@ -339,7 +340,7 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                   Ready to Assign
                 </h3>
                 <p style={{ color: COLORS.textSecondary, textAlign: "center", maxWidth: "80%", margin: 0 }}>
-                  This will lock the current question set and schedule the assessment for the employee.
+                  This will lock the current question set and schedule the assessment for employee {employeeId}.
                 </p>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "16px", marginTop: "16px" }}>
