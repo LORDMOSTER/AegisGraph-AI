@@ -1,20 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { assembleExam, Employee, swapQuestion } from "../../api";
 
 // --- STYLING CONSTANTS (Void-Glass-Clay) ---
-const COLORS = {
-  void: "#07070e",
-  devilViolet: "#8a2be2",
-  neonAccent: "#00ffcc",
-  glassBg: "rgba(255, 255, 255, 0.03)",
-  glassBorder: "rgba(255, 255, 255, 0.08)",
-  clayShadow: "inset 4px 4px 10px rgba(0, 0, 0, 0.6), inset -4px -4px 10px rgba(255, 255, 255, 0.05)",
-  clayBg: "#11111a",
-  textPrimary: "#f3f3f3",
-  textSecondary: "#888899",
-};
 
-const BORDER_RADIUS = "16px";
 
 // --- ICONS (Mathematically Generated SVGs) ---
 const CloseIcon = () => (
@@ -32,34 +21,79 @@ const SwapIcon = () => (
   </svg>
 );
 
+const LoadingAnimation = ({ roleTemplate }: { roleTemplate: string }) => {
+  const messages = [
+    `Parsing ${roleTemplate} safety standards...`,
+    "Analyzing cognitive patterns...",
+    "Generating context-aware scenarios...",
+    "Validating compliance rules...",
+    "Finalizing question set..."
+  ];
+  const [msgIdx, setMsgIdx] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMsgIdx((prev) => (prev < messages.length - 1 ? prev + 1 : prev));
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [messages.length]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "24px", padding: "40px" }}>
+      <div style={{ display: "flex", gap: "8px" }}>
+        {[0, 1, 2].map((i) => (
+          <motion.div
+            key={i}
+            animate={{ y: [0, -10, 0], opacity: [0.3, 1, 0.3] }}
+            transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+            style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "var(--accent)" }}
+          />
+        ))}
+      </div>
+      <motion.p
+        key={msgIdx}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        style={{ color: "var(--text-primary)", fontSize: "1.1rem", margin: 0, minHeight: "24px" }}
+      >
+        {messages[msgIdx]}
+      </motion.p>
+    </div>
+  );
+};
+
 // --- INTERFACES ---
 interface AssignExamModalProps {
   isOpen: boolean;
   onClose: () => void;
-  employeeId: string;
-  employeeJobTitle: string;
+  employees: Employee[];
 }
 
 interface QuestionVariant {
   id: string;
   question_text: string;
   options: string[];
+  correct_answer_index?: number;
+  rule_id?: string;
 }
 
 export const AssignExamModal: React.FC<AssignExamModalProps> = ({
   isOpen,
   onClose,
-  employeeId,
-  employeeJobTitle,
+  employees,
 }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
   // Step 1 State
-  const [validFrom, setValidFrom] = useState("");
+  const today = new Date().toISOString().split("T")[0];
+  const [validFrom, setValidFrom] = useState(today);
   const [validTo, setValidTo] = useState("");
   const [targetCount, setTargetCount] = useState<number>(10);
-  const [roleTemplate, setRoleTemplate] = useState(employeeJobTitle);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const selectedEmployee = employees.find(e => e.id === selectedEmployeeId);
+  const roleTemplate = selectedEmployee?.designation || "";
 
   // Step 2 State
   const [questions, setQuestions] = useState<QuestionVariant[]>([]);
@@ -70,25 +104,17 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setStep(1);
-      setRoleTemplate(employeeJobTitle);
+      setSelectedEmployeeId("");
       setQuestions([]);
       setRevealScore(false);
     }
-  }, [isOpen, employeeJobTitle]);
+  }, [isOpen]);
 
   const handleAssemble = async () => {
     setLoading(true);
     try {
-      // Mocking the backend call to assemble_exam_for_role
-      // In a real app, you would call your API client here.
-      await new Promise((res) => setTimeout(res, 1500));
-      const mockQuestions = Array.from({ length: targetCount }).map((_, i) => ({
-        id: `q-${i}`,
-        question_text: `Generated question ${i + 1} for ${roleTemplate}?`,
-        options: ["Option A", "Option B", "Option C", "Option D"],
-      }));
-      setQuestions(mockQuestions);
-      setStep(2);
+      const realQuestions = await assembleExam(roleTemplate, targetCount);
+      setQuestions(realQuestions);
     } catch (err) {
       console.error("Assembly failed", err);
     } finally {
@@ -96,24 +122,41 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
     }
   };
 
-  const handleSwap = async (id: string) => {
-    // Mocking the backend call to swap_question
-    setQuestions((prev) =>
-      prev.map((q) =>
-        q.id === id
-          ? { ...q, question_text: `[Swapped] ${q.question_text}` }
-          : q
-      )
-    );
+  const handleSwap = async (q: QuestionVariant) => {
+    if (!q.rule_id) return;
+    try {
+      const newQ = await swapQuestion(q.rule_id, q.id);
+      if (newQ.error) {
+        alert(newQ.error);
+        return;
+      }
+      setQuestions((prev) => prev.map((old) => (old.id === q.id ? newQ : old)));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleFinalize = async () => {
     setLoading(true);
     try {
-      // Mocking the backend call to commit the AssessmentSession
-      console.log(`Assigning exam to employee: ${employeeId}`);
-      await new Promise((res) => setTimeout(res, 1500));
-      onClose();
+      if (!selectedEmployeeId) return;
+      console.log(`Assigning exam to employee: ${selectedEmployeeId}`);
+      
+      const manifest = questions.map(q => ({
+        rule_id: q.rule_id || "00000000-0000-0000-0000-000000000000",
+        question_variant_id: q.id,
+        question_text: q.question_text,
+        options: q.options,
+        correct_answer_index: q.correct_answer_index
+      }));
+
+      const { saveAssembledExam, assignExam } = await import("../../api");
+      const saveRes = await saveAssembledExam(`${roleTemplate} Certification`, manifest);
+      if (saveRes && saveRes.assessment_id) {
+        await assignExam(saveRes.assessment_id, [selectedEmployeeId]);
+      }
+      
+      setStep(4);
     } catch (err) {
       console.error("Finalization failed", err);
     } finally {
@@ -144,43 +187,36 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
           initial={{ y: 50, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 20, opacity: 0 }}
+          className="card glass-panel"
           style={{
-            width: "600px",
-            maxWidth: "90%",
-            backgroundColor: COLORS.void,
-            border: `1px solid ${COLORS.glassBorder}`,
-            borderRadius: BORDER_RADIUS,
-            boxShadow: `0 24px 48px rgba(0,0,0,0.5), inset 0 1px 0 ${COLORS.glassBorder}`,
+            width: step >= 2 ? "90vw" : "600px",
+            height: step >= 2 ? "90vh" : "auto",
+            maxWidth: step >= 2 ? "1200px" : "90%",
+            padding: 0,
             overflow: "hidden",
             display: "flex",
             flexDirection: "column",
-            fontFamily: "'IBM Plex Sans', sans-serif",
-            color: COLORS.textPrimary,
+            transition: "all 0.3s ease",
           }}
         >
           {/* Header */}
           <div
             style={{
               padding: "24px",
-              borderBottom: `1px solid ${COLORS.glassBorder}`,
+              borderBottom: "1px solid var(--border-muted)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
             }}
           >
             <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 600, letterSpacing: "-0.02em" }}>
-              Assign Exam
-              <span style={{ color: COLORS.devilViolet, marginLeft: "8px" }}>[{step}/3]</span>
+              {step === 4 ? "Exam Summary" : "Assign Exam"}
+              {step < 4 && <span style={{ color: "var(--accent)", marginLeft: "8px" }}>[{step}/3]</span>}
             </h2>
             <button
               onClick={onClose}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: COLORS.textSecondary,
-                cursor: "pointer",
-                padding: "4px",
-              }}
+              className="btn-icon btn-ghost"
+              style={{ border: "none", background: "transparent", padding: "4px" }}
             >
               <CloseIcon />
             </button>
@@ -192,81 +228,57 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
               <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
                 <div style={{ display: "flex", gap: "16px" }}>
                   <div style={{ flex: 1 }}>
-                    <label style={{ display: "block", marginBottom: "8px", fontSize: "0.85rem", color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: "0.05em" }}>Valid From</label>
+                    <label className="field-label" style={{ display: "block", marginBottom: "8px" }}>Valid From</label>
                     <input
                       type="date"
+                      min={today}
                       value={validFrom}
-                      onChange={(e) => setValidFrom(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "12px",
-                        backgroundColor: COLORS.clayBg,
-                        border: `1px solid ${COLORS.glassBorder}`,
-                        borderRadius: "8px",
-                        color: COLORS.textPrimary,
-                        boxShadow: COLORS.clayShadow,
+                      onChange={(e) => {
+                        setValidFrom(e.target.value);
+                        if (validTo && e.target.value > validTo) {
+                          setValidTo("");
+                        }
                       }}
+                      className="field-input"
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <label style={{ display: "block", marginBottom: "8px", fontSize: "0.85rem", color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: "0.05em" }}>Valid To</label>
+                    <label className="field-label" style={{ display: "block", marginBottom: "8px" }}>Valid To</label>
                     <input
                       type="date"
+                      min={validFrom || today}
                       value={validTo}
                       onChange={(e) => setValidTo(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "12px",
-                        backgroundColor: COLORS.clayBg,
-                        border: `1px solid ${COLORS.glassBorder}`,
-                        borderRadius: "8px",
-                        color: COLORS.textPrimary,
-                        boxShadow: COLORS.clayShadow,
-                      }}
+                      className="field-input"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label style={{ display: "block", marginBottom: "8px", fontSize: "0.85rem", color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: "0.05em" }}>Target Question Count</label>
+                  <label className="field-label" style={{ display: "block", marginBottom: "8px" }}>Target Question Count</label>
                   <input
                     type="number"
                     min="1"
                     max="100"
                     value={targetCount}
                     onChange={(e) => setTargetCount(Number(e.target.value))}
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      backgroundColor: COLORS.clayBg,
-                      border: `1px solid ${COLORS.glassBorder}`,
-                      borderRadius: "8px",
-                      color: COLORS.textPrimary,
-                      boxShadow: COLORS.clayShadow,
-                    }}
+                    className="field-input"
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: "block", marginBottom: "8px", fontSize: "0.85rem", color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: "0.05em" }}>Role Template</label>
+                  <label className="field-label" style={{ display: "block", marginBottom: "8px" }}>Select Employee</label>
                   <select
-                    value={roleTemplate}
-                    onChange={(e) => setRoleTemplate(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      backgroundColor: COLORS.clayBg,
-                      border: `1px solid ${COLORS.glassBorder}`,
-                      borderRadius: "8px",
-                      color: COLORS.textPrimary,
-                      boxShadow: COLORS.clayShadow,
-                      appearance: "none",
-                    }}
+                    value={selectedEmployeeId}
+                    onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                    className="field-select"
                   >
-                    <option value="CNC Machine Operator">CNC Machine Operator</option>
-                    <option value="Forklift Operator">Forklift Operator</option>
-                    <option value="Maintenance Technician (Electrical)">Maintenance Technician (Electrical)</option>
-                    <option value="Quality Inspector">Quality Inspector</option>
+                    <option value="" disabled>-- Select an employee --</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.designation})
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -274,31 +286,64 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
 
             {step === 2 && (
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                {questions.map((q, idx) => (
+                {questions.length === 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px", gap: "16px" }}>
+                    {loading ? (
+                      <LoadingAnimation roleTemplate={roleTemplate} />
+                    ) : (
+                      <>
+                        <p style={{ color: "var(--text-secondary)", textAlign: "center" }}>
+                          Ready to generate questions based on the {roleTemplate} role template.
+                        </p>
+                        <button
+                          onClick={handleAssemble}
+                          disabled={loading}
+                          className="btn btn-primary"
+                          style={{ padding: "12px 32px", fontSize: "1rem" }}
+                        >
+                          Start Generation
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  questions.map((q, idx) => (
                   <div
                     key={q.id}
-                    style={{
-                      backgroundColor: COLORS.clayBg,
-                      border: `1px solid ${COLORS.glassBorder}`,
-                      borderRadius: "12px",
-                      padding: "16px",
-                      boxShadow: COLORS.clayShadow,
-                      position: "relative",
-                    }}
+                    className="card glass-panel"
+                    style={{ padding: "16px", position: "relative", boxShadow: "var(--shadow-card)" }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <p style={{ margin: "0 0 12px 0", fontSize: "0.95rem", lineHeight: 1.5, color: COLORS.neonAccent }}>
-                        <span style={{ color: COLORS.textSecondary, marginRight: "8px" }}>{idx + 1}.</span>
-                        {q.question_text}
-                      </p>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
+                      <div style={{ display: "flex", flex: 1 }}>
+                        <span style={{ color: "var(--text-secondary)", marginRight: "8px", marginTop: "2px" }}>{idx + 1}.</span>
+                        <textarea
+                          value={q.question_text}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, question_text: val } : x));
+                          }}
+                          style={{
+                            margin: "0 0 12px 0",
+                            fontSize: "0.95rem",
+                            lineHeight: 1.5,
+                            color: "var(--accent)",
+                            background: "transparent",
+                            border: "none",
+                            width: "100%",
+                            resize: "vertical",
+                            outline: "none",
+                            fontFamily: "inherit"
+                          }}
+                        />
+                      </div>
                       <button
-                        onClick={() => handleSwap(q.id)}
+                        onClick={() => handleSwap(q)}
                         title="Swap/Regenerate Question"
                         style={{
                           background: "transparent",
-                          border: `1px solid ${COLORS.glassBorder}`,
+                          border: "1px solid var(--border-muted)",
                           borderRadius: "4px",
-                          color: COLORS.devilViolet,
+                          color: "var(--accent)",
                           cursor: "pointer",
                           padding: "6px",
                           display: "flex",
@@ -306,45 +351,71 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                           justifyContent: "center",
                           transition: "all 0.2s",
                         }}
-                        onMouseOver={(e) => (e.currentTarget.style.borderColor = COLORS.devilViolet)}
-                        onMouseOut={(e) => (e.currentTarget.style.borderColor = COLORS.glassBorder)}
+                        onMouseOver={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
+                        onMouseOut={(e) => (e.currentTarget.style.borderColor = "var(--border-muted)")}
                       >
                         <SwapIcon />
                       </button>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                       {q.options.map((opt, i) => (
-                        <div
+                        <input
                           key={i}
+                          value={opt}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setQuestions(prev => prev.map(x => {
+                              if (x.id === q.id) {
+                                const newOpts = [...x.options];
+                                newOpts[i] = val;
+                                return { ...x, options: newOpts };
+                              }
+                              return x;
+                            }));
+                          }}
                           style={{
                             padding: "8px 12px",
                             fontSize: "0.85rem",
-                            backgroundColor: "rgba(255,255,255,0.02)",
-                            border: `1px solid ${COLORS.glassBorder}`,
+                            backgroundColor: q.correct_answer_index === i ? "rgba(0,255,0,0.1)" : "rgba(255,255,255,0.02)",
+                            border: q.correct_answer_index === i ? "1px solid var(--emerald)" : "1px solid var(--border-muted)",
                             borderRadius: "6px",
-                            color: COLORS.textSecondary,
+                            color: q.correct_answer_index === i ? "var(--emerald)" : "var(--text-secondary)",
+                            width: "100%",
+                            outline: "none",
+                            fontFamily: "inherit",
+                            boxSizing: "border-box"
                           }}
-                        >
-                          {opt}
-                        </div>
+                        />
                       ))}
                     </div>
                   </div>
-                ))}
+                )))}
               </div>
             )}
 
             {step === 3 && (
               <div style={{ display: "flex", flexDirection: "column", gap: "24px", alignItems: "center", justifyContent: "center", padding: "40px 0" }}>
-                <h3 style={{ fontSize: "1.5rem", fontWeight: 400, color: COLORS.neonAccent, margin: 0, textAlign: "center" }}>
+                <h3 style={{ fontSize: "1.5rem", fontWeight: 400, color: "var(--accent)", margin: 0, textAlign: "center" }}>
                   Ready to Assign
                 </h3>
-                <p style={{ color: COLORS.textSecondary, textAlign: "center", maxWidth: "80%", margin: 0 }}>
-                  This will lock the current question set and schedule the assessment for employee {employeeId}.
+                
+                <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-muted)", borderRadius: "12px", padding: "24px", display: "flex", flexDirection: "column", gap: "12px", alignItems: "center", minWidth: "300px" }}>
+                  <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "var(--raised)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.5rem", color: "var(--text-primary)" }}>
+                     {selectedEmployee?.name.charAt(0) || "U"}
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <h4 style={{ margin: "0 0 4px 0", fontSize: "1.2rem", color: "var(--text-primary)" }}>{selectedEmployee?.name}</h4>
+                    <p style={{ margin: 0, color: "var(--text-secondary)", fontFamily: "monospace", fontSize: "0.9rem" }}>ID: {selectedEmployee?.id}</p>
+                    <p style={{ margin: "4px 0 0 0", color: "var(--accent)", fontSize: "0.85rem" }}>{selectedEmployee?.designation}</p>
+                  </div>
+                </div>
+
+                <p style={{ color: "var(--text-secondary)", textAlign: "center", maxWidth: "80%", margin: 0 }}>
+                  This will lock the current {questions.length}-question set and schedule the assessment.
                 </p>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "16px", marginTop: "16px" }}>
-                  <span style={{ fontSize: "0.9rem", color: COLORS.textPrimary }}>Reveal Score to Worker Upon Completion</span>
+                  <span style={{ fontSize: "0.9rem", color: "var(--text-primary)" }}>Reveal Score to Worker Upon Completion</span>
                   <label
                     style={{
                       position: "relative",
@@ -367,11 +438,11 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        backgroundColor: revealScore ? COLORS.devilViolet : COLORS.clayBg,
-                        border: `1px solid ${COLORS.glassBorder}`,
+                        backgroundColor: revealScore ? "var(--accent)" : "var(--raised)",
+                        border: "1px solid var(--border-muted)",
                         transition: ".4s",
                         borderRadius: "24px",
-                        boxShadow: COLORS.clayShadow,
+                        
                       }}
                     >
                       <span
@@ -382,7 +453,7 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                           width: "16px",
                           left: revealScore ? "26px" : "4px",
                           bottom: "3px",
-                          backgroundColor: revealScore ? COLORS.textPrimary : COLORS.textSecondary,
+                          backgroundColor: revealScore ? "#fff" : "var(--text-secondary)",
                           transition: ".4s",
                           borderRadius: "50%",
                         }}
@@ -392,32 +463,63 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                 </div>
               </div>
             )}
+
+            {step === 4 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ marginBottom: "16px", padding: "16px", background: "rgba(0, 255, 100, 0.1)", borderRadius: "8px", border: "1px solid var(--emerald)" }}>
+                  <h3 style={{ fontSize: "1.2rem", color: "var(--emerald)", margin: "0 0 8px 0" }}>Exam Successfully Assigned!</h3>
+                  <p style={{ color: "var(--text-secondary)", margin: 0 }}>The exam has been locked and assigned to {selectedEmployee?.name}. Below is the final question set for review.</p>
+                </div>
+                
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: "16px" }}>
+                  {questions.map((q, idx) => (
+                    <div key={q.id} className="card glass-panel" style={{ padding: "16px", boxShadow: "var(--shadow-card)", display: "flex", flexDirection: "column" }}>
+                      <p style={{ margin: "0 0 12px 0", fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.5 }}>
+                        <span style={{ color: "var(--text-secondary)", marginRight: "8px" }}>{idx + 1}.</span>
+                        {q.question_text}
+                      </p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1, justifyContent: "flex-end" }}>
+                        {q.options.map((opt, i) => {
+                          const isCorrect = q.correct_answer_index === i;
+                          return (
+                            <div key={i} style={{
+                              padding: "8px 12px",
+                              fontSize: "0.85rem",
+                              backgroundColor: isCorrect ? "rgba(0,255,0,0.1)" : "rgba(255,255,255,0.02)",
+                              border: isCorrect ? "1px solid var(--emerald)" : "1px solid var(--border-muted)",
+                              borderRadius: "6px",
+                              color: isCorrect ? "var(--emerald)" : "var(--text-secondary)",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center"
+                            }}>
+                              <span>{opt}</span>
+                              {isCorrect && <span style={{ fontWeight: "bold" }}>✓ Correct</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Footer Actions */}
           <div
             style={{
               padding: "24px",
-              borderTop: `1px solid ${COLORS.glassBorder}`,
+              borderTop: "1px solid var(--border-muted)",
               display: "flex",
               justifyContent: "space-between",
-              backgroundColor: "rgba(0,0,0,0.2)",
+              backgroundColor: "var(--raised)",
             }}
           >
             {step > 1 ? (
               <button
                 onClick={() => setStep(step - 1)}
-                style={{
-                  padding: "10px 24px",
-                  backgroundColor: "transparent",
-                  border: `1px solid ${COLORS.glassBorder}`,
-                  borderRadius: "6px",
-                  color: COLORS.textPrimary,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  fontSize: "0.9rem",
-                  letterSpacing: "0.02em",
-                }}
+                className="btn btn-secondary"
               >
                 Back
               </button>
@@ -425,29 +527,31 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
               <div /> // Placeholder to align next button right
             )}
 
-            {step < 3 ? (
+            {step === 4 ? (
+              <div style={{ display: "flex", justifyContent: "flex-end", width: "100%" }}>
+                <button
+                  onClick={onClose}
+                  className="btn btn-primary"
+                  style={{ padding: "10px 32px", fontSize: "1rem" }}
+                >
+                  Done
+                </button>
+              </div>
+            ) : step < 3 ? (
               <button
                 onClick={() => {
-                  if (step === 1) handleAssemble();
-                  else setStep(step + 1);
+                  if (step === 1) {
+                    if (!selectedEmployeeId) {
+                      alert("Please select an employee first.");
+                      return;
+                    }
+                    setStep(2);
+                  }
+                  else if (step === 2 && questions.length > 0) setStep(3);
                 }}
-                disabled={loading}
-                style={{
-                  padding: "10px 24px",
-                  backgroundColor: COLORS.devilViolet,
-                  border: "none",
-                  borderRadius: "6px",
-                  color: "#fff",
-                  cursor: loading ? "not-allowed" : "pointer",
-                  fontFamily: "inherit",
-                  fontSize: "0.9rem",
-                  fontWeight: 500,
-                  letterSpacing: "0.02em",
-                  boxShadow: `0 0 15px ${COLORS.devilViolet}40`,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
+                disabled={loading || (step === 2 && questions.length === 0)}
+                className="btn btn-primary"
+                style={{ opacity: (loading || (step === 2 && questions.length === 0)) ? 0.5 : 1 }}
               >
                 {loading ? "Processing..." : "Next Step"}
               </button>
@@ -455,19 +559,8 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
               <button
                 onClick={handleFinalize}
                 disabled={loading}
-                style={{
-                  padding: "10px 32px",
-                  backgroundColor: COLORS.neonAccent,
-                  border: "none",
-                  borderRadius: "6px",
-                  color: COLORS.void,
-                  cursor: loading ? "not-allowed" : "pointer",
-                  fontFamily: "inherit",
-                  fontSize: "0.9rem",
-                  fontWeight: 600,
-                  letterSpacing: "0.02em",
-                  boxShadow: `0 0 20px ${COLORS.neonAccent}60`,
-                }}
+                className="btn btn-primary"
+                style={{ padding: "10px 32px", fontSize: "1rem", background: "var(--accent)" }}
               >
                 {loading ? "Locking..." : "Lock & Assign"}
               </button>

@@ -179,6 +179,38 @@ export async function getAssessments(): Promise<any[]> {
   return fetchWithRetry<any[]>(`${BASE}/assessment/assessments`);
 }
 
+export async function getAllAssignedExams(): Promise<any[]> {
+  return fetchWithRetry<any[]>(`${BASE}/assessment/all-assigned-exams`);
+}
+
+export async function deleteAssignedExam(examId: string): Promise<void> {
+  return fetchWithRetry<void>(`${BASE}/assessment/exam/${examId}`, { method: "DELETE" });
+}
+
+export async function assembleExam(jobTitle: string, targetCount: number): Promise<any[]> {
+  return fetchWithRetry<any[]>(`${BASE}/assessment/assemble`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ job_title: jobTitle, target_count: targetCount })
+  });
+}
+
+export async function saveAssembledExam(name: string, manifest: any[]): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/assessment/save-assembled`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, manifest })
+  });
+}
+
+export async function swapQuestion(ruleId: string, currentVariantId: string): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/assessment/swap`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rule_id: ruleId, current_variant_id: currentVariantId })
+  });
+}
+
 export async function assignExam(assessmentId: string, employeeIds: string[]): Promise<any> {
   return fetchWithRetry<any>(`${BASE}/assessment/assign`, {
     method: "POST",
@@ -380,6 +412,9 @@ export async function loginAdmin(email: string, pass: string): Promise<boolean> 
     
     if (res.ok) {
       const data = await res.json();
+      if (data.role === "OPERATOR") {
+        return false; // Workers cannot login here
+      }
       localStorage.setItem("aegis_token", data.access_token);
       return true;
     }
@@ -390,7 +425,29 @@ export async function loginAdmin(email: string, pass: string): Promise<boolean> 
 }
 
 export async function loginEmployee(empId: string, pin: string): Promise<boolean> {
-  return loginAdmin(empId, pin);
+  try {
+    const formData = new URLSearchParams();
+    formData.append("username", empId);
+    formData.append("password", pin);
+
+    const res = await fetch(`${BASE}/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: formData.toString()
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      if (data.role !== "OPERATOR") {
+        return false; // Admins cannot login here
+      }
+      localStorage.setItem("aegis_token", data.access_token);
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -420,17 +477,47 @@ export async function getDepartments(): Promise<Department[]> {
   const existingStr = localStorage.getItem("aegis_departments") || "[]";
   let deps: Department[] = JSON.parse(existingStr);
   
-  // Dynamically count actual employees from the backend
   try {
     const employees = await getEmployees();
     const counts: Record<string, number> = {};
+    const names: Record<string, string> = {};
     for (const emp of employees) {
       counts[emp.departmentCode] = (counts[emp.departmentCode] || 0) + 1;
+      names[emp.departmentCode] = emp.departmentName;
     }
+    
+    // Auto-hydrate missing departments from backend employee data
+    for (const code of Object.keys(counts)) {
+      if (!deps.find(d => d.code === code)) {
+        deps.push({
+          id: crypto.randomUUID(),
+          name: names[code] || "Unknown Department",
+          code,
+          employeeCount: 0
+        });
+      }
+    }
+
+    // Deduplicate by name (keeping the one with employees)
+    const uniqueDepsMap = new Map<string, Department>();
+    for (const d of deps) {
+      const existing = uniqueDepsMap.get(d.name);
+      const currentCount = counts[d.code] || 0;
+      const existingCount = existing ? (counts[existing.code] || 0) : 0;
+      
+      if (!existing || currentCount > existingCount) {
+        uniqueDepsMap.set(d.name, d);
+      }
+    }
+    deps = Array.from(uniqueDepsMap.values());
+
+    // Update counts
     deps = deps.map(dep => ({
       ...dep,
       employeeCount: counts[dep.code] || 0
     }));
+    
+    localStorage.setItem("aegis_departments", JSON.stringify(deps));
   } catch (err) {
     console.error("Could not fetch employees to update department counts");
   }
@@ -662,6 +749,34 @@ export interface VerificationResult {
 export async function getAdminCertificates(): Promise<AdminCertificate[]> {
   return fetchWithRetry<AdminCertificate[]>(`${BASE}/v1/certificates/`, {
     method: "GET"
+  });
+}
+
+export async function analyzeCertificate(file: File): Promise<any> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return fetchWithRetry<any>(`${BASE}/v1/certificates/analyze`, {
+    method: "POST",
+    body: formData
+  });
+}
+
+export async function importCertificate(employeeName: string, score: number, expiryDate: string): Promise<any> {
+  const formData = new FormData();
+  formData.append("employee_name", employeeName);
+  formData.append("score", score.toString());
+  formData.append("expiry_date", expiryDate);
+  return fetchWithRetry<any>(`${BASE}/v1/certificates/import`, {
+    method: "POST",
+    body: formData
+  });
+}
+
+export async function updateCertificate(certId: string, score: number, expiryDate: string): Promise<void> {
+  return fetchWithRetry<void>(`${BASE}/v1/certificates/${certId}`, {
+    method: "PUT",
+    body: JSON.stringify({ score, expiry_date: expiryDate }),
+    headers: { "Content-Type": "application/json" }
   });
 }
 

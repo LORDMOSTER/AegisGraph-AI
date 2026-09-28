@@ -45,6 +45,25 @@ export const Certificates: React.FC = () => {
   const [importExpiry, setImportExpiry] = useState("");
   const [importScore, setImportScore] = useState("");
 
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editCertId, setEditCertId] = useState("");
+  const [editScore, setEditScore] = useState("");
+  const [editExpiry, setEditExpiry] = useState("");
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const { updateCertificate, getAdminCertificates } = await import("../api");
+      await updateCertificate(editCertId, parseFloat(editScore), editExpiry);
+      const data = await getAdminCertificates();
+      setCerts(data);
+      setIsEditModalOpen(false);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update certificate.");
+    }
+  };
+
   const today = new Date();
   const thirtyDaysFromNow = new Date(today);
   thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
@@ -54,25 +73,22 @@ export const Certificates: React.FC = () => {
     return expDate > today && expDate <= thirtyDaysFromNow;
   });
 
-  const handleImport = (e: React.FormEvent) => {
+  const handleImport = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newCert: AdminCertificate = {
-      id: `cert-${Date.now()}`,
-      employeeName: importEmp,
-      employeeId: importEmpId || "UNKNOWN",
-      company: "Imported",
-      score: parseFloat(importScore) || 0,
-      issueDate: today.toISOString(),
-      expiryDate: new Date(importExpiry).toISOString(),
-      status: "Valid",
-      isImported: true,
-    };
-    setCerts([newCert, ...certs]);
-    setIsModalOpen(false);
-    setImportEmp("");
-    setImportEmpId("");
-    setImportScore("");
-    setImportExpiry("");
+    try {
+      const { importCertificate, getAdminCertificates } = await import("../api");
+      await importCertificate(importEmp, parseFloat(importScore) || 0, importExpiry);
+      const data = await getAdminCertificates();
+      setCerts(data);
+      setIsModalOpen(false);
+      setImportEmp("");
+      setImportEmpId("");
+      setImportScore("");
+      setImportExpiry("");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to import and save certificate.");
+    }
   };
 
   return (
@@ -139,6 +155,37 @@ export const Certificates: React.FC = () => {
                   <div className="mono t-primary" style={{ fontSize: "0.9rem", marginTop: "2px" }}>{expDate}</div>
                 </div>
               </div>
+              <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+                <button 
+                  onClick={() => {
+                    setEditCertId(cert.id);
+                    setEditScore(String(cert.score));
+                    setEditExpiry(cert.expiryDate.split("T")[0]);
+                    setIsEditModalOpen(true);
+                  }} 
+                  className="btn" 
+                  style={{ flex: 1, padding: "6px" }}
+                >
+                  Edit
+                </button>
+                <button 
+                  onClick={async () => {
+                    const { revokeCertificate, getAdminCertificates } = await import("../api");
+                    try {
+                      await revokeCertificate(cert.id);
+                      const data = await getAdminCertificates();
+                      setCerts(data);
+                    } catch (e) {
+                      console.error(e);
+                      alert("Failed to delete certificate");
+                    }
+                  }} 
+                  className="btn btn-destructive" 
+                  style={{ flex: 1, padding: "6px" }}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           );
         })}
@@ -167,15 +214,54 @@ export const Certificates: React.FC = () => {
               </div>
 
               <form onSubmit={handleImport} style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-                <div style={{ border: "1px dashed var(--line)", padding: "32px", textAlign: "center", cursor: "pointer", borderRadius: "var(--radius-md)", backgroundColor: "var(--surface)" }}>
+                <div 
+                  style={{ border: "1px dashed var(--line)", padding: "32px", textAlign: "center", cursor: "pointer", borderRadius: "var(--radius-md)", backgroundColor: "var(--surface)", position: "relative" }}
+                >
+                  <input 
+                    type="file" 
+                    accept="application/pdf"
+                    style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setImportEmp("Analyzing with AI...");
+                      setImportScore("");
+                      setImportExpiry("");
+                      try {
+                        const { analyzeCertificate } = await import("../api");
+                        const data = await analyzeCertificate(file);
+                        
+                        setImportEmp(data.employee_name || "");
+                        setImportScore(data.score ? String(data.score) : "");
+                        setImportExpiry(data.expiry_date || "");
+                        
+                        // Handle grounding validation display (mocked state usage)
+                        if (data.grounding) {
+                            if (!data.grounding.holder_name) {
+                                alert("Warning: Name could not be verified in the PDF text. Please double check.");
+                            }
+                        }
+                        if (data.derived_expiry) {
+                            alert("Note: Expiry date was derived from validity rules. Please confirm.");
+                        }
+                      } catch (err) {
+                        console.error(err);
+                        setImportEmp("");
+                        alert("AI extraction failed. Please fill manually.");
+                      }
+                    }}
+                  />
                   <ImportIcon />
                   <div style={{ marginTop: "12px", fontSize: "0.9rem" }} className="t-secondary">
                     Drag & Drop PDF here or <span style={{ color: "var(--accent)" }}>browse</span>
                   </div>
+                  <div style={{ marginTop: "4px", fontSize: "0.75rem", color: "var(--muted)" }}>
+                    AI will automatically extract details.
+                  </div>
                 </div>
 
                 <div className="field-group" style={{ position: "relative" }}>
-                  <label className="field-label">Employee Name</label>
+                  <label className="field-label">Employee Name <span style={{ fontSize: "0.7rem", color: "var(--amber)", marginLeft: 8 }}>(Please verify AI match)</span></label>
                   <input 
                     required 
                     type="text" 
@@ -226,11 +312,6 @@ export const Certificates: React.FC = () => {
                             <div style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{emp.designation}</div>
                           </div>
                       ))}
-                      {employees.filter(emp => emp.name.toLowerCase().includes(importEmp.toLowerCase())).length === 0 && (
-                        <div style={{ padding: "10px 14px", color: "var(--muted)", fontStyle: "italic", fontSize: "0.9rem" }}>
-                          No employees found.
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -247,8 +328,50 @@ export const Certificates: React.FC = () => {
                 </div>
 
                 <div style={{ marginTop: "16px", display: "flex", justifyContent: "flex-end" }}>
+                  <button type="submit" className="btn btn-primary" disabled={importEmp === "Analyzing with AI..."}>
+                    Generate QR & Save
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isEditModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0, 0, 0, 0.5)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}
+          >
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              className="card"
+              style={{ width: "400px", padding: 0, overflow: "hidden" }}
+            >
+              <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 500 }}>Edit Certificate</h2>
+                <button onClick={() => setIsEditModalOpen(false)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)" }}>
+                  <CloseIcon />
+                </button>
+              </div>
+
+              <form onSubmit={handleEditSubmit} style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+                <div className="field-group">
+                  <label className="field-label">SCI Score</label>
+                  <input required type="number" step="0.1" value={editScore} onChange={(e) => setEditScore(e.target.value)} className="field-input" />
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Expiry Date</label>
+                  <input required type="date" value={editExpiry} onChange={(e) => setEditExpiry(e.target.value)} className="field-input" />
+                </div>
+                <div style={{ marginTop: "16px", display: "flex", justifyContent: "flex-end" }}>
                   <button type="submit" className="btn btn-primary">
-                    Import & Save
+                    Update
                   </button>
                 </div>
               </form>

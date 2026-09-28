@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { getMyExams, getMyCertificates } from "../api";
 
 export interface AssignedExam {
@@ -24,6 +24,7 @@ export function ExamDashboard({ onStartExam }: Props) {
   const [exams, setExams] = useState<AssignedExam[]>([]);
   const [certs, setCerts] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showNotification, setShowNotification] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -40,6 +41,11 @@ export function ExamDashboard({ onStartExam }: Props) {
         issueDate: cert.issued_at
       })));
       setLoading(false);
+      
+      if (e.length > 0) {
+        setShowNotification(true);
+        setTimeout(() => setShowNotification(false), 5000); // Hide after 5 seconds
+      }
     }
     load();
   }, []);
@@ -54,7 +60,35 @@ export function ExamDashboard({ onStartExam }: Props) {
   }
 
   return (
-    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 28px" }}>
+    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 28px", position: "relative" }}>
+      <AnimatePresence>
+        {showNotification && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            style={{
+              position: "fixed",
+              top: 24,
+              right: 24,
+              background: "var(--accent, #3b82f6)",
+              color: "white",
+              padding: "16px 24px",
+              borderRadius: "8px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              zIndex: 1000,
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              fontWeight: 500,
+            }}
+          >
+            <iconify-icon icon="lucide:bell" style={{ fontSize: 20 }} />
+            You have new assigned exams to complete!
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 24, marginBottom: 40 }}>
         <div>

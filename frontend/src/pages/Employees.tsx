@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Employee, Department, getEmployees, getDepartments, createEmployee, updateEmployeePin, deleteEmployee } from "../api";
+import { AssignExamModal } from "../components/assessments/AssignExamModal";
 
 export function Employees() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -28,6 +29,7 @@ export function Employees() {
     targetEmp?: Employee;
   }>({ type: "none" });
   const [pinInput, setPinInput] = useState("");
+  const [showAssignExamModal, setShowAssignExamModal] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -122,9 +124,14 @@ export function Employees() {
           <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)" }}>Employees</h1>
           <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>Manage workforce access and certification history.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-          + Add Employee
-        </button>
+        <div style={{ display: "flex", gap: "12px" }}>
+          <button className="btn btn-secondary" onClick={() => setShowAssignExamModal(true)}>
+            Assign Exam
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+            + Add Employee
+          </button>
+        </div>
       </div>
 
       <div className="table-container">
@@ -172,7 +179,6 @@ export function Employees() {
                     <td style={{ textAlign: "right" }}>
                       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                         <button className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: 11 }} onClick={() => openChangePin(emp)}>Change PIN</button>
-                        <button className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: 11 }}>Assign Exam</button>
                         <button className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: 11, color: "var(--crimson)" }} onClick={() => openDelete(emp)}>Delete</button>
                       </div>
                     </td>
@@ -355,6 +361,13 @@ export function Employees() {
         )}
       </AnimatePresence>
       
+      {/* --- EXTERNAL ASSIGN EXAM MODAL --- */}
+      <AssignExamModal
+        isOpen={showAssignExamModal}
+        onClose={() => setShowAssignExamModal(false)}
+        employees={employees}
+      />
+
       {/* Hide actions in print mode */}
       <style>{`
         @media print {

@@ -163,9 +163,69 @@ from datetime import datetime
 from sqlalchemy.orm import selectinload
 from app.services.certificate import generate_certificate
 
+class AssembleRequest(BaseModel):
+    job_title: str
+    target_count: int
+
+@router.post("/assemble", summary="Assemble exam questions for a role")
+async def assemble_exam(
+    request: AssembleRequest,
+    db: AsyncSession = Depends(get_db_session)
+):
+    from app.services.assessment_assembler import assemble_exam_for_role
+    questions = await assemble_exam_for_role(db, request.job_title, request.target_count)
+    return [
+        {
+            "id": str(q.id),
+            "question_text": q.question_text,
+            "options": q.options or [],
+            "correct_answer_index": q.correct_option_index,
+            "rule_id": str(q.rule_id) if hasattr(q, "rule_id") else None
+        }
+        for q in questions
+    ]
+
+class SwapRequest(BaseModel):
+    rule_id: uuid.UUID
+    current_variant_id: uuid.UUID
+
+@router.post("/swap", summary="Swap a question variant for the same rule")
+async def swap_question(
+    request: SwapRequest,
+    db: AsyncSession = Depends(get_db_session)
+):
+    from sqlalchemy import select
+    from app.models.question_bank import QuestionVariant
+    
+    # Get all approved variants for this rule
+    stmt = select(QuestionVariant).where(
+        QuestionVariant.rule_id == request.rule_id,
+        QuestionVariant.status == "APPROVED"
+    )
+    result = await db.execute(stmt)
+    variants = result.scalars().all()
+    
+    # Filter out the current one if possible, and pick a new one
+    other_variants = [v for v in variants if v.id != request.current_variant_id]
+    
+    if not other_variants:
+        # If no other variants, just return the current one or a generated dummy
+        return {"error": "No alternative questions available for this rule"}
+        
+    import random
+    q = random.choice(other_variants)
+    
+    return {
+        "id": str(q.id),
+        "question_text": q.question_text,
+        "options": q.options or [],
+        "correct_answer_index": q.correct_option_index,
+        "rule_id": str(q.rule_id)
+    }
+
 class AssignRequest(BaseModel):
     assessment_id: uuid.UUID
-    employee_ids: list[uuid.UUID]
+    employee_ids: list[str]
 
 @router.post("/assign", summary="Assign an exam to employees")
 async def assign_exam(
@@ -173,11 +233,16 @@ async def assign_exam(
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
 ):
+    # Map employee codes to User UUIDs
+    stmt = select(User).where(User.employee_code.in_(request.employee_ids))
+    result = await db.execute(stmt)
+    users = result.scalars().all()
+    
     sessions = []
-    for emp_id in request.employee_ids:
+    for u in users:
         session = ExamSession(
             assessment_id=request.assessment_id,
-            employee_id=emp_id,
+            employee_id=u.id,
             status=ExamStatus.ASSIGNED,
             assigned_at=datetime.utcnow(),
             responses={}
@@ -217,6 +282,47 @@ async def get_my_exams(
         "score": e.score,
         "total_questions": e.assessment.total_question_count
     } for e in exams]
+
+@router.get("/all-assigned-exams", summary="Get all assigned exams for admin")
+async def get_all_assigned_exams(
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    # Fetch all exam sessions for users in the current user's company
+    stmt = (
+        select(ExamSession)
+        .join(User, ExamSession.employee_id == User.id)
+        .options(selectinload(ExamSession.assessment), selectinload(ExamSession.employee))
+        .where(User.company_id == current_user.company_id)
+    )
+    result = await db.execute(stmt)
+    exams = result.scalars().all()
+    
+    return [{
+        "exam_session_id": e.id,
+        "employee_name": e.employee.full_name or e.employee.employee_code,
+        "assessment_name": e.assessment.name,
+        "status": e.status,
+        "assigned_at": e.assigned_at,
+        "score": e.score,
+        "total_questions": e.assessment.total_question_count
+    } for e in exams]
+
+@router.delete("/exam/{exam_id}", summary="Delete an assigned exam")
+async def delete_exam(
+    exam_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    stmt = select(ExamSession).where(ExamSession.id == exam_id)
+    result = await db.execute(stmt)
+    exam = result.scalar_one_or_none()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+        
+    await db.delete(exam)
+    await db.commit()
+    return {"status": "deleted"}
 
 @router.get("/exam/{exam_id}", summary="Get exam details")
 async def get_exam(
@@ -372,3 +478,41 @@ async def get_my_certificates(
         "assessment_name": c.exam_session.assessment.name,
         "score": c.exam_session.score
     } for c in certs]
+
+class SaveAssembledRequest(BaseModel):
+    name: str
+    manifest: list[dict]
+
+@router.post("/save-assembled", summary="Save assembled questions as an assessment")
+async def save_assembled_assessment(
+    request: SaveAssembledRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    for item in request.manifest:
+        if 'question_variant_id' in item and 'question_text' in item:
+            try:
+                var_id = uuid.UUID(item['question_variant_id'])
+                stmt = select(QuestionVariant).where(QuestionVariant.id == var_id)
+                res = await db.execute(stmt)
+                variant = res.scalar_one_or_none()
+                if variant:
+                    variant.question_text = item['question_text']
+                    variant.options = item.get('options', [])
+                    if 'correct_answer_index' in item:
+                        variant.correct_option_index = item['correct_answer_index']
+            except Exception as e:
+                logger.error(f"Failed to update variant {item.get('question_variant_id')}: {e}")
+
+    assessment = Assessment(
+        company_id=current_user.company_id,
+        name=request.name,
+        manifest=request.manifest,
+        total_question_count=len(request.manifest),
+        section_breakdown={}
+    )
+    db.add(assessment)
+    await db.commit()
+    await db.refresh(assessment)
+    return {"assessment_id": assessment.id}
+

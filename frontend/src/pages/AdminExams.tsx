@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { getAssessments, assignExam, getEmployees, Employee } from "../api";
+import { getAllAssignedExams, deleteAssignedExam } from "../api";
 import { AnimatePresence, motion } from "framer-motion";
 
 export function AdminExams() {
-  const [assessments, setAssessments] = useState<any[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [exams, setExams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Modal State
-  const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
-  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(new Set());
-  const [assigning, setAssigning] = useState(false);
+  
+  // Custom Modal State
+  const [examToRemove, setExamToRemove] = useState<string | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -20,12 +18,8 @@ export function AdminExams() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [assessmentsData, employeesData] = await Promise.all([
-        getAssessments(),
-        getEmployees(),
-      ]);
-      setAssessments(assessmentsData);
-      setEmployees(employeesData);
+      const data = await getAllAssignedExams();
+      setExams(data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -33,39 +27,27 @@ export function AdminExams() {
     }
   };
 
-  const openAssignModal = (assessmentId: string) => {
-    setSelectedAssessmentId(assessmentId);
-    setSelectedEmployeeIds(new Set());
-    setAssignModalOpen(true);
-  };
-
-  const toggleEmployee = (empId: string) => {
-    const next = new Set(selectedEmployeeIds);
-    if (next.has(empId)) next.delete(empId);
-    else next.add(empId);
-    setSelectedEmployeeIds(next);
-  };
-
-  const handleConfirmAssign = async () => {
-    if (!selectedAssessmentId || selectedEmployeeIds.size === 0) return;
-    setAssigning(true);
+  const handleConfirmRemove = async () => {
+    if (!examToRemove) return;
+    setIsRemoving(true);
+    setErrorMessage(null);
     try {
-      await assignExam(selectedAssessmentId, Array.from(selectedEmployeeIds));
-      alert("Exam assigned successfully!");
-      setAssignModalOpen(false);
+      await deleteAssignedExam(examToRemove);
+      await loadData();
+      setExamToRemove(null);
     } catch (err) {
       console.error(err);
-      alert("Failed to assign exam.");
+      setErrorMessage("Failed to remove exam.");
     } finally {
-      setAssigning(false);
+      setIsRemoving(false);
     }
   };
 
   return (
     <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 24 }}>
       <div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)" }}>Exam Templates</h1>
-        <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>Manage generated assessment templates and assign them to employees.</p>
+        <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)" }}>Assigned Exams</h1>
+        <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>Manage exams currently assigned to employees.</p>
       </div>
 
       <div className="table-container">
@@ -75,31 +57,38 @@ export function AdminExams() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Total Questions</th>
-                <th>Created At</th>
+                <th>Employee</th>
+                <th>Assessment Name</th>
+                <th>Status</th>
+                <th>Assigned At</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {assessments.length === 0 ? (
+              {exams.length === 0 ? (
                 <tr>
-                  <td colSpan={4} style={{ textAlign: "center", padding: 40, color: "var(--text-tertiary)" }}>
-                    No assessment templates found. Go to Constraints to generate one.
+                  <td colSpan={5} style={{ textAlign: "center", padding: 40, color: "var(--text-tertiary)" }}>
+                    No assigned exams found. Assign them from the Employees page.
                   </td>
                 </tr>
               ) : (
-                assessments.map((a: any) => (
-                  <tr key={a.id}>
-                    <td style={{ fontWeight: 500 }}>{a.name}</td>
-                    <td>{a.total_question_count}</td>
-                    <td>{new Date(a.created_at).toLocaleString()}</td>
+                exams.map((e: any) => (
+                  <tr key={e.exam_session_id}>
+                    <td style={{ fontWeight: 500 }}>{e.employee_name}</td>
+                    <td>{e.assessment_name}</td>
+                    <td>
+                      <span className={`badge badge-${e.status === 'COMPLETED' ? 'emerald' : e.status === 'FAILED' ? 'rose' : 'amber'}`}>
+                        {e.status}
+                      </span>
+                    </td>
+                    <td>{new Date(e.assigned_at).toLocaleString()}</td>
                     <td>
                       <button 
-                        className="btn btn-primary"
-                        onClick={() => openAssignModal(a.id)}
+                        className="btn btn-ghost"
+                        style={{ color: "var(--rose)", border: "1px solid var(--rose-dim)" }}
+                        onClick={() => setExamToRemove(e.exam_session_id)}
                       >
-                        Assign
+                        Remove
                       </button>
                     </td>
                   </tr>
@@ -111,68 +100,46 @@ export function AdminExams() {
       </div>
 
       <AnimatePresence>
-        {assignModalOpen && (
+        {examToRemove && (
           <div className="modal-backdrop">
             <motion.div
               className="modal-content"
-              style={{ maxWidth: 500 }}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
+              style={{ maxWidth: 400 }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
             >
-              <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)" }}>
-                Assign Exam
+              <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12, color: "var(--text-primary)" }}>
+                Remove Exam
               </h3>
-              <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
-                Select employees to assign this exam to.
+              <p style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 24, lineHeight: 1.5 }}>
+                Are you sure you want to remove this assigned exam? This action cannot be undone.
               </p>
+              
+              {errorMessage && (
+                <div style={{ padding: 12, background: "var(--rose-dim)", color: "var(--rose)", borderRadius: 6, marginBottom: 16, fontSize: 13 }}>
+                  {errorMessage}
+                </div>
+              )}
 
-              <div style={{ maxHeight: 300, overflowY: "auto", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: 8 }}>
-                {employees.length === 0 ? (
-                  <p style={{ fontSize: 13, color: "var(--text-tertiary)", textAlign: "center", padding: 16 }}>
-                    No employees found.
-                  </p>
-                ) : (
-                  employees.map(emp => (
-                    <label 
-                      key={emp.id} 
-                      style={{ 
-                        display: "flex", 
-                        alignItems: "center", 
-                        gap: 12, 
-                        padding: "8px 12px", 
-                        cursor: "pointer",
-                        borderRadius: "var(--radius)",
-                        background: selectedEmployeeIds.has(emp.id) ? "var(--bg-hover)" : "transparent"
-                      }}
-                    >
-                      <input 
-                        type="checkbox" 
-                        checked={selectedEmployeeIds.has(emp.id)}
-                        onChange={() => toggleEmployee(emp.id)}
-                      />
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text-primary)" }}>{emp.name}</div>
-                        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{emp.designation} - {emp.departmentName}</div>
-                      </div>
-                    </label>
-                  ))
-                )}
-              </div>
-
-              <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 24 }}>
+              <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
                 <button
                   className="btn btn-ghost"
-                  onClick={() => setAssignModalOpen(false)}
+                  onClick={() => {
+                    setExamToRemove(null);
+                    setErrorMessage(null);
+                  }}
+                  disabled={isRemoving}
                 >
                   Cancel
                 </button>
                 <button
                   className="btn btn-primary"
-                  onClick={handleConfirmAssign}
-                  disabled={selectedEmployeeIds.size === 0 || assigning}
+                  style={{ background: "var(--rose)", borderColor: "var(--rose)" }}
+                  onClick={handleConfirmRemove}
+                  disabled={isRemoving}
                 >
-                  {assigning ? "Assigning..." : `Assign to ${selectedEmployeeIds.size} Employee(s)`}
+                  {isRemoving ? "Removing..." : "Remove Exam"}
                 </button>
               </div>
             </motion.div>

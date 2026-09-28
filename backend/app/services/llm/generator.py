@@ -61,10 +61,11 @@ async def generate_question_variants(rule_text: str) -> RuleExtractionResponse:
                     if variant.correct_answer not in variant.options:
                         raise ValueError(f"Variant {idx} correct_answer must exactly match one of the options.")
                 elif variant.question_type == "TRUE_FALSE":
-                    if not variant.options or sorted(variant.options) != ["False", "True"]:
-                        raise ValueError(f"Variant {idx} (TRUE_FALSE) options must be ['True', 'False'].")
-                    if variant.correct_answer not in ["True", "False"]:
-                        raise ValueError(f"Variant {idx} correct_answer must be 'True' or 'False'.")
+                    variant.options = ["True", "False"]
+                    if str(variant.correct_answer).strip().lower() in ["true", "1", "yes"]:
+                        variant.correct_answer = "True"
+                    else:
+                        variant.correct_answer = "False"
             
             return validated_response
             

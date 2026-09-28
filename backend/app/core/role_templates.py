@@ -21,5 +21,16 @@ ROLE_TEMPLATES = {
         "Quality Control Procedures": 40,
         "General Safety": 30,
         "Emergency Protocols": 30
+    },
+    "Overhead Crane Operator": {
+        "Emergency Protocols": 20,
+        "Vehicle Operation": 30,
+        "Material Handling": 40,
+        "General Safety": 10
+    },
+    "Shift Supervisor": {
+        "General Safety": 40,
+        "Emergency Protocols": 40,
+        "Quality Control Procedures": 20
     }
 }

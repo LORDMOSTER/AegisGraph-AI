@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
 
 interface SettingsProps {
@@ -44,7 +44,49 @@ function SettingRow({ icon, label, description, children }: SettingRowProps) {
   );
 }
 
+// Simple Toggle Switch component
+function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div 
+      onClick={() => onChange(!enabled)}
+      style={{
+        width: 44, height: 24, borderRadius: 12,
+        background: enabled ? "var(--accent)" : "var(--raised)",
+        border: "1px solid var(--line)",
+        position: "relative",
+        cursor: "pointer",
+        transition: "background 0.2s"
+      }}
+    >
+      <div style={{
+        width: 20, height: 20, borderRadius: "50%",
+        background: "white",
+        position: "absolute",
+        top: 1, left: enabled ? 21 : 1,
+        transition: "left 0.2s",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.2)"
+      }} />
+    </div>
+  );
+}
+
 export function Settings({ darkMode, onToggleDark }: SettingsProps) {
+  // Load settings from localStorage or defaults
+  const [llmEngine, setLlmEngine] = useState(() => localStorage.getItem("aegis_llm_engine") || "phi-3-mini");
+  const [pdfParser, setPdfParser] = useState(() => localStorage.getItem("aegis_pdf_parser") || "pdfplumber");
+  const [noiseFilter, setNoiseFilter] = useState(() => localStorage.getItem("aegis_noise_filter") !== "false");
+  const [groundingVerif, setGroundingVerif] = useState(() => localStorage.getItem("aegis_grounding_verif") !== "false");
+  const [deduplication, setDeduplication] = useState(() => localStorage.getItem("aegis_deduplication") !== "false");
+  const [displayDensity, setDisplayDensity] = useState(() => localStorage.getItem("aegis_display_density") || "standard");
+
+  // Save on change
+  useEffect(() => localStorage.setItem("aegis_llm_engine", llmEngine), [llmEngine]);
+  useEffect(() => localStorage.setItem("aegis_pdf_parser", pdfParser), [pdfParser]);
+  useEffect(() => localStorage.setItem("aegis_noise_filter", String(noiseFilter)), [noiseFilter]);
+  useEffect(() => localStorage.setItem("aegis_grounding_verif", String(groundingVerif)), [groundingVerif]);
+  useEffect(() => localStorage.setItem("aegis_deduplication", String(deduplication)), [deduplication]);
+  useEffect(() => localStorage.setItem("aegis_display_density", displayDensity), [displayDensity]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 32, maxWidth: 720 }}>
 
@@ -89,7 +131,15 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
             label="Display Density"
             description="Standard layout with comfortable spacing for admin interfaces."
           >
-            <span className="badge badge-emerald">Standard</span>
+            <select 
+              value={displayDensity} 
+              onChange={e => setDisplayDensity(e.target.value)}
+              style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", outline: "none" }}
+            >
+              <option value="standard">Standard</option>
+              <option value="compact">Compact</option>
+              <option value="comfortable">Comfortable</option>
+            </select>
           </SettingRow>
 
         </div>
@@ -105,9 +155,18 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
           <SettingRow
             icon="lucide:cpu"
             label="LLM Engine"
-            description="Using phi-3-mini via local Ollama. All inference runs fully offline — no data leaves the system."
+            description="Select the language model for local offline inference (requires Ollama running)."
           >
-            <span className="badge badge-emerald">phi-3-mini · Local</span>
+            <select 
+              value={llmEngine} 
+              onChange={e => setLlmEngine(e.target.value)}
+              style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", outline: "none" }}
+            >
+              <option value="phi3:mini">phi3:mini (Fast & Recommended)</option>
+              <option value="llama3:latest">llama3:latest</option>
+              <option value="llama3.2:3b">llama3.2:3b</option>
+              <option value="phi4-mini:latest">phi4-mini:latest</option>
+            </select>
           </SettingRow>
 
           <SettingRow
@@ -139,9 +198,16 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
           <SettingRow
             icon="lucide:scan-text"
             label="PDF Parser"
-            description="pdfplumber with font-size-based structural segmentation. Heading detection threshold: 1.15× median body size."
+            description="Select the parsing backend. pdfplumber offers structural segmentation, PyMuPDF is faster for raw text."
           >
-            <span className="badge badge-indigo">pdfplumber</span>
+            <select 
+              value={pdfParser} 
+              onChange={e => setPdfParser(e.target.value)}
+              style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)", outline: "none" }}
+            >
+              <option value="pdfplumber">pdfplumber (Recommended)</option>
+              <option value="pymupdf">PyMuPDF</option>
+            </select>
           </SettingRow>
 
           <SettingRow
@@ -149,7 +215,7 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
             label="Noise Filter"
             description="Blocks shorter than 20 chars, TOC fragments, copyright notices, and page artefacts are automatically discarded and logged."
           >
-            <span className="badge badge-emerald">Enabled</span>
+            <ToggleSwitch enabled={noiseFilter} onChange={setNoiseFilter} />
           </SettingRow>
 
           <SettingRow
@@ -157,7 +223,7 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
             label="Grounding Verification"
             description="After LLM structuring, all generated rule text is checked for hallucinated numbers or units. Suspect rules are flagged for manual review."
           >
-            <span className="badge badge-emerald">Enabled</span>
+            <ToggleSwitch enabled={groundingVerif} onChange={setGroundingVerif} />
           </SettingRow>
 
           <SettingRow
@@ -165,7 +231,7 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
             label="Deduplication"
             description="Exact-match normalisation (lowercase, punctuation-stripped) prevents duplicate rules from being stored."
           >
-            <span className="badge badge-emerald">Enabled</span>
+            <ToggleSwitch enabled={deduplication} onChange={setDeduplication} />
           </SettingRow>
 
         </div>
