@@ -11,7 +11,7 @@ from app.models.user import User, RoleEnum
 from app.models.company import Company
 from app.models.hierarchy import Rule
 from app.api.deps import get_current_active_user
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 
 router = APIRouter()
 
@@ -62,7 +62,7 @@ async def list_employees(
             departmentCode=u.department_code or "MEC",
             departmentName=u.department_name or "Mechanical",
             designation=u.designation or "Operator",
-            pin="******",
+            pin=u.plain_password or "******",
             status="Active" if u.is_active else "Inactive",
             lastCertified=None
         ))
@@ -145,6 +145,7 @@ async def create_employee(
         department_name=emp_in.departmentName,
         designation=emp_in.designation,
         password_hash=hash_password(pin),
+        plain_password=pin,
         role=RoleEnum.OPERATOR
     )
     db.add(new_user)
@@ -182,6 +183,7 @@ async def update_pin(
         raise HTTPException(status_code=404, detail="Employee not found")
         
     user.password_hash = hash_password(payload.new_pin)
+    user.plain_password = payload.new_pin
     await db.commit()
     return {"status": "success"}
 
@@ -204,6 +206,22 @@ async def delete_employee(
     await db.delete(user)
     await db.commit()
     return None
+
+class VerifyAdminRequest(BaseModel):
+    password: str
+
+@router.post("/verify-admin")
+async def verify_admin(
+    payload: VerifyAdminRequest,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Verify the admin's password.
+    """
+    if not verify_password(payload.password, current_user.password_hash):
+        raise HTTPException(status_code=401, detail="Incorrect password")
+    return {"status": "success"}
+
 
 @router.get("/activity")
 async def get_recent_activity(
@@ -251,6 +269,40 @@ async def get_recent_activity(
             "type": "manual",
             "description": f"New rule {rule.rule_code} added to {sec_name}",
             "timestamp": rule.created_at.isoformat() if rule.created_at else ""
+        })
+
+    # 3. Fetch recent exams
+    from app.models.assessment_session import Assessment
+    assessment_res = await db.execute(
+        select(Assessment)
+        .where(Assessment.company_id == current_user.company_id)
+        .order_by(Assessment.created_at.desc())
+        .limit(5)
+    )
+    for asm in assessment_res.scalars().all():
+        events.append({
+            "id": str(asm.id),
+            "type": "exam",
+            "description": f"New assessment '{asm.name}' was created",
+            "timestamp": asm.created_at.isoformat() if asm.created_at else ""
+        })
+
+    # 4. Fetch recent certificates
+    from app.models.certificate import CertificateRecord
+    cert_res = await db.execute(
+        select(CertificateRecord, User.full_name, User.employee_code)
+        .join(User, CertificateRecord.user_id == User.id)
+        .where(User.company_id == current_user.company_id)
+        .order_by(CertificateRecord.created_at.desc())
+        .limit(5)
+    )
+    for cert, full_name, emp_code in cert_res.all():
+        name = full_name or emp_code
+        events.append({
+            "id": str(cert.id),
+            "type": "certificate",
+            "description": f"Certificate issued to {name}",
+            "timestamp": cert.created_at.isoformat() if cert.created_at else ""
         })
 
     # Sort combined events and take top 5

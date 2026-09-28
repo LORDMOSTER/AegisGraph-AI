@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Employee, Department, getEmployees, getDepartments, createEmployee, updateEmployeePin, deleteEmployee } from "../api";
+import { Employee, Department, getEmployees, getDepartments, createEmployee, updateEmployeePin, deleteEmployee, verifyAdminPassword } from "../api";
 import { AssignExamModal } from "../components/assessments/AssignExamModal";
 
 export function Employees() {
@@ -23,13 +23,15 @@ export function Employees() {
 
   // Custom Dialog States
   const [dialog, setDialog] = useState<{
-    type: "none" | "alert" | "confirmDelete" | "promptPin";
+    type: "none" | "alert" | "confirmDelete" | "promptPin" | "promptAdminVerify";
     title?: string;
     message?: string;
     targetEmp?: Employee;
   }>({ type: "none" });
   const [pinInput, setPinInput] = useState("");
+  const [adminPassInput, setAdminPassInput] = useState("");
   const [showAssignExamModal, setShowAssignExamModal] = useState(false);
+  const [unlockedPins, setUnlockedPins] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     loadData();
@@ -83,15 +85,29 @@ export function Employees() {
 
   const openChangePin = (emp: Employee) => {
     setPinInput("");
+    setAdminPassInput("");
     setDialog({ type: "promptPin", title: "Change PIN", targetEmp: emp });
   };
 
   const submitChangePin = async () => {
     const emp = dialog.targetEmp;
     if (!emp) return;
+    
+    if (!adminPassInput) {
+      setDialog({ type: "alert", title: "Error", message: "Admin password is required." });
+      return;
+    }
+    
     if (pinInput && pinInput.length === 6 && /^\d+$/.test(pinInput)) {
-      setDialog({ type: "none" });
       setLoading(true);
+      const isValid = await verifyAdminPassword(adminPassInput);
+      if (!isValid) {
+        setLoading(false);
+        setDialog({ type: "alert", title: "Error", message: "Incorrect admin password." });
+        return;
+      }
+      
+      setDialog({ type: "none" });
       await updateEmployeePin(emp.id, pinInput);
       await loadData();
     } else {
@@ -115,6 +131,31 @@ export function Employees() {
       setDialog({ type: "alert", title: "Error", message: "Failed to delete employee." });
       setLoading(false);
     }
+  };
+
+  const openViewPin = (emp: Employee) => {
+    setAdminPassInput("");
+    setDialog({ type: "promptAdminVerify", title: "Admin Verification", targetEmp: emp });
+  };
+
+  const submitAdminVerify = async () => {
+    const emp = dialog.targetEmp;
+    if (!emp) return;
+    if (!adminPassInput) {
+      setDialog({ type: "alert", title: "Error", message: "Password cannot be empty." });
+      return;
+    }
+    const isValid = await verifyAdminPassword(adminPassInput);
+    if (isValid) {
+      setDialog({ type: "none" });
+      setUnlockedPins(prev => ({ ...prev, [emp.id]: true }));
+    } else {
+      setDialog({ type: "alert", title: "Error", message: "Incorrect admin password." });
+    }
+  };
+
+  const toggleUnview = (emp: Employee) => {
+    setUnlockedPins(prev => ({ ...prev, [emp.id]: false }));
   };
 
   return (
@@ -145,6 +186,7 @@ export function Employees() {
                 <th>Name</th>
                 <th>Job Title</th>
                 <th>Department</th>
+                <th>PIN / Password</th>
                 <th>Status</th>
                 <th>Last Certified</th>
                 <th style={{ textAlign: "right" }}>Actions</th>
@@ -168,6 +210,18 @@ export function Employees() {
                     <td style={{ fontWeight: 500 }}>{emp.name}</td>
                     <td style={{ color: "var(--text-secondary)" }}>{emp.designation}</td>
                     <td>{emp.departmentName}</td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", background: "var(--raised)", padding: "2px 6px", borderRadius: 4 }}>
+                          {unlockedPins[emp.id] ? emp.pin : "******"}
+                        </span>
+                        {unlockedPins[emp.id] ? (
+                          <button className="btn btn-ghost" style={{ padding: "2px 4px", fontSize: 11 }} onClick={() => toggleUnview(emp)}>Unview</button>
+                        ) : (
+                          <button className="btn btn-ghost" style={{ padding: "2px 4px", fontSize: 11 }} onClick={() => openViewPin(emp)}>View</button>
+                        )}
+                      </div>
+                    </td>
                     <td>
                       <span className={`badge ${emp.status === 'Active' ? 'badge-emerald' : 'badge-crimson'}`}>
                         {emp.status}
@@ -320,6 +374,17 @@ export function Employees() {
               {dialog.type === "promptPin" && (
                 <div style={{ marginBottom: 24 }}>
                   <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
+                    Enter admin password to authorize:
+                  </p>
+                  <input
+                    type="password"
+                    className="field-input"
+                    placeholder="Admin Password"
+                    value={adminPassInput}
+                    onChange={(e) => setAdminPassInput(e.target.value)}
+                    style={{ textAlign: "center", fontSize: 16, width: "100%", marginBottom: 16 }}
+                  />
+                  <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
                     Enter new 6-digit PIN for {dialog.targetEmp?.name}:
                   </p>
                   <input
@@ -330,6 +395,22 @@ export function Employees() {
                     value={pinInput}
                     onChange={(e) => setPinInput(e.target.value)}
                     style={{ textAlign: "center", fontSize: 20, letterSpacing: "0.2em", width: "100%" }}
+                  />
+                </div>
+              )}
+
+              {dialog.type === "promptAdminVerify" && (
+                <div style={{ marginBottom: 24 }}>
+                  <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
+                    Enter admin password to view PIN for {dialog.targetEmp?.name}:
+                  </p>
+                  <input
+                    type="password"
+                    className="field-input"
+                    placeholder="Admin Password"
+                    value={adminPassInput}
+                    onChange={(e) => setAdminPassInput(e.target.value)}
+                    style={{ textAlign: "center", fontSize: 16, width: "100%" }}
                   />
                 </div>
               )}
@@ -353,6 +434,11 @@ export function Employees() {
                 {dialog.type === "promptPin" && (
                   <button className="btn btn-primary" onClick={submitChangePin}>
                     Save PIN
+                  </button>
+                )}
+                {dialog.type === "promptAdminVerify" && (
+                  <button className="btn btn-primary" onClick={submitAdminVerify}>
+                    Verify
                   </button>
                 )}
               </div>

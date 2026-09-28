@@ -47,7 +47,7 @@ import os
 import tempfile
 import httpx
 import pdfplumber
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form
 from sqlalchemy import select
@@ -75,6 +75,14 @@ async def get_certificates(db: AsyncSession = Depends(get_db_session)):
     
     response = []
     for rec in records:
+        now = datetime.now(timezone.utc)
+        if rec.expiry_date < now:
+            status = "Expired"
+        elif rec.expiry_date <= now + timedelta(days=30):
+            status = "Expiring Soon"
+        else:
+            status = "Valid"
+
         response.append({
             "id": str(rec.id),
             "employeeName": rec.user.full_name or "Unknown",
@@ -83,8 +91,9 @@ async def get_certificates(db: AsyncSession = Depends(get_db_session)):
             "score": rec.sci_score,
             "issueDate": rec.issue_date.isoformat(),
             "expiryDate": rec.expiry_date.isoformat(),
-            "status": "Valid",
-            "isImported": rec.is_imported
+            "status": status,
+            "isImported": rec.is_imported,
+            "pdfUrl": getattr(rec, "file_path_or_blob", None)
         })
         
     return response
@@ -235,22 +244,21 @@ async def analyze_certificate(file: UploadFile = File(...)):
 
 @router.post("/import")
 async def save_imported_certificate(
-    employee_name: str = Form(...),
-    score: float = Form(...),
+    employee_id: str = Form(...),
+    score: Optional[float] = Form(None),
     expiry_date: str = Form(...),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
 ):
-    # Find user by name (basic match for demo)
-    stmt = select(User).where(User.full_name.ilike(f"%{employee_name}%"))
+    # Find exact user by employee code
+    stmt = select(User).options(selectinload(User.company)).where(User.employee_code == employee_id, User.company_id == current_user.company_id)
     result = await db.execute(stmt)
     user = result.scalars().first()
     
     if not user:
-        # Fallback to current user if we can't find them
-        user = current_user
+        raise HTTPException(status_code=404, detail="Employee not found")
         
-    issue_date = datetime.utcnow()
+    issue_date = datetime.now(timezone.utc)
     exp_dt = datetime.fromisoformat(expiry_date) if expiry_date else issue_date + timedelta(days=365)
     
     # Create the CertificateRecord
@@ -271,9 +279,11 @@ async def save_imported_certificate(
     qr_data, signature, pdf_url = generate_certificate(
         exam_session_id=mock_session_id,
         employee_id=user.id,
-        full_name=user.full_name or employee_name,
+        full_name=user.full_name or "Unknown Employee",
         score=score,
-        company_name=getattr(user.company, 'name', 'AegisGraph') if getattr(user, 'company', None) else 'AegisGraph'
+        company_name=getattr(user.company, 'name', 'AegisGraph') if getattr(user, 'company', None) else 'AegisGraph',
+        logo_url=getattr(user.company, 'logo_url', None) if getattr(user, 'company', None) else None,
+        designation=user.designation
     )
     
     # Update record with PDF URL

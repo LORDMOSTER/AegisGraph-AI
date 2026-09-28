@@ -22,6 +22,7 @@ export function ExamSession({ examId, onExit }: Props) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [result, setResult] = useState<{status: string, score: number} | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -49,9 +50,9 @@ export function ExamSession({ examId, onExit }: Props) {
       setCurrentIndex(prev => prev + 1);
     } else {
       setSubmitting(true);
-      await submitExam(examId, 95.0); // Pass a high integrity score for now
+      const res = await submitExam(examId, 95.0); // Pass a high integrity score for now
+      setResult(res);
       setSubmitting(false);
-      onExit();
     }
   };
 
@@ -68,6 +69,37 @@ export function ExamSession({ examId, onExit }: Props) {
       <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--base)", flexDirection: "column", gap: 16 }}>
         <div className="spinner" style={{ width: 28, height: 28, borderTopColor: "var(--accent)" }} />
         <p style={{ color: "var(--muted)", fontSize: 14 }}>Loading Exam...</p>
+      </div>
+    );
+  }
+
+  if (result) {
+    const isPass = result.status === "COMPLETED";
+    return (
+      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--base)", flexDirection: "column", gap: 24 }}>
+        <div style={{ textAlign: "center", maxWidth: 400, background: "var(--surface)", padding: 40, borderRadius: 16, border: "1px solid var(--line)", boxShadow: "var(--shadow-card)" }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: isPass ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)", display: "grid", placeItems: "center", margin: "0 auto 24px" }}>
+            <iconify-icon icon={isPass ? "lucide:check-circle" : "lucide:x-circle"} style={{ fontSize: 32, color: isPass ? "var(--emerald)" : "var(--red)" }} />
+          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--ink)", marginBottom: 8 }}>Exam Completed</h1>
+          <p style={{ fontSize: 15, color: "var(--muted)", marginBottom: 24 }}>Your final score is <strong style={{ color: "var(--ink)" }}>{result.score.toFixed(1)}%</strong></p>
+          
+          {isPass ? (
+            <div style={{ padding: "16px", background: "rgba(16, 185, 129, 0.05)", borderRadius: 8, border: "1px solid var(--emerald)", textAlign: "center", marginBottom: 24 }}>
+              <h2 style={{ color: "var(--emerald)", fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Congratulations!</h2>
+              <p style={{ color: "var(--emerald)", fontSize: 13, opacity: 0.9 }}>You have passed the certification exam. Your certificate has been automatically generated.</p>
+            </div>
+          ) : (
+            <div style={{ padding: "16px", background: "rgba(239, 68, 68, 0.05)", borderRadius: 8, border: "1px solid var(--red)", textAlign: "center", marginBottom: 24 }}>
+              <h2 style={{ color: "var(--red)", fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Did not pass</h2>
+              <p style={{ color: "var(--red)", fontSize: 13, opacity: 0.9 }}>You did not meet the required score of 80%. Please review the safety rules and try again.</p>
+            </div>
+          )}
+
+          <button onClick={onExit} style={{ width: "100%", padding: "12px", background: "var(--ink)", color: "var(--surface)", border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>
+            Return to Dashboard
+          </button>
+        </div>
       </div>
     );
   }

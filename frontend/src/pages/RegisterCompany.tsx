@@ -195,7 +195,7 @@ export function RegisterCompany({ onNavigate }: { onNavigate: (route: "login" | 
               </label>
               <div style={{ position: "relative" }}>
                 <iconify-icon icon="lucide:building-2" style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", fontSize: 18 }} />
-                <input required type="text" name="companyName" placeholder="Acme Corp" value={formData.companyName} onChange={handleChange} 
+                <input required type="text" name="companyName" placeholder="Meridian AutoComponents Pvt. Ltd." value={formData.companyName} onChange={handleChange} 
                   style={{ width: "100%", background: "transparent", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 16px 12px 42px", fontSize: 15, outline: "none", transition: "border-color 0.2s" }}
                   onFocus={(e) => e.target.style.borderColor = "var(--accent)"}
                   onBlur={(e) => e.target.style.borderColor = "var(--line)"}

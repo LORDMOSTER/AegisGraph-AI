@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -85,8 +85,28 @@ export function IngestionTerminal() {
   const [logs, setLogs]               = useState<LogLine[]>([]);
   const [error, setError]             = useState<string | null>(null);
   const [progress, setProgress]       = useState<{current: number, total: number} | null>(null);
+  const [manuals, setManuals]         = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logEndRef    = useRef<HTMLDivElement>(null);
+
+  const fetchManuals = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("aegis_token");
+      const res = await fetch("http://localhost:8000/api/v1/hierarchy/manuals", {
+        headers: token ? { "Authorization": `Bearer ${token}` } : undefined
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setManuals(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch manuals", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchManuals();
+  }, [fetchManuals]);
 
   const addLog = useCallback((text: string, type: LogLine["type"] = "info") => {
     setLogs(prev => {
@@ -449,6 +469,59 @@ export function IngestionTerminal() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Uploaded Manuals ── */}
+      <div style={{ marginTop: 40 }}>
+        <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)", marginBottom: 16 }}>
+          Stored Manuals
+        </h3>
+        
+        {manuals.length === 0 ? (
+          <div className="card" style={{ padding: "32px", textAlign: "center" }}>
+            <p style={{ color: "var(--text-tertiary)", fontSize: 14 }}>
+              No manuals have been uploaded yet. Upload a PDF above to get started.
+            </p>
+          </div>
+        ) : (
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead style={{ background: "var(--surface-hover)", borderBottom: "1px solid var(--line)" }}>
+                <tr>
+                  <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>Title</th>
+                  <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>Upload Date</th>
+                  <th style={{ padding: "12px 16px", textAlign: "right", fontSize: 12, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {manuals.map((m) => (
+                  <tr key={m.id} style={{ borderBottom: "1px solid var(--line)" }}>
+                    <td style={{ padding: "12px 16px", fontSize: 14, color: "var(--ink)", fontWeight: 500 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <IconPDF />
+                        {m.title}
+                      </div>
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 14, color: "var(--muted)" }}>
+                      {m.upload_date ? new Date(m.upload_date).toLocaleDateString() : "N/A"}
+                    </td>
+                    <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                      <a 
+                        href={`http://localhost:8000${m.url}`} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="btn btn-primary"
+                        style={{ padding: "6px 12px", fontSize: 12, textDecoration: "none", display: "inline-block" }}
+                      >
+                        View & Download
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

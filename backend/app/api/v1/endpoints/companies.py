@@ -54,3 +54,82 @@ async def register_company(data: CompanyRegister, db: AsyncSession = Depends(get
         raise HTTPException(status_code=400, detail="Error creating admin user.")
 
     return CompanyResponse(companyCode=code)
+
+from fastapi import UploadFile, File
+import os
+import shutil
+
+LOGO_DIR = os.path.join(os.getcwd(), "static", "logos")
+os.makedirs(LOGO_DIR, exist_ok=True)
+
+@router.post("/{company_id}/logo")
+async def upload_company_logo(company_id: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Company).filter(Company.id == company_id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    file_extension = file.filename.split(".")[-1]
+    logo_filename = f"logo_{company_id}.{file_extension}"
+    logo_path = os.path.join(LOGO_DIR, logo_filename)
+    
+    with open(logo_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    company.logo_url = f"/static/logos/{logo_filename}"
+    await db.commit()
+    
+    return {"message": "Logo uploaded successfully", "logo_url": company.logo_url}
+
+@router.delete("/{company_id}/logo")
+async def delete_company_logo(company_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Company).filter(Company.id == company_id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    if company.logo_url:
+        logo_path = os.path.join(os.getcwd(), company.logo_url.lstrip('/'))
+        if os.path.exists(logo_path):
+            os.remove(logo_path)
+        company.logo_url = None
+        await db.commit()
+
+    return {"message": "Logo deleted successfully"}
+
+from pydantic import BaseModel
+from typing import Optional
+from app.api.deps import get_current_user
+
+class CompanyProfileUpdate(BaseModel):
+    company_name: Optional[str] = None
+    admin_email: Optional[str] = None
+    admin_password: Optional[str] = None
+
+@router.put("/{company_id}/profile")
+async def update_company_profile(
+    company_id: str,
+    data: CompanyProfileUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if str(current_user.company_id) != company_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this company")
+        
+    result = await db.execute(select(Company).filter(Company.id == company_id))
+    company = result.scalar_one_or_none()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+        
+    if data.company_name:
+        company.name = data.company_name
+        
+    if data.admin_email:
+        current_user.employee_code = data.admin_email
+        
+    if data.admin_password:
+        current_user.password_hash = hash_password(data.admin_password)
+        
+    await db.commit()
+    return {"message": "Profile updated successfully"}

@@ -30,6 +30,7 @@ class User(Base, TimestampMixin, UUIDMixin):
     department_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     designation: Mapped[str | None] = mapped_column(String(255), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    plain_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[RoleEnum] = mapped_column(nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 

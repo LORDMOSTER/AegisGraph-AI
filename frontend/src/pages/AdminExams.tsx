@@ -101,30 +101,44 @@ export function AdminExams() {
 
       <AnimatePresence>
         {examToRemove && (
-          <div className="modal-backdrop">
+          <div 
+            style={{ position: "fixed", inset: 0, zIndex: 10001, display: "grid", placeItems: "center", background: "rgba(28,28,26,0.2)", backdropFilter: "blur(4px)", padding: 20 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setExamToRemove(null); }}
+          >
             <motion.div
-              className="modal-content"
-              style={{ maxWidth: 400 }}
+              style={{
+                width: "100%", maxWidth: 440,
+                background: "var(--surface)", border: "1px solid var(--line)",
+                borderRadius: "var(--card-radius)", padding: 24,
+                boxShadow: "0 20px 60px rgba(28,28,26,0.15)",
+              }}
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
             >
-              <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12, color: "var(--text-primary)" }}>
-                Remove Exam
-              </h3>
-              <p style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 24, lineHeight: 1.5 }}>
-                Are you sure you want to remove this assigned exam? This action cannot be undone.
-              </p>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 20 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 8, background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.2)", display: "grid", placeItems: "center", flexShrink: 0, color: "#ef4444" }}>
+                  <iconify-icon icon="lucide:alert-triangle" style={{ fontSize: 20 }} />
+                </div>
+                <div>
+                  <h3 style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 600, color: "var(--ink)", marginBottom: 6 }}>
+                    Remove Exam
+                  </h3>
+                  <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6 }}>
+                    Are you sure you want to remove this assigned exam? This action cannot be undone.
+                  </p>
+                </div>
+              </div>
               
               {errorMessage && (
-                <div style={{ padding: 12, background: "var(--rose-dim)", color: "var(--rose)", borderRadius: 6, marginBottom: 16, fontSize: 13 }}>
+                <div style={{ padding: 12, background: "rgba(239, 68, 68, 0.1)", color: "#ef4444", borderRadius: 6, marginBottom: 16, fontSize: 13 }}>
                   {errorMessage}
                 </div>
               )}
 
-              <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                 <button
-                  className="btn btn-ghost"
+                  style={{ border: "1px solid var(--line)", background: "var(--surface)", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 500, color: "var(--muted)", cursor: "pointer", fontFamily: "var(--font-sans)" }}
                   onClick={() => {
                     setExamToRemove(null);
                     setErrorMessage(null);
@@ -134,8 +148,7 @@ export function AdminExams() {
                   Cancel
                 </button>
                 <button
-                  className="btn btn-primary"
-                  style={{ background: "var(--rose)", borderColor: "var(--rose)" }}
+                  style={{ background: "#dc2626", border: "1px solid #dc2626", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 500, color: "#fff", cursor: "pointer", fontFamily: "var(--font-sans)" }}
                   onClick={handleConfirmRemove}
                   disabled={isRemoving}
                 >

@@ -55,5 +55,9 @@ async def read_users_me(
         "employee_code": current_user.employee_code,
         "role": current_user.role.value,
         "company_id": str(current_user.company_id),
-        "company_name": company.name if company else "Acme Corp"
+        "company_name": company.name if company else "Acme Corp",
+        "company": {
+            "logo_url": company.logo_url if company else None,
+            "name": company.name if company else "Acme Corp"
+        }
     }

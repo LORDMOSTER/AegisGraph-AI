@@ -450,6 +450,19 @@ export async function loginEmployee(empId: string, pin: string): Promise<boolean
   }
 }
 
+export async function verifyAdminPassword(password: string): Promise<boolean> {
+  try {
+    const res = await fetchWithRetry<any>(`${BASE}/v1/users/verify-admin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password })
+    });
+    return res.status === "success";
+  } catch {
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Departments & Employees Mock API (LocalStorage)
 // ---------------------------------------------------------------------------
@@ -573,7 +586,10 @@ export interface DashboardStats {
 export async function getDashboardStats(): Promise<DashboardStats> {
   const employees = await getEmployees();
   
-  let companyName = "Acme Corp";
+  const companiesStr = localStorage.getItem("aegis_companies") || "[]";
+  const companies = JSON.parse(companiesStr);
+  let companyName = companies.length > 0 ? companies[0].companyName : "Meridian AutoComponents Pvt. Ltd.";
+  
   try {
     const token = localStorage.getItem("aegis_token");
     if (token) {
@@ -726,11 +742,12 @@ export interface AdminCertificate {
   id: string;
   employeeName: string;
   employeeId: string;
-  score: number;
+  score: number | null;
   issueDate: string;
   expiryDate: string;
-  status: "Valid" | "Expiring Soon" | "Revoked";
+  status: "Valid" | "Expiring Soon" | "Expired" | "Revoked";
   isImported?: boolean;
+  pdfUrl?: string;
 }
 
 export interface VerificationResult {
@@ -741,7 +758,7 @@ export interface VerificationResult {
     employeeName: string;
     employeeId: string;
     company: string;
-    score: number;
+    score: number | null;
     issueDate: string;
   };
 }
@@ -761,10 +778,12 @@ export async function analyzeCertificate(file: File): Promise<any> {
   });
 }
 
-export async function importCertificate(employeeName: string, score: number, expiryDate: string): Promise<any> {
+export async function importCertificate(employeeId: string, score: number | null, expiryDate: string): Promise<any> {
   const formData = new FormData();
-  formData.append("employee_name", employeeName);
-  formData.append("score", score.toString());
+  formData.append("employee_id", employeeId);
+  if (score !== null) {
+    formData.append("score", score.toString());
+  }
   formData.append("expiry_date", expiryDate);
   return fetchWithRetry<any>(`${BASE}/v1/certificates/import`, {
     method: "POST",

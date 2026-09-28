@@ -445,7 +445,10 @@ async def submit_exam(
             employee_id=current_user.id,
             full_name=current_user.full_name or current_user.employee_code,
             score=sci_score,
-            company_name=company.name
+            company_name=company.name,
+            assessment_name=exam.assessment.name if exam.assessment else "Safety Assessment",
+            logo_url=company.logo_url,
+            designation=current_user.designation
         )
         cert = Certificate(
             exam_session_id=exam.id,

@@ -9,6 +9,33 @@ from app.models.user import User
 
 router = APIRouter()
 
+from app.models.hierarchy import Manual
+from sqlalchemy import select
+
+@router.get("/manuals")
+async def get_manuals(
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    stmt = select(Manual).where(Manual.company_id == current_user.company_id)
+    result = await db.execute(stmt)
+    manuals = result.scalars().all()
+    
+    import os
+    response = []
+    for m in manuals:
+        filename = os.path.basename(m.file_path)
+        url = f"/uploads/{filename}"
+        response.append({
+            "id": str(m.id),
+            "title": m.title,
+            "version": m.version,
+            "upload_date": m.created_at.isoformat() if hasattr(m, 'created_at') and m.created_at else None,
+            "url": url
+        })
+    return response
+
+
 @router.get("/tree", response_model=HierarchyTreeResponse)
 async def get_hierarchy_tree(
     db: AsyncSession = Depends(get_db_session),
