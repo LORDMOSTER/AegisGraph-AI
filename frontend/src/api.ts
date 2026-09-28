@@ -564,6 +564,20 @@ export async function createEmployee(
   });
 }
 
+export async function updateEmployeePin(empId: string, newPin: string): Promise<void> {
+  return fetchWithRetry<void>(`${BASE}/v1/users/${empId}/pin`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ new_pin: newPin })
+  });
+}
+
+export async function deleteEmployee(empId: string): Promise<void> {
+  return fetchWithRetry<void>(`${BASE}/v1/users/${empId}`, {
+    method: "DELETE"
+  });
+}
+
 export interface ActivityEvent {
   id: string;
   type: "exam" | "manual" | "certificate" | "employee";
@@ -860,19 +874,7 @@ export async function verifyCertificate(certId: string): Promise<VerificationRes
   };
 }
 
-export async function updateEmployeePin(id: string, newPin: string): Promise<void> {
-  await fetchWithRetry(`${BASE}/v1/users/${id}/pin`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ new_pin: newPin })
-  });
-}
 
-export async function deleteEmployee(id: string): Promise<void> {
-  await fetchWithRetry(`${BASE}/v1/users/${id}`, {
-    method: "DELETE"
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Hierarchy & Rules API

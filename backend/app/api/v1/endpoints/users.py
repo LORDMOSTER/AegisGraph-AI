@@ -62,7 +62,7 @@ async def list_employees(
             departmentCode=u.department_code or "MEC",
             departmentName=u.department_name or "Mechanical",
             designation=u.designation or "Operator",
-            pin=u.plain_password or "******",
+            pin="******",
             status="Active" if u.is_active else "Inactive",
             lastCertified=None
         ))
@@ -145,7 +145,6 @@ async def create_employee(
         department_name=emp_in.departmentName,
         designation=emp_in.designation,
         password_hash=hash_password(pin),
-        plain_password=pin,
         role=RoleEnum.OPERATOR
     )
     db.add(new_user)
@@ -183,7 +182,6 @@ async def update_pin(
         raise HTTPException(status_code=404, detail="Employee not found")
         
     user.password_hash = hash_password(payload.new_pin)
-    user.plain_password = payload.new_pin
     await db.commit()
     return {"status": "success"}
 

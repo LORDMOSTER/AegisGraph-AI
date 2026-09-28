@@ -31,7 +31,6 @@ export function Employees() {
   const [pinInput, setPinInput] = useState("");
   const [adminPassInput, setAdminPassInput] = useState("");
   const [showAssignExamModal, setShowAssignExamModal] = useState(false);
-  const [unlockedPins, setUnlockedPins] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     loadData();
@@ -133,31 +132,6 @@ export function Employees() {
     }
   };
 
-  const openViewPin = (emp: Employee) => {
-    setAdminPassInput("");
-    setDialog({ type: "promptAdminVerify", title: "Admin Verification", targetEmp: emp });
-  };
-
-  const submitAdminVerify = async () => {
-    const emp = dialog.targetEmp;
-    if (!emp) return;
-    if (!adminPassInput) {
-      setDialog({ type: "alert", title: "Error", message: "Password cannot be empty." });
-      return;
-    }
-    const isValid = await verifyAdminPassword(adminPassInput);
-    if (isValid) {
-      setDialog({ type: "none" });
-      setUnlockedPins(prev => ({ ...prev, [emp.id]: true }));
-    } else {
-      setDialog({ type: "alert", title: "Error", message: "Incorrect admin password." });
-    }
-  };
-
-  const toggleUnview = (emp: Employee) => {
-    setUnlockedPins(prev => ({ ...prev, [emp.id]: false }));
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, height: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -213,13 +187,8 @@ export function Employees() {
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", background: "var(--raised)", padding: "2px 6px", borderRadius: 4 }}>
-                          {unlockedPins[emp.id] ? emp.pin : "******"}
+                          ******
                         </span>
-                        {unlockedPins[emp.id] ? (
-                          <button className="btn btn-ghost" style={{ padding: "2px 4px", fontSize: 11 }} onClick={() => toggleUnview(emp)}>Unview</button>
-                        ) : (
-                          <button className="btn btn-ghost" style={{ padding: "2px 4px", fontSize: 11 }} onClick={() => openViewPin(emp)}>View</button>
-                        )}
                       </div>
                     </td>
                     <td>
@@ -399,22 +368,6 @@ export function Employees() {
                 </div>
               )}
 
-              {dialog.type === "promptAdminVerify" && (
-                <div style={{ marginBottom: 24 }}>
-                  <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
-                    Enter admin password to view PIN for {dialog.targetEmp?.name}:
-                  </p>
-                  <input
-                    type="password"
-                    className="field-input"
-                    placeholder="Admin Password"
-                    value={adminPassInput}
-                    onChange={(e) => setAdminPassInput(e.target.value)}
-                    style={{ textAlign: "center", fontSize: 16, width: "100%" }}
-                  />
-                </div>
-              )}
-
               <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
                 {dialog.type !== "alert" && (
                   <button className="btn btn-ghost" onClick={() => setDialog({ type: "none" })}>
@@ -434,11 +387,6 @@ export function Employees() {
                 {dialog.type === "promptPin" && (
                   <button className="btn btn-primary" onClick={submitChangePin}>
                     Save PIN
-                  </button>
-                )}
-                {dialog.type === "promptAdminVerify" && (
-                  <button className="btn btn-primary" onClick={submitAdminVerify}>
-                    Verify
                   </button>
                 )}
               </div>
