@@ -187,8 +187,8 @@ export async function deleteAssignedExam(examId: string): Promise<void> {
   return fetchWithRetry<void>(`${BASE}/assessment/exam/${examId}`, { method: "DELETE" });
 }
 
-export async function assembleExam(jobTitle: string, targetCount: number): Promise<any[]> {
-  return fetchWithRetry<any[]>(`${BASE}/assessment/assemble`, {
+export async function assembleExam(jobTitle: string, targetCount: number): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/assessment/assemble`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ job_title: jobTitle, target_count: targetCount })
@@ -211,11 +211,19 @@ export async function swapQuestion(ruleId: string, currentVariantId: string): Pr
   });
 }
 
-export async function assignExam(assessmentId: string, employeeIds: string[]): Promise<any> {
+export async function assignExam(
+  assessmentId: string,
+  employeeIds: string[],
+  examKey?: string
+): Promise<any> {
   return fetchWithRetry<any>(`${BASE}/assessment/assign`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ assessment_id: assessmentId, employee_ids: employeeIds })
+    body: JSON.stringify({
+      assessment_id: assessmentId,
+      employee_ids: employeeIds,
+      ...(examKey ? { exam_key: examKey } : {}),
+    }),
   });
 }
 
@@ -227,11 +235,20 @@ export async function getExam(examId: string): Promise<any> {
   return fetchWithRetry<any>(`${BASE}/assessment/exam/${examId}`);
 }
 
-export async function saveAnswer(examId: string, variantId: string, index: number): Promise<any> {
+export async function saveAnswer(
+  examId: string,
+  variantId: string,
+  index: number,
+  fillText?: string
+): Promise<any> {
   return fetchWithRetry<any>(`${BASE}/assessment/exam/${examId}/answer`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question_variant_id: variantId, selected_option_index: index })
+    body: JSON.stringify({
+      question_variant_id: variantId,
+      selected_option_index: index,
+      ...(fillText !== undefined ? { fill_text: fillText } : {}),
+    }),
   });
 }
 
@@ -245,6 +262,93 @@ export async function submitExam(examId: string, integrityScore: number): Promis
 
 export async function getMyCertificates(): Promise<any[]> {
   return fetchWithRetry<any[]>(`${BASE}/assessment/certificates`);
+}
+
+// ---------------------------------------------------------------------------
+// Lockdown Flow API (Req #2, #5, #7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Dual-factor unlock: verifies employee PIN + supervisor Exam Key.
+ * Returns true on success; throws/returns false on 401.
+ */
+export async function unlockExam(
+  examId: string,
+  employeeCode: string,
+  pin: string,
+  examKey: string
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE}/assessment/exam/${examId}/unlock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employee_code: employeeCode, pin, exam_key: examKey }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export interface LockdownAnomalyResult {
+  logged: boolean;
+  escalated: boolean;
+  total_events: number;
+  cumulative_duration_s: number;
+}
+
+/**
+ * Log a lockdown anomaly event (fullscreen exit, focus blur, tab hidden, screenshare stopped/changed).
+ */
+export async function logLockdownAnomaly(
+  examId: string,
+  anomalyType: string,
+  durationS: number
+): Promise<LockdownAnomalyResult | null> {
+  try {
+    return await fetchWithRetry<LockdownAnomalyResult>(
+      `${BASE}/assessment/exam/${examId}/lockdown-anomaly`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          anomaly_type: anomalyType,
+          duration_s: durationS,
+          timestamp: new Date().toISOString(),
+        }),
+      }
+    );
+  } catch {
+    return null;
+  }
+}
+
+export interface AuditTimelineEvent {
+  source: "mediapipe" | "lockdown";
+  type: string;
+  ts: string | null;
+  duration_s: number | null;
+  detail: Record<string, any>;
+}
+
+export interface AuditTimeline {
+  exam_session_id: string;
+  employee_name: string | null;
+  assessment_name: string | null;
+  status: string;
+  score: number | null;
+  lockdown_escalated: boolean;
+  timeline: AuditTimelineEvent[];
+}
+
+/**
+ * Fetch the combined MediaPipe + lockdown audit timeline for a given exam session.
+ */
+export async function getAuditTimeline(examId: string): Promise<AuditTimeline> {
+  return fetchWithRetry<AuditTimeline>(
+    `${BASE}/assessment/exam/${examId}/audit-timeline`,
+    { method: "GET" }
+  );
 }
 
 /** POST /api/ingest/batch */
@@ -439,9 +543,16 @@ export async function loginEmployee(empId: string, pin: string): Promise<boolean
     if (res.ok) {
       const data = await res.json();
       if (data.role !== "OPERATOR") {
-        return false; // Admins cannot login here
+        return false;
       }
       localStorage.setItem("aegis_token", data.access_token);
+      // Store employee_code for the unlock re-auth step (Req #2)
+      if (data.employee_code) {
+        localStorage.setItem("aegis_employee_code", data.employee_code);
+      } else {
+        // Fallback: use the empId as code (backend may return it differently)
+        localStorage.setItem("aegis_employee_code", empId);
+      }
       return true;
     }
     return false;
@@ -766,14 +877,16 @@ export interface AdminCertificate {
 
 export interface VerificationResult {
   isValid: boolean;
-  message: string;
+  message?: string;
   certificate?: {
     id: string;
     employeeName: string;
-    employeeId: string;
+    employeeId?: string;
     company: string;
+    assessmentName?: string;
     score: number | null;
     issueDate: string;
+    signature?: string;
   };
 }
 
@@ -820,58 +933,32 @@ export async function revokeCertificate(certId: string): Promise<void> {
 }
 
 export async function verifyCertificate(certId: string): Promise<VerificationResult> {
-  await new Promise(r => setTimeout(r, 800)); // Simulate cryptographic verification delay
-  
-  // Mock logic: Any ID starting with 'CERT-' is valid if it hasn't been revoked.
-  // We'll check local storage first.
-  const existingStr = localStorage.getItem("aegis_admin_certs") || "[]";
-  const certs: AdminCertificate[] = JSON.parse(existingStr);
-  const localCert = certs.find(c => c.id === certId);
-  
-  if (localCert) {
-    if (localCert.status === "Revoked") {
-      return { isValid: false, message: "Certificate has been revoked by the issuing authority." };
-    }
-    
-    // Fetch company name
-    const companiesStr = localStorage.getItem("aegis_companies") || "[]";
-    const companies: CompanyRecord[] = JSON.parse(companiesStr);
-    const company = companies.length > 0 ? companies[0].companyName : "AegisGraph Demo Corp";
-    
-    return {
-      isValid: true,
-      message: "Signature Valid",
-      certificate: {
-        id: localCert.id,
-        employeeName: localCert.employeeName,
-        employeeId: localCert.employeeId,
-        company,
-        score: localCert.score,
-        issueDate: localCert.issueDate
+  try {
+    const res = await fetch(`${BASE}/v1/certificates/verify/${certId}`);
+    if (!res.ok) {
+      if (res.status === 404) {
+        return { isValid: false, message: "Certificate not found or revoked." };
       }
-    };
-  }
-
-  // Fallback for valid format but not in DB (e.g. testing)
-  if (certId.toUpperCase().startsWith("CERT-")) {
+      return { isValid: false, message: "Verification failed due to server error." };
+    }
+    const data = await res.json();
     return {
       isValid: true,
-      message: "Signature Valid",
+      message: "Certificate verified successfully",
       certificate: {
         id: certId,
-        employeeName: "Unknown Employee",
-        employeeId: "UNK-0001",
-        company: "Unknown Company",
-        score: 100,
-        issueDate: new Date().toISOString()
+        employeeName: data.employee_name,
+        employeeId: data.employee_id || "Unknown",
+        company: data.company,
+        assessmentName: data.assessment_name,
+        score: data.score,
+        issueDate: data.issue_date,
+        signature: data.signature
       }
     };
+  } catch (err: any) {
+    return { isValid: false, message: err.message };
   }
-
-  return {
-    isValid: false,
-    message: "Ed25519 signature check failed. Certificate may be tampered with."
-  };
 }
 
 
@@ -954,3 +1041,4 @@ export async function promoteFilteredBlock(blockId: string): Promise<{ status: s
     method: "POST"
   });
 }
+

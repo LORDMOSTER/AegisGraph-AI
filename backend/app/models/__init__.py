@@ -7,6 +7,7 @@ from app.models.certificate import Certificate
 from app.models.audit_log import ComplianceAuditLog
 from app.models.hierarchy import Manual, Section, SubCategory, Rule
 from app.models.question_bank import QuestionVariant
+from app.models.question_usage_history import QuestionUsageHistory
 
 # Export Base and all models to ensure Alembic can discover them
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "SubCategory",
     "Rule",
     "QuestionVariant",
+    "QuestionUsageHistory",
 ]

@@ -249,12 +249,21 @@ export function IngestionTerminal() {
         style={{
           marginBottom: 16,
           cursor: selectedFile ? "default" : "pointer",
-          borderColor: isDragOver ? "var(--violet-500)" : selectedFile ? "var(--emerald)" : undefined,
+          borderColor: isDragOver ? "var(--violet-500)" : selectedFile ? "var(--emerald)" : "var(--border-strong, #ccc)",
           background: isDragOver
             ? "var(--violet-tint)"
             : selectedFile
               ? "var(--emerald-dim)"
-              : undefined,
+              : "var(--surface-hover, #f8f9fa)",
+          borderWidth: 2,
+          borderStyle: "dashed",
+          borderRadius: 12,
+          padding: "48px 24px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 160,
           transition: "all 200ms ease",
         }}
       >

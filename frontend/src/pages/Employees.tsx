@@ -160,7 +160,6 @@ export function Employees() {
                 <th>Name</th>
                 <th>Job Title</th>
                 <th>Department</th>
-                <th>PIN / Password</th>
                 <th>Status</th>
                 <th>Last Certified</th>
                 <th style={{ textAlign: "right" }}>Actions</th>
@@ -184,13 +183,7 @@ export function Employees() {
                     <td style={{ fontWeight: 500 }}>{emp.name}</td>
                     <td style={{ color: "var(--text-secondary)" }}>{emp.designation}</td>
                     <td>{emp.departmentName}</td>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", background: "var(--raised)", padding: "2px 6px", borderRadius: 4 }}>
-                          ******
-                        </span>
-                      </div>
-                    </td>
+
                     <td>
                       <span className={`badge ${emp.status === 'Active' ? 'badge-emerald' : 'badge-crimson'}`}>
                         {emp.status}

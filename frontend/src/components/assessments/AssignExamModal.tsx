@@ -100,6 +100,9 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
 
   // Step 3 State
   const [revealScore, setRevealScore] = useState(false);
+  const [examKey, setExamKey] = useState("");
+
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -107,14 +110,20 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
       setSelectedEmployeeId("");
       setQuestions([]);
       setRevealScore(false);
+      setExamKey("");
+      setErrorMsg(null);
     }
   }, [isOpen]);
 
   const handleAssemble = async () => {
     setLoading(true);
     try {
-      const realQuestions = await assembleExam(roleTemplate, targetCount);
-      setQuestions(realQuestions);
+      setErrorMsg(null);
+      const data = await assembleExam(roleTemplate, targetCount);
+      if (data.status === "incomplete") {
+        setErrorMsg("INSUFFICIENT CONTENT: " + data.reason);
+      }
+      setQuestions(data.questions || []);
     } catch (err) {
       console.error("Assembly failed", err);
     } finally {
@@ -125,9 +134,10 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
   const handleSwap = async (q: QuestionVariant) => {
     if (!q.rule_id) return;
     try {
+      setErrorMsg(null);
       const newQ = await swapQuestion(q.rule_id, q.id);
       if (newQ.error) {
-        alert(newQ.error);
+        setErrorMsg(newQ.error);
         return;
       }
       setQuestions((prev) => prev.map((old) => (old.id === q.id ? newQ : old)));
@@ -153,7 +163,7 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
       const { saveAssembledExam, assignExam } = await import("../../api");
       const saveRes = await saveAssembledExam(`${roleTemplate} Certification`, manifest);
       if (saveRes && saveRes.assessment_id) {
-        await assignExam(saveRes.assessment_id, [selectedEmployeeId]);
+        await assignExam(saveRes.assessment_id, [selectedEmployeeId], examKey || undefined);
       }
       
       setStep(4);
@@ -221,6 +231,26 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
               <CloseIcon />
             </button>
           </div>
+          
+          {errorMsg && (
+            <div
+              style={{
+                padding: "12px 16px",
+                margin: "16px 24px 0",
+                backgroundColor: "rgba(239, 68, 68, 0.1)",
+                border: "1px solid rgba(239, 68, 68, 0.3)",
+                borderRadius: "8px",
+                color: "#ef4444",
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px"
+              }}
+            >
+              <iconify-icon icon="lucide:alert-circle" style={{ fontSize: "16px", flexShrink: 0 }} />
+              <span style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{errorMsg}</span>
+            </div>
+          )}
 
           {/* Content Area */}
           <div style={{ padding: "24px", flex: 1, overflowY: "auto", maxHeight: "60vh" }}>
@@ -413,6 +443,37 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                 <p style={{ color: "var(--text-secondary)", textAlign: "center", maxWidth: "80%", margin: 0 }}>
                   This will lock the current {questions.length}-question set and schedule the assessment.
                 </p>
+
+                {/* Exam Key (Req #1) */}
+                <div style={{ width: "100%", maxWidth: 360, marginTop: 8 }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+                    Exam Key{" "}<span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.75rem" }}>(spoken to worker at test time)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={examKey}
+                    onChange={(e) => setExamKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                    maxLength={8}
+                    placeholder="e.g. AX7K2B (leave blank to skip)"
+                    style={{
+                      width: "100%",
+                      padding: "12px 14px",
+                      fontSize: "1.1rem",
+                      fontFamily: "monospace",
+                      letterSpacing: "0.2em",
+                      textTransform: "uppercase",
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid var(--border-muted)",
+                      borderRadius: 8,
+                      color: "var(--text-primary)",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <p style={{ margin: "8px 0 0", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                    This key is verbal-only — do <strong>not</strong> send it digitally. The worker must enter it at test time in the presence of a supervisor. It is stored hashed and never revealed.
+                  </p>
+                </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "16px", marginTop: "16px" }}>
                   <span style={{ fontSize: "0.9rem", color: "var(--text-primary)" }}>Reveal Score to Worker Upon Completion</span>

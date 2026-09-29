@@ -16,12 +16,12 @@ os.makedirs(CERT_DIR, exist_ok=True)
 # Fixed key for demo purposes. In production, load from secure vault or env.
 SECRET_KEY_BYTES = b"thisisasecretkeyfornacl123456789"
 
-def generate_certificate(exam_session_id: uuid.UUID, employee_id: uuid.UUID, full_name: str, score: float, company_name: str, is_imported: bool = False, original_issuer: str = None, original_issue_date: str = None, cert_number: str = None, assessment_name: str = "Safety Assessment", logo_url: str = None, designation: str = None) -> tuple[str, str, str]:
+def generate_certificate(certificate_id: uuid.UUID, employee_id: uuid.UUID, full_name: str, score: float, company_name: str, is_imported: bool = False, original_issuer: str = None, original_issue_date: str = None, cert_number: str = None, assessment_name: str = "Safety Assessment", logo_url: str = None, designation: str = None) -> tuple[str, str, str]:
     # 1. Ed25519 Signing
     signing_key = SigningKey(SECRET_KEY_BYTES)
     
     payload = {
-        "exam_session_id": str(exam_session_id),
+        "certificate_id": str(certificate_id),
         "employee_id": str(employee_id),
         "name": full_name,
         "score": score,
@@ -38,11 +38,10 @@ def generate_certificate(exam_session_id: uuid.UUID, employee_id: uuid.UUID, ful
     signed_payload_hex = signed.signature.decode("utf-8")
     
     # 2. QR Code
-    qr_data = json.dumps({
-        "exam_session_id": str(exam_session_id),
-        "signature": signed_payload_hex,
-        "is_imported": is_imported
-    })
+    import urllib.parse
+    # For a fully offline local network app, the phone must be on the same WiFi
+    base_url = "http://localhost:5173" # Update to LAN IP for physical device testing
+    qr_data = f"{base_url}/verify/{certificate_id}?sig={signed_payload_hex}"
     
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
     qr.add_data(qr_data)
@@ -54,7 +53,7 @@ def generate_certificate(exam_session_id: uuid.UUID, employee_id: uuid.UUID, ful
         qr_path = tf.name
 
     # 3. PDF Generation
-    cert_filename = f"cert_{exam_session_id}.pdf"
+    cert_filename = f"cert_{certificate_id}.pdf"
     cert_path = os.path.join(CERT_DIR, cert_filename)
     
     # Use landscape orientation
@@ -145,7 +144,7 @@ def generate_certificate(exam_session_id: uuid.UUID, employee_id: uuid.UUID, ful
     c.setFont("Helvetica", 10)
     c.setFillColorRGB(0.4, 0.4, 0.4)
     # Text below the QR code
-    c.drawCentredString(width / 2.0, qr_y - 15, f"Credential ID: {str(exam_session_id)}")
+    c.drawCentredString(width / 2.0, qr_y - 15, f"Credential ID: {str(certificate_id)}")
     c.drawCentredString(width / 2.0, qr_y - 30, f"Issued on: {formatted_date}")
     if is_imported and cert_number:
         c.drawCentredString(width / 2.0, qr_y - 45, f"Original Cert No: {cert_number}")

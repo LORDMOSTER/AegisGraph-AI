@@ -132,12 +132,10 @@ export const Certificates: React.FC = () => {
 
   return (
     <div style={{ padding: "40px", minHeight: "100vh" }}>
-      <header style={{ marginBottom: "40px", display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: "1px solid var(--line)", paddingBottom: "20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: "2rem", margin: 0, fontWeight: 300, letterSpacing: "-0.02em" }}>
-            CERTIFICATE <span style={{ color: "var(--accent)", fontWeight: 600 }}>VAULT</span>
-          </h1>
-          <p className="t-secondary" style={{ marginTop: "8px", fontSize: "0.9rem" }}>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Certificates</h1>
+          <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
             Manage cryptographically signed credentials and external imports.
           </p>
         </div>
@@ -147,7 +145,7 @@ export const Certificates: React.FC = () => {
         >
           <ImportIcon /> Import External Certificate
         </button>
-      </header>
+      </div>
 
       {expiringCerts.length > 0 && (
         <div style={{ backgroundColor: "var(--amber-dim)", border: "1px solid var(--amber)", padding: "16px 20px", marginBottom: "32px", display: "flex", alignItems: "center", gap: "12px", color: "var(--amber)", borderRadius: "var(--radius-md)" }}>

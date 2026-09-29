@@ -1,7 +1,7 @@
 import logging
 import uuid
 import random
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +13,9 @@ from app.models.hierarchy import Rule, SubCategory, Section
 from app.models.question_bank import QuestionVariant
 from app.models.assessment_session import Assessment
 from app.models.user import User
+from app.models.question_usage_history import QuestionUsageHistory
 from app.api.deps import get_current_active_user
+from app.services.llm.generator import grade_fill_in_blank
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -159,31 +161,55 @@ from app.models.test_attempt import ExamSession, ExamStatus
 from app.models.certificate import Certificate
 from app.models.company import Company
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import selectinload
 from app.services.certificate import generate_certificate
+import hashlib, secrets
 
 class AssembleRequest(BaseModel):
     job_title: str
     target_count: int
+    employee_id: Optional[uuid.UUID] = None  # for no-repeat filtering (Req #8)
 
 @router.post("/assemble", summary="Assemble exam questions for a role")
 async def assemble_exam(
     request: AssembleRequest,
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user),
 ):
     from app.services.assessment_assembler import assemble_exam_for_role
-    questions = await assemble_exam_for_role(db, request.job_title, request.target_count)
-    return [
+
+    eid = request.employee_id or current_user.id
+    result = await assemble_exam_for_role(db, request.job_title, request.target_count, employee_id=eid)
+
+    questions = result["questions"]
+    repeat_ids = result["repeat_variant_ids"]
+    incomplete = result["incomplete"]
+    reason = result["reason"]
+
+    if incomplete and not questions:
+        return {"status": "incomplete", "reason": reason, "questions": []}
+
+    payload = [
         {
             "id": str(q.id),
             "question_text": q.question_text,
+            "question_type": q.question_type,
             "options": q.options or [],
+            "blank_answer_variants": q.blank_answer_variants,
             "correct_answer_index": q.correct_option_index,
-            "rule_id": str(q.rule_id) if hasattr(q, "rule_id") else None
+            "difficulty": q.difficulty,
+            "rule_id": str(q.rule_id),
+            "is_repeat": str(q.id) in repeat_ids,
         }
         for q in questions
     ]
+    return {
+        "status": "incomplete" if incomplete else "ready",
+        "reason": reason,
+        "repeat_count": len(repeat_ids),
+        "questions": payload,
+    }
 
 class SwapRequest(BaseModel):
     rule_id: uuid.UUID
@@ -226,6 +252,13 @@ async def swap_question(
 class AssignRequest(BaseModel):
     assessment_id: uuid.UUID
     employee_ids: list[str]
+    # Lockdown: supervisor sets a short Exam Key given verbally at test time (Req #1)
+    exam_key: Optional[str] = None
+    # Per-exam configurable marking (optional; falls back to Assessment defaults)
+    marks_per_question: Optional[int] = None
+    use_weighted_marks: Optional[bool] = None
+    pass_mark_pct: Optional[float] = None
+    pass_mark_abs: Optional[int] = None
 
 @router.post("/assign", summary="Assign an exam to employees")
 async def assign_exam(
@@ -233,26 +266,237 @@ async def assign_exam(
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
 ):
+    # Optionally update marking config on the Assessment record
+    if any(x is not None for x in [
+        request.marks_per_question, request.use_weighted_marks,
+        request.pass_mark_pct, request.pass_mark_abs,
+    ]):
+        a_stmt = select(Assessment).where(Assessment.id == request.assessment_id)
+        a_res = await db.execute(a_stmt)
+        assessment = a_res.scalar_one_or_none()
+        if assessment:
+            if request.marks_per_question is not None:
+                assessment.marks_per_question = request.marks_per_question
+            if request.use_weighted_marks is not None:
+                assessment.use_weighted_marks = request.use_weighted_marks
+            if request.pass_mark_pct is not None:
+                assessment.pass_mark_pct = request.pass_mark_pct
+            if request.pass_mark_abs is not None:
+                assessment.pass_mark_abs = request.pass_mark_abs
+
     # Map employee codes to User UUIDs
     stmt = select(User).where(User.employee_code.in_(request.employee_ids))
     result = await db.execute(stmt)
     users = result.scalars().all()
-    
+
     sessions = []
     for u in users:
+        key_hash: Optional[str] = None
+        if request.exam_key:
+            # SHA-256 the key (+ a static pepper); never store plaintext
+            pepper = "aegis-lockdown-v1"
+            key_hash = hashlib.sha256(f"{pepper}:{request.exam_key.upper()}".encode()).hexdigest()
         session = ExamSession(
             assessment_id=request.assessment_id,
             employee_id=u.id,
             status=ExamStatus.ASSIGNED,
-            assigned_at=datetime.utcnow(),
-            responses={}
+            assigned_at=datetime.now(timezone.utc),
+            responses={},
+            exam_key_hash=key_hash,
+            lockdown_anomalies=[],
+            lockdown_escalated=False,
         )
         db.add(session)
         sessions.append(session)
     await db.commit()
     return {"status": "success", "assigned_count": len(sessions)}
 
+
+# ---------------------------------------------------------------------------
+# Lockdown flow — Dual-factor unlock (Req #2)
+# ---------------------------------------------------------------------------
+
+class UnlockRequest(BaseModel):
+    employee_code: str
+    pin: str
+    exam_key: str
+
+@router.post("/exam/{exam_id}/unlock", summary="Dual-factor unlock before exam start")
+async def unlock_exam(
+    exam_id: uuid.UUID,
+    request: UnlockRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Verifies employee PIN and supervisor Exam Key.
+    Returns a generic error to the caller but logs the specific failure
+    server-side for the audit trail (log-don't-reveal principle).
+    """
+    stmt = select(ExamSession).options(selectinload(ExamSession.employee)).where(ExamSession.id == exam_id)
+    result = await db.execute(stmt)
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Exam session not found")
+
+    failure_reason: Optional[str] = None
+
+    # Check 1: employee PIN
+    emp_stmt = select(User).where(User.employee_code == request.employee_code)
+    emp_res = await db.execute(emp_stmt)
+    emp = emp_res.scalar_one_or_none()
+
+    import bcrypt
+    pin_ok = False
+    if emp and emp.password_hash:
+        try:
+            pin_ok = bcrypt.checkpw(request.pin.encode(), emp.password_hash.encode())
+        except Exception:
+            pin_ok = False
+    if not pin_ok:
+        failure_reason = "pin_mismatch"
+
+    # Check 2: supervisor Exam Key
+    key_ok = False
+    if session.exam_key_hash:
+        pepper = "aegis-lockdown-v1"
+        provided_hash = hashlib.sha256(f"{pepper}:{request.exam_key.upper()}".encode()).hexdigest()
+        key_ok = secrets.compare_digest(provided_hash, session.exam_key_hash)
+    else:
+        key_ok = True  # no key was set — let through
+    if not key_ok and failure_reason is None:
+        failure_reason = "exam_key_mismatch"
+
+    if failure_reason:
+        # Log the SPECIFIC reason server-side
+        anomaly = {
+            "type": "unlock_failure",
+            "subtype": failure_reason,
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+        new_anomalies = list(session.lockdown_anomalies or []) + [anomaly]
+        session.lockdown_anomalies = new_anomalies
+        await db.commit()
+        raise HTTPException(status_code=401, detail="Credentials incorrect. Contact your supervisor.")
+
+    # Both checks pass — mark session as started
+    session.status = ExamStatus.IN_PROGRESS
+    session.started_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"status": "unlocked"}
+
+
+# ---------------------------------------------------------------------------
+# Lockdown anomaly ingestion (Req #5)
+# ---------------------------------------------------------------------------
+
+ANOMALY_MAX_COUNT = 3
+ANOMALY_MAX_DURATION_S = 30
+
+class LockdownAnomalyRequest(BaseModel):
+    anomaly_type: str   # fullscreen_exit | focus_blur | tab_hidden | screenshare_stopped | screenshare_changed
+    duration_s: float
+    timestamp: str      # ISO string from client
+
+@router.post("/exam/{exam_id}/lockdown-anomaly", summary="Log a lockdown integrity event")
+async def log_lockdown_anomaly(
+    exam_id: uuid.UUID,
+    request: LockdownAnomalyRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user),
+):
+    stmt = select(ExamSession).where(ExamSession.id == exam_id)
+    result = await db.execute(stmt)
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Exam session not found")
+
+    anomaly = {
+        "type": request.anomaly_type,
+        "duration_s": request.duration_s,
+        "ts": request.timestamp,
+    }
+    new_anomalies = list(session.lockdown_anomalies or []) + [anomaly]
+    session.lockdown_anomalies = new_anomalies
+
+    lockdown_events = [a for a in new_anomalies if a.get("type") != "unlock_failure"]
+    total_duration = sum(a.get("duration_s", 0) for a in lockdown_events)
+    if len(lockdown_events) >= ANOMALY_MAX_COUNT or total_duration >= ANOMALY_MAX_DURATION_S:
+        if not session.lockdown_escalated:
+            session.lockdown_escalated = True
+            session.status = ExamStatus.PENDING_REVIEW
+            logger.warning(
+                "Exam %s auto-escalated to PENDING_REVIEW: %d events, %.1fs cumulative",
+                exam_id, len(lockdown_events), total_duration,
+            )
+
+    await db.commit()
+    return {
+        "logged": True,
+        "escalated": session.lockdown_escalated,
+        "total_events": len(lockdown_events),
+        "cumulative_duration_s": total_duration,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Audit timeline (Req #7)
+# ---------------------------------------------------------------------------
+
+@router.get("/exam/{exam_id}/audit-timeline", summary="Combined integrity + lockdown timeline")
+async def get_audit_timeline(
+    exam_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user),
+):
+    stmt = select(ExamSession).options(
+        selectinload(ExamSession.employee),
+        selectinload(ExamSession.assessment),
+    ).where(ExamSession.id == exam_id)
+    result = await db.execute(stmt)
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Exam session not found")
+
+    timeline = []
+
+    # MediaPipe / head-pose events stored under __proctoring__ key in responses
+    proctoring_events = []
+    if isinstance(session.responses, dict):
+        proctoring_events = session.responses.get("__proctoring__", [])
+    for ev in proctoring_events:
+        timeline.append({
+            "source": "mediapipe",
+            "type": ev.get("type", "gaze_anomaly"),
+            "ts": ev.get("ts"),
+            "duration_s": ev.get("duration_s"),
+            "detail": ev,
+        })
+
+    # Lockdown / screen-capture / fullscreen events
+    for ev in (session.lockdown_anomalies or []):
+        timeline.append({
+            "source": "lockdown",
+            "type": ev.get("type"),
+            "ts": ev.get("ts"),
+            "duration_s": ev.get("duration_s"),
+            "detail": ev,
+        })
+
+    timeline.sort(key=lambda e: e.get("ts") or "")
+
+    return {
+        "exam_session_id": str(exam_id),
+        "employee_name": (session.employee.full_name or session.employee.employee_code) if session.employee else None,
+        "assessment_name": session.assessment.name if session.assessment else None,
+        "status": session.status,
+        "score": session.score,
+        "lockdown_escalated": session.lockdown_escalated,
+        "timeline": timeline,
+    }
+
+
 @router.get("/assessments", summary="Get all templates")
+
 async def get_all_assessments(
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
@@ -352,8 +596,10 @@ async def get_exam(
                 "id": str(variant.id),
                 "rule_id": str(variant.rule_id),
                 "question_text": variant.question_text,
+                "question_type": variant.question_type,          # expose type (Req #5)
                 "options": variant.options,
-                # Intentionally omitting correct_option_index
+                "difficulty": variant.difficulty,
+                # Intentionally omitting correct_option_index / correct_answer
             })
 
     return {
@@ -361,12 +607,16 @@ async def get_exam(
         "assessment_name": exam.assessment.name,
         "status": exam.status,
         "responses": exam.responses,
-        "questions": questions
+        "questions": questions,
+        "pass_mark_pct": exam.assessment.pass_mark_pct,
+        "use_weighted_marks": exam.assessment.use_weighted_marks,
+        "reveal_score_to_user": exam.assessment.reveal_score_to_user,
     }
 
 class AnswerRequest(BaseModel):
     question_variant_id: str
-    selected_option_index: int
+    selected_option_index: Optional[int] = None    # MCQ / TRUE_FALSE
+    text_answer: Optional[str] = None              # FILL_IN_BLANK (Req #5)
 
 @router.put("/exam/{exam_id}/answer", summary="Save single answer")
 async def save_answer(
@@ -380,11 +630,15 @@ async def save_answer(
     exam = result.scalar_one_or_none()
     if not exam:
         raise HTTPException(status_code=404)
-        
+
     new_responses = dict(exam.responses)
-    new_responses[request.question_variant_id] = request.selected_option_index
+    # Store both so scoring can pick the right one
+    new_responses[request.question_variant_id] = {
+        "selected_option_index": request.selected_option_index,
+        "text_answer": request.text_answer,
+    }
     exam.responses = new_responses
-    
+
     await db.commit()
     return {"status": "saved"}
 
@@ -401,56 +655,105 @@ async def submit_exam(
     stmt = select(ExamSession).options(selectinload(ExamSession.assessment)).where(ExamSession.id == exam_id)
     result = await db.execute(stmt)
     exam = result.scalar_one_or_none()
-    
+
     if not exam:
         raise HTTPException(status_code=404)
-        
-    total_weighted_score = 0.0
-    total_weight = 0.0
-    
-    for item in exam.assessment.manifest:
+
+    assessment = exam.assessment
+    use_weighted = assessment.use_weighted_marks  # Req #10
+    pass_pct = assessment.pass_mark_pct           # Req #10
+    pass_abs = assessment.pass_mark_abs           # Req #10 (optional absolute)
+    marks_per_q = assessment.marks_per_question   # Req #10
+
+    total_score = 0.0
+    total_possible = 0.0
+    usage_history_entries: list[QuestionUsageHistory] = []
+
+    for item in assessment.manifest:
         var_id = uuid.UUID(item['question_variant_id'])
         rule_id = uuid.UUID(item['rule_id'])
-        
+
         v_stmt = select(QuestionVariant).where(QuestionVariant.id == var_id)
         v_res = await db.execute(v_stmt)
         variant = v_res.scalar_one()
-        
+
         r_stmt = select(Rule).where(Rule.id == rule_id)
         r_res = await db.execute(r_stmt)
         rule = r_res.scalar_one()
-        
-        weight = rule.risk_score
-        total_weight += weight
-        
-        user_answer = exam.responses.get(str(var_id))
-        if user_answer == variant.correct_option_index:
-            total_weighted_score += weight
-            
-    sci_score = (total_weighted_score / total_weight * 100) if total_weight > 0 else 0
-    
+
+        # Mark weight (Req #10)
+        weight = rule.risk_score if use_weighted else marks_per_q
+        total_possible += weight
+
+        # Retrieve saved response (supports both old int and new dict formats)
+        raw_resp = exam.responses.get(str(var_id))
+        if isinstance(raw_resp, dict):
+            selected_idx = raw_resp.get("selected_option_index")
+            text_answer = raw_resp.get("text_answer")
+        else:
+            selected_idx = raw_resp
+            text_answer = None
+
+        # Grade depending on question type (Req #5)
+        q_type = variant.question_type
+        correct = False
+        if q_type == "FILL_IN_BLANK":
+            if text_answer is not None:
+                correct = grade_fill_in_blank(
+                    text_answer,
+                    variant.correct_answer or "",
+                    variant.blank_answer_variants,
+                )
+        else:
+            correct = (selected_idx == variant.correct_option_index)
+
+        if correct:
+            total_score += weight
+
+        # Record usage history (Req #8)
+        usage_history_entries.append(QuestionUsageHistory(
+            employee_id=current_user.id,
+            question_variant_id=var_id,
+            exam_session_id=exam.id,
+        ))
+
+    # Compute SCI score as percentage
+    sci_score = (total_score / total_possible * 100) if total_possible > 0 else 0.0
+
+    # Determine pass/fail threshold (Req #10)
+    if pass_abs is not None:
+        passed = total_score >= pass_abs
+    else:
+        passed = sci_score >= pass_pct
+
     exam.score = sci_score
     exam.completed_at = datetime.utcnow()
-    
+
+    # Save usage history
+    for entry in usage_history_entries:
+        db.add(entry)
+
     c_stmt = select(Company).where(Company.id == current_user.company_id)
     c_res = await db.execute(c_stmt)
     company = c_res.scalar_one()
-    
+
     if request.integrity_score < 70.0:
         exam.status = ExamStatus.PENDING_REVIEW
-    elif sci_score >= 80.0: 
+    elif passed:
         exam.status = ExamStatus.COMPLETED
+        cert_id = uuid.uuid4()
         qr, sig, pdf_url = generate_certificate(
-            exam_session_id=exam.id,
+            certificate_id=cert_id,
             employee_id=current_user.id,
             full_name=current_user.full_name or current_user.employee_code,
             score=sci_score,
             company_name=company.name,
-            assessment_name=exam.assessment.name if exam.assessment else "Safety Assessment",
+            assessment_name=assessment.name if assessment else "Safety Assessment",
             logo_url=company.logo_url,
             designation=current_user.designation
         )
         cert = Certificate(
+            id=cert_id,
             exam_session_id=exam.id,
             employee_id=current_user.id,
             issued_at=datetime.utcnow(),
@@ -463,7 +766,13 @@ async def submit_exam(
         exam.status = ExamStatus.FAILED
 
     await db.commit()
-    return {"status": exam.status, "score": sci_score}
+    return {
+        "status": exam.status,
+        "score": sci_score,
+        "passed": passed,
+        "reveal_score_to_user": assessment.reveal_score_to_user,
+        "pass_mark_pct": pass_pct,
+    }
 
 @router.get("/certificates", summary="Get my certificates")
 async def get_my_certificates(

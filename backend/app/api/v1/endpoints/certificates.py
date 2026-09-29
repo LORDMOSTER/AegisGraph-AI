@@ -277,7 +277,7 @@ async def save_imported_certificate(
     # (Using a mock exam_session_id since it's imported)
     mock_session_id = uuid.uuid4()
     qr_data, signature, pdf_url = generate_certificate(
-        exam_session_id=mock_session_id,
+        certificate_id=new_record.id,
         employee_id=user.id,
         full_name=user.full_name or "Unknown Employee",
         score=score,
@@ -291,3 +291,46 @@ async def save_imported_certificate(
     await db.commit()
     
     return {"message": "Import successful", "pdf_url": pdf_url}
+
+@router.get("/verify/{cert_id}")
+async def verify_certificate(cert_id: uuid.UUID, db: AsyncSession = Depends(get_db_session)):
+    # Check regular certificates
+    stmt = select(Certificate).options(
+        selectinload(Certificate.employee).selectinload(User.company),
+        selectinload(Certificate.exam_session).selectinload(ExamSession.assessment)
+    ).where(Certificate.id == cert_id)
+    result = await db.execute(stmt)
+    cert = result.scalar_one_or_none()
+    
+    if cert:
+        return {
+            "status": "Verified",
+            "is_imported": False,
+            "employee_name": cert.employee.full_name or "Unknown",
+            "company": cert.employee.company.name if cert.employee.company else "Unknown",
+            "assessment_name": cert.exam_session.assessment.name if cert.exam_session.assessment else "Safety Assessment",
+            "score": cert.exam_session.score,
+            "issue_date": cert.issued_at.isoformat(),
+            "signature": cert.signed_payload
+        }
+        
+    # Check imported certificates
+    stmt2 = select(CertificateRecord).options(
+        selectinload(CertificateRecord.user).selectinload(User.company)
+    ).where(CertificateRecord.id == cert_id)
+    result2 = await db.execute(stmt2)
+    record = result2.scalar_one_or_none()
+    
+    if record:
+        return {
+            "status": "Verified",
+            "is_imported": True,
+            "employee_name": record.user.full_name or "Unknown",
+            "company": record.user.company.name if record.user.company else "Unknown",
+            "assessment_name": "Imported Certificate",
+            "score": record.sci_score,
+            "issue_date": record.issue_date.isoformat(),
+            "expiry_date": record.expiry_date.isoformat()
+        }
+        
+    raise HTTPException(status_code=404, detail="Certificate not found or invalid")

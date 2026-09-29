@@ -10,6 +10,9 @@ export function EmployeeShell({ onLogout }: Props) {
   const [route, setRoute] = useState<"dashboard" | "exam">("dashboard");
   const [activeExamId, setActiveExamId] = useState<string | null>(null);
 
+  // Employee code is stored on login (employee_code from JWT/login response)
+  const employeeCode = localStorage.getItem("aegis_employee_code") || "";
+
   const handleStartExam = (examId: string) => {
     setActiveExamId(examId);
     setRoute("exam");
@@ -21,7 +24,7 @@ export function EmployeeShell({ onLogout }: Props) {
   };
 
   if (route === "exam" && activeExamId) {
-    return <ExamSession examId={activeExamId} onExit={handleExitExam} />;
+    return <ExamSession examId={activeExamId} employeeCode={employeeCode} onExit={handleExitExam} />;
   }
 
   // Dashboard layout with top bar
