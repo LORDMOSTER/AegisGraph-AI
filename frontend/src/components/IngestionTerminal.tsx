@@ -191,13 +191,10 @@ export function IngestionTerminal() {
                  }
                }
                if (data.done) {
-                 setResult({
-                    filename: selectedFile.name,
-                    chunk_count: 0,
-                    extraction_time_ms: 0,
-                    status: "completed",
-                    message: data.message
-                 });
+                 setTimeout(() => {
+                   fetchManuals();
+                   reset();
+                 }, 800);
                }
              } catch (e) {
                 if (e instanceof Error && e.message !== "Unexpected end of JSON input") {
@@ -254,7 +251,7 @@ export function IngestionTerminal() {
             ? "var(--violet-tint)"
             : selectedFile
               ? "var(--emerald-dim)"
-              : "var(--surface-hover, #f8f9fa)",
+              : "var(--raised, #f8f9fa)",
           borderWidth: 2,
           borderStyle: "dashed",
           borderRadius: 12,
@@ -494,7 +491,7 @@ export function IngestionTerminal() {
         ) : (
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: "var(--surface-hover)", borderBottom: "1px solid var(--line)" }}>
+              <thead style={{ background: "var(--raised)", borderBottom: "1px solid var(--line)" }}>
                 <tr>
                   <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>Title</th>
                   <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase" }}>Upload Date</th>

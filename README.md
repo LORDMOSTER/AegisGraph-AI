@@ -2,7 +2,7 @@
 
 AegisGraph AI is a mission-critical, 100% offline Edge-AI Assessment Engine built for the **Tata Technologies InnoVent** competition. It is designed to generate highly accurate, dynamically constrained safety assessments for heavy industrial environments. 
 
-By combining a **Neo4j Knowledge Graph** with **Local Edge Inference (Llama-3)** and the proprietary **DCWGT (Dynamic Cognitive-Weighted Graph Traversal)** algorithm, AegisGraph guarantees deterministic accuracy while completely eliminating data privacy risks.
+By combining a **Relational Knowledge Hierarchy (PostgreSQL)** with **Local Edge Inference (Ollama - Qwen2.5/Llama-3)** and the proprietary **DCWGT (Dynamic Cognitive-Weighted Graph Traversal)** algorithm, AegisGraph guarantees deterministic accuracy while completely eliminating data privacy risks.
 
 ---
 
@@ -10,63 +10,61 @@ By combining a **Neo4j Knowledge Graph** with **Local Edge Inference (Llama-3)**
 
 The system is built on a decoupled, modern enterprise stack separated into three primary tiers:
 
-1. **Frontend Presentation Layer**: React 18, Vite, TypeScript, Framer Motion.
+1. **Frontend Presentation Layer**: React 18, Vite, TypeScript, Tailwind CSS, Framer Motion.
 2. **Backend API & Logic Layer**: Python 3.11, FastAPI, Pydantic v2.
-3. **Data & AI Layer**: Neo4j (Graph Database), Ollama (Local LLM Inference), LangChain.
+3. **Data & AI Layer**: PostgreSQL (Relational Knowledge Base & App Data), SQLAlchemy 2.0 (Async ORM), Ollama (Local LLM Inference), LangChain.
 
 > [!IMPORTANT]
-> **Zero-Trust & 100% Offline**: The entire ecosystem, including the Large Language Model, runs locally on CPU (`num_gpu=0`). No data ever leaves the host machine, ensuring absolute compliance with strict enterprise data privacy requirements.
+> **Zero-Trust & 100% Offline**: The entire ecosystem, including the Large Language Model, runs entirely locally. No proprietary data ever leaves the host machine, ensuring absolute compliance with strict enterprise data privacy requirements.
 
 ---
 
 ## 2. Core Innovation: DCWGT v2 Algorithm
-*Dynamic Cognitive-Weighted Graph Traversal*
+*Dynamic Cognitive-Weighted Graph Traversal (Relational Edition)*
 
 Traditional Retrieval-Augmented Generation (RAG) relies on vector embeddings, which are statistical and prone to hallucination. AegisGraph AI replaces vector search with **DCWGT**, a deterministic mathematical filter.
 
 ### How it Works:
-1. **Constraint Ingestion**: The user requests a specific mathematical distribution (e.g., 2 Emergency Protocol rules, 3 Maintenance rules).
-2. **Weighted Priority Filtering**: The algorithm applies a `DifficultyProfile` (e.g., High-Risk Weight 60%, Routine Weight 40%). It sorts the rules inside the Neo4j database based on their `risk_score` (1-10).
-3. **Recursive Sibling Fallback**: If a section lacks enough rules to satisfy the user's numeric constraint, the algorithm dynamically traverses the graph to find structurally similar "sibling" categories to borrow rules from, ensuring the exact requested question count is always met without failing.
-4. **Absolute Truth Locking**: The algorithm extracts these mathematically verified rules from the graph and securely locks them into a strictly typed tuple. 
+1. **Constraint Ingestion**: The admin requests a specific mathematical distribution (e.g., 5 General Safety questions, 2 Emergency Protocol questions).
+2. **Hierarchical Filtering**: The algorithm uses highly-optimized asynchronous PostgreSQL queries via SQLAlchemy 2.0 to traverse the domain hierarchy (`Manual -> Section -> SubCategory -> Rule`).
+3. **Usage Exclusion**: It actively filters out `QuestionVariant` records that the specific employee has already been assigned in previous `QuestionUsageHistory` records.
+4. **Absolute Truth Locking**: The algorithm extracts mathematically verified rules from the SQL database and securely locks them into a strict dataset, which is passed directly to the LLM to ground the assessment generation.
 
 ---
 
-## 3. The Data Engine: Neo4j Knowledge Graph
+## 3. The Data Engine: PostgreSQL + SQLAlchemy 2.0
 
-AegisGraph does not use standard relational databases. It utilizes Neo4j (Bolt protocol, Port 7687) to map relationships between safety domains.
+AegisGraph V2 has fully migrated from Neo4j to an advanced, fully relational schema utilizing high-performance PostgreSQL.
 
-- **Schema Hierarchy**: `Rule` → belongs to → `SubCategory` → belongs to → `Section`.
-- **Rich Metadata**: Every rule node contains advanced attributes:
-  - `risk_score`: Severity of the hazard (1.0 to 10.0).
-  - `cognitive_level`: Bloom's Taxonomy categorization (Remember, Understand, Apply, Analyze, Evaluate, Create).
-  - `estimated_response_time`: Seconds required to safely execute the protocol.
-  - `revision_version`: Tracking compliance updates.
-- **Batch Ingestion Pipeline**: The `/api/ingest/batch` endpoint allows thousands of rules to be dragged and dropped into the UI, clearing old data, committing new nodes via transactional `MERGE` statements, and automatically rebuilding graph indices.
+### Hierarchical Knowledge Base
+Instead of a separate graph database, PostgreSQL handles complex relationships via optimized joins and nested loading.
+- **Schema Hierarchy**: `Company` → `Manual` → `Section` → `SubCategory` → `Rule` → `QuestionVariant`.
+- **Rich Metadata**: Rules contain attributes like `risk_score` and `cognitive_level`. Questions inherit `bloom_level` and `difficulty`.
+
+### Standard Application Data
+PostgreSQL also handles standard transactional consistency for:
+- User Management, Roles, and Authentication.
+- Exam Sessions, Assessment Manifests, and Attempt Usage Histories.
+- Generated Certificates and Audit Log Timelines.
 
 ---
 
-## 4. The Inference Engine: Local Edge AI (Llama-3)
+## 4. The Inference Engine: Local Edge AI
 
 Once the DCWGT algorithm locks in the factual rules, they are passed to the AI layer via **LangChain**.
 
-- **Prompt Engineering**: The rules are serialized into a highly structured system prompt. The prompt forces the LLM to act as an "Expert Industrial Safety Assessor."
-- **Strict Bounding**: The LLM is explicitly instructed to generate multiple-choice questions *only* from the provided graph data. It is forbidden from using outside knowledge.
-- **Answer Key Generation**: The prompt commands the LLM to provide a secure Answer Key at the bottom of the output for grading purposes.
-- **Latency Profiling**: In-memory metrics track the exact millisecond latency of both the Graph Traversal and the LLM Inference, reporting this back to the frontend in real-time.
+- **Prompt Engineering**: The rules are serialized into highly structured system prompts. The AI acts as an "Expert Industrial Safety Assessor."
+- **Live Generation Backfill**: If a rule lacks pre-approved questions, the LLM is invoked live to generate variants specifically grounded on that rule's text.
+- **Strict Grounding Check**: The system includes a verification phase (`grounding_check.py`) to ensure the LLM generates content strictly based on the provided data, avoiding external hallucination.
 
 ---
 
-## 5. Backend Infrastructure (FastAPI)
+## 5. End-to-End Evaluation & Certificate Pipeline
 
-The backend is built with enterprise-grade Python using object-oriented principles.
-
-- **`app/api/`**: Contains the API Routers (`ingest.py`, `assessment.py`, `analytics.py`).
-- **`app/models/schemas.py`**: Utilizes **Pydantic v2** for strict data validation. It ensures every piece of data entering or leaving the API conforms to exact specifications.
-- **`app/services/`**:
-  - `GraphService`: Handles Neo4j connection pooling, Cypher queries, and the DCWGT algorithm.
-  - `AIService`: Manages the LangChain Ollama connection and prompt serialization.
-- **`app/core/metrics.py`**: A thread-safe, in-memory latency tracker that feeds the frontend Analytics Dashboard.
+AegisGraph handles the entire lifecycle of employee assessment:
+1. **Exam Conduction**: Employees unlock dynamically generated exams using a supervisor PIN and take them in a strictly monitored lockdown session.
+2. **Automated Analytics & Grading**: The system instantly evaluates responses against the pre-approved exact answers (supporting MCQ, Multi-Select, and Fill-in-the-Blank regex matching).
+3. **Certificate Generation**: Upon passing, an Ed25519 Cryptographically-signed PDF certificate is generated using ReportLab, branded, and permanently stored for compliance tracking.
 
 ---
 
@@ -74,26 +72,11 @@ The backend is built with enterprise-grade Python using object-oriented principl
 
 The frontend is an ultra-modern, motion-heavy Single Page Application designed around a custom **Void-Industrial** aesthetic.
 
-### Aesthetic Design System
-- **Colors**: Deep charcoal void backgrounds (`#07070e`) contrasted with neon functional accents: Emerald (Verified/Safe), Amber (Warning/Offline), Cyan (Active/Graph), and Red (High-Risk/Error).
-- **Typography**: `Inter` for clean legibility and `JetBrains Mono` for terminal/data readouts.
-- **Micro-animations**: Powered by Framer Motion to provide high-end, tactile feedback (pulsing dots, sliding tabs, glowing buttons).
-
 ### Key UI Components
-1. **Analytics Dashboard**: Real-time telemetry showing total rules, section distributions via animated bar charts, and a dynamic inference latency sparkline.
-2. **Ingestion Terminal**: A drag-and-drop zone that parses JSON files and visualizes the Neo4j graph commitment process line-by-line in a hacker-style terminal.
-3. **Constraint Dashboard (Wizard)**: A 2-step animated wizard allowing the user to dial in exact question counts per section, and adjust the mathematical weight of high-risk vs. routine questions.
-4. **Assessment Renderer**: A dual-pane layout. The left pane shows the strictly verified Neo4j rules (with color-coded risk badges). The right pane dynamically renders the AI's markdown output, featuring a collapsible, secure Answer Key drawer.
-
----
-
-## 7. Enterprise Readiness (Tata Technologies Alignment)
-
-AegisGraph AI is designed to win. It checks every box for enterprise software:
-- **Modularity**: Code is strictly separated by concern (Services, Models, API, Components).
-- **Robustness**: Advanced error handling (exponential backoff retry loops on the frontend, HTTP exception mapping on the backend).
-- **Scalability**: While running locally for the prototype, the FastAPI + Neo4j stack is instantly ready to be containerized with Docker and deployed to a massive Kubernetes cluster.
-- **Data Security**: In an industrial setting (like an automotive plant or aerospace manufacturer), proprietary safety protocols cannot be leaked to public models like ChatGPT. AegisGraph solves this entirely.
+1. **Analytics Dashboard & Audit Log**: Real-time telemetry tracking, including MediaPipe gaze anomalies and browser lockdown violations.
+2. **Ingestion Terminal**: A UI to ingest new knowledge and visualize database commitments.
+3. **Assessment Workflow**: End-to-end interface for admins to assign exams and for employees to execute them.
+4. **Certificate Vault**: A searchable grid interface mapping issued PDF certificates to employees.
 
 ---
 
@@ -102,32 +85,28 @@ AegisGraph AI is designed to win. It checks every box for enterprise software:
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- Neo4j Desktop (Running locally on `bolt://localhost:7687`)
-- Ollama (Running locally with `llama3` pulled)
+- PostgreSQL (Running locally on port `5432`)
+- Ollama (Running locally with a model like Qwen2.5 or Llama-3 pulled)
 
-### 1. Setup Backend
-```bash
-# Clone the repository
-git clone https://github.com/LORDMOSTER/AegisGraph-AI.git
-cd AegisGraph-AI
+### 1. Configure Environment Variables
+Create a `.env` file in the root directory (refer to `.env.example`):
+```env
+# PostgreSQL Settings
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your_postgres_password
+POSTGRES_DB=aegisgraph_dev
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
 
-# Configure environment variables
-# Create a .env file in the root directory:
-# NEO4J_URI=bolt://localhost:7687
-# NEO4J_USER=neo4j
-# NEO4J_PASSWORD=your_password_here
-
-# Install dependencies and run
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+# Local AI Inference
+OLLAMA_MODEL="hf.co/bartowski/Qwen2.5-3B-Instruct-GGUF:Q4_K_M"
 ```
 
-### 2. Setup Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
+### 2. Start the Platform
+The project includes convenient batch scripts for rapid startup:
 
-Navigate to `http://localhost:5173` to access the AegisGraph AI Dashboard. Drop the included `safety_data_v2.json` into the Ingest Terminal to initialize the Knowledge Graph!
+**Backend:**
+Run `start_backend.bat`. This automatically checks Python, installs `requirements.txt`, runs database migrations/startup hooks, and spins up the FastAPI server on `http://localhost:8000`.
+
+**Frontend:**
+Run `start_frontend.bat`. This automatically checks Node.js, runs `npm install`, and launches the Vite React app on `http://localhost:5173`.

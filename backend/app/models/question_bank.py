@@ -19,6 +19,7 @@ class QuestionType(str, enum.Enum):
     MCQ = "MCQ"
     FILL_IN_BLANK = "FILL_IN_BLANK"
     TRUE_FALSE = "TRUE_FALSE"
+    MULTI_SELECT = "MULTI_SELECT"
 
 
 class DifficultyLevel(str, enum.Enum):
@@ -41,6 +42,9 @@ class QuestionVariant(Base, TimestampMixin, UUIDMixin):
     # MCQ / TRUE_FALSE: list of option strings
     options: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
     correct_option_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # MULTI_SELECT: array of correct option indices (e.g. [0, 2])
+    correct_option_indices: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
 
     # Shared correct-answer string (MCQ uses options[correct_option_index];
     # FILL_IN_BLANK stores the primary correct phrase here)

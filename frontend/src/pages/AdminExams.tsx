@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getAllAssignedExams, deleteAssignedExam } from "../api";
+import { getAllAssignedExams, deleteAssignedExam, resetAssignedExam } from "../api";
 import { AnimatePresence, motion } from "framer-motion";
 
 export function AdminExams() {
@@ -9,6 +9,7 @@ export function AdminExams() {
   // Custom Modal State
   const [examToRemove, setExamToRemove] = useState<string | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,6 +41,19 @@ export function AdminExams() {
       setErrorMessage("Failed to remove exam.");
     } finally {
       setIsRemoving(false);
+    }
+  };
+
+  const handleReset = async (examId: string) => {
+    setIsResetting(true);
+    try {
+      await resetAssignedExam(examId);
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to reset exam.");
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -83,13 +97,25 @@ export function AdminExams() {
                     </td>
                     <td>{new Date(e.assigned_at).toLocaleString()}</td>
                     <td>
-                      <button 
-                        className="btn btn-ghost"
-                        style={{ color: "var(--rose)", border: "1px solid var(--rose-dim)" }}
-                        onClick={() => setExamToRemove(e.exam_session_id)}
-                      >
-                        Remove
-                      </button>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        {e.status !== 'ASSIGNED' && (
+                          <button 
+                            className="btn btn-ghost"
+                            style={{ color: "var(--emerald)", border: "1px solid var(--emerald-dim)" }}
+                            onClick={() => handleReset(e.exam_session_id)}
+                            disabled={isResetting}
+                          >
+                            Enable Attempt
+                          </button>
+                        )}
+                        <button 
+                          className="btn btn-ghost"
+                          style={{ color: "var(--rose)", border: "1px solid var(--rose-dim)" }}
+                          onClick={() => setExamToRemove(e.exam_session_id)}
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

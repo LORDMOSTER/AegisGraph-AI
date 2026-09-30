@@ -30,6 +30,7 @@ class EmployeeResponse(BaseModel):
     pin: str
     status: str
     lastCertified: str | None = None
+    face_embedding_stored: bool = False
 
     class Config:
         from_attributes = True
@@ -64,7 +65,8 @@ async def list_employees(
             designation=u.designation or "Operator",
             pin="******",
             status="Active" if u.is_active else "Inactive",
-            lastCertified=None
+            lastCertified=None,
+            face_embedding_stored=u.face_embedding is not None
         ))
     return res
 
@@ -158,7 +160,8 @@ async def create_employee(
         designation=emp_in.designation,
         pin=pin,
         status="Active",
-        lastCertified=None
+        lastCertified=None,
+        face_embedding_stored=False
     )
 
 class PinUpdate(BaseModel):
@@ -219,6 +222,57 @@ async def verify_admin(
     if not verify_password(payload.password, current_user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect password")
     return {"status": "success"}
+
+
+class FaceEmbeddingUpdate(BaseModel):
+    embedding: list  # Float array from face-api.js FaceRecognitionNet
+
+
+@router.put("/{employee_code}/face-embedding")
+async def store_face_embedding(
+    employee_code: str,
+    payload: FaceEmbeddingUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Store or replace the face embedding for an employee.
+    The embedding is a 128-d float vector from face-api.js FaceRecognitionNet.
+    The raw image is never stored — only this embedding.
+    """
+    result = await db.execute(
+        select(User).where(User.employee_code == employee_code, User.company_id == current_user.company_id)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    user.face_embedding = payload.embedding
+    await db.commit()
+    return {"status": "success", "message": "Face embedding stored"}
+
+
+@router.get("/{employee_code}/face-embedding")
+async def get_face_embedding(
+    employee_code: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Retrieve the stored face embedding for identity verification.
+    Only returns the embedding vector, never any image.
+    """
+    result = await db.execute(
+        select(User).where(User.employee_code == employee_code, User.company_id == current_user.company_id)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    if user.face_embedding is None:
+        raise HTTPException(status_code=404, detail="No face embedding stored for this employee")
+
+    return {"embedding": user.face_embedding}
 
 
 @router.get("/activity")

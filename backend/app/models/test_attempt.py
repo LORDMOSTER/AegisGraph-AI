@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Float, ForeignKey, DateTime, Boolean
+from sqlalchemy import String, Float, ForeignKey, DateTime, Boolean, Integer
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -41,6 +41,15 @@ class ExamSession(Base, TimestampMixin, UUIDMixin):
 
     # Auto-escalation flag — set when anomaly count or duration crosses threshold
     lockdown_escalated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
+
+    # Integrity score from monitoring (0-100, lower = more anomalies)
+    integrity_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Warning counter (increments on each anomaly, auto-escalate at 3)
+    warning_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
+
+    # Anomaly clip metadata (list of {type, timestamp, session_ms, duration_s})
+    anomaly_clips: Mapped[list] = mapped_column(JSONB, default=list, nullable=False, server_default="[]")
 
     assessment: Mapped["Assessment"] = relationship(back_populates="exam_sessions")
     employee: Mapped["User"] = relationship(back_populates="exam_sessions")

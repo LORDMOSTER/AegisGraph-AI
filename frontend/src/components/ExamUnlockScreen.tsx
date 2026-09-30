@@ -16,24 +16,23 @@ interface Props {
 }
 
 export function ExamUnlockScreen({ examId, employeeCode, onUnlocked }: Props) {
-  const [pin, setPin] = useState("");
   const [examKey, setExamKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shake, setShake] = useState(false);
-  const pinRef = useRef<HTMLInputElement>(null);
+  const keyRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    pinRef.current?.focus();
+    keyRef.current?.focus();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pin || !examKey) return;
+    if (!examKey) return;
     setLoading(true);
     setError(null);
 
-    const ok = await unlockExam(examId, employeeCode, pin, examKey);
+    const ok = await unlockExam(examId, employeeCode, examKey);
     setLoading(false);
 
     if (ok) {
@@ -125,53 +124,10 @@ export function ExamUnlockScreen({ examId, employeeCode, onUnlocked }: Props) {
             lineHeight: 1.6,
           }}
         >
-          Enter your PIN and the Exam Key provided by your supervisor to begin.
+          Enter the Exam Key provided by your supervisor to begin.
         </p>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* PIN field */}
-          <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: 12,
-                fontWeight: 600,
-                color: "var(--muted)",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                marginBottom: 8,
-              }}
-            >
-              Your PIN
-            </label>
-            <input
-              ref={pinRef}
-              type="password"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              placeholder="Enter your PIN"
-              maxLength={12}
-              autoComplete="off"
-              style={{
-                width: "100%",
-                padding: "12px 14px",
-                background: "var(--raised)",
-                border: "1.5px solid var(--line)",
-                borderRadius: 10,
-                color: "var(--ink)",
-                fontSize: 15,
-                fontFamily: "var(--font-mono)",
-                letterSpacing: "0.1em",
-                outline: "none",
-                boxSizing: "border-box",
-                transition: "border-color 0.15s",
-              }}
-              onFocus={(e) => (e.target.style.borderColor = "var(--accent)")}
-              onBlur={(e) => (e.target.style.borderColor = "var(--line)")}
-            />
-          </div>
-
-          {/* Exam Key field */}
           <div>
             <label
               style={{
@@ -187,6 +143,7 @@ export function ExamUnlockScreen({ examId, employeeCode, onUnlocked }: Props) {
               Exam Key <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 11 }}>(from supervisor)</span>
             </label>
             <input
+              ref={keyRef}
               type="text"
               value={examKey}
               onChange={(e) => setExamKey(e.target.value.toUpperCase())}
@@ -240,7 +197,7 @@ export function ExamUnlockScreen({ examId, employeeCode, onUnlocked }: Props) {
 
           <button
             type="submit"
-            disabled={!pin || !examKey || loading}
+            disabled={!examKey || loading}
             style={{
               marginTop: 4,
               width: "100%",
@@ -257,7 +214,7 @@ export function ExamUnlockScreen({ examId, employeeCode, onUnlocked }: Props) {
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
-              opacity: (!pin || !examKey || loading) ? 0.5 : 1,
+              opacity: (!examKey || loading) ? 0.5 : 1,
               transition: "opacity 0.15s",
               boxShadow: "0 4px 14px rgba(37,99,235,0.25)",
             }}

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Employee, Department, getEmployees, getDepartments, createEmployee, updateEmployeePin, deleteEmployee, verifyAdminPassword } from "../api";
+import { Employee, Department, getEmployees, getDepartments, createEmployee, updateEmployeePin, deleteEmployee, verifyAdminPassword, storeFaceEmbedding } from "../api";
 import { AssignExamModal } from "../components/assessments/AssignExamModal";
+import { WebcamCapture } from "../components/WebcamCapture";
 
 export function Employees() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -10,7 +11,7 @@ export function Employees() {
   
   // Modal State
   const [showModal, setShowModal] = useState(false);
-  const [step, setStep] = useState<"form" | "credential">("form");
+  const [step, setStep] = useState<"form" | "capture" | "credential">("form");
   const [saving, setSaving] = useState(false);
   
   // Form State
@@ -18,8 +19,9 @@ export function Employees() {
   const [deptCode, setDeptCode] = useState("");
   const [designation, setDesignation] = useState("");
   
-  // Credential State (after save)
+  // Credential & Capture State
   const [newEmp, setNewEmp] = useState<Employee | null>(null);
+  const [captureTarget, setCaptureTarget] = useState<Employee | null>(null);
 
   // Custom Dialog States
   const [dialog, setDialog] = useState<{
@@ -57,7 +59,41 @@ export function Employees() {
     setNewEmp(emp);
     await loadData();
     setSaving(false);
-    setStep("credential");
+    setStep("capture"); // Go to capture step instead of credential
+  };
+
+  const handleCaptureComplete = async (embedding: number[]) => {
+    try {
+      const target = newEmp || captureTarget;
+      if (target) {
+        await storeFaceEmbedding(target.id, embedding);
+        await loadData();
+      }
+      if (newEmp) {
+        setStep("credential");
+      } else {
+        setCaptureTarget(null);
+      }
+    } catch (err: any) {
+      alert(`Error saving embedding: ${err.message}`);
+      if (newEmp) {
+        setStep("credential"); // move forward anyway to show credentials
+      } else {
+        setCaptureTarget(null);
+      }
+    }
+  };
+
+  const handleCaptureSkip = () => {
+    if (newEmp) {
+      setStep("credential");
+    } else {
+      setCaptureTarget(null);
+    }
+  };
+
+  const openRecapture = (emp: Employee) => {
+    setCaptureTarget(emp);
   };
 
   const handleCloseModal = () => {
@@ -67,6 +103,7 @@ export function Employees() {
       setName("");
       setDesignation("");
       setNewEmp(null);
+      setCaptureTarget(null);
     }, 300);
   };
 
@@ -160,6 +197,7 @@ export function Employees() {
                 <th>Name</th>
                 <th>Job Title</th>
                 <th>Department</th>
+                <th>Photo</th>
                 <th>Status</th>
                 <th>Last Certified</th>
                 <th style={{ textAlign: "right" }}>Actions</th>
@@ -183,7 +221,17 @@ export function Employees() {
                     <td style={{ fontWeight: 500 }}>{emp.name}</td>
                     <td style={{ color: "var(--text-secondary)" }}>{emp.designation}</td>
                     <td>{emp.departmentName}</td>
-
+                    <td>
+                      {emp.face_embedding_stored ? (
+                        <span style={{ fontSize: 11, color: "var(--emerald)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <iconify-icon icon="lucide:check-circle" /> Enrolled
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 11, color: "var(--amber)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <iconify-icon icon="lucide:alert-circle" /> Missing
+                        </span>
+                      )}
+                    </td>
                     <td>
                       <span className={`badge ${emp.status === 'Active' ? 'badge-emerald' : 'badge-crimson'}`}>
                         {emp.status}
@@ -194,6 +242,7 @@ export function Employees() {
                     </td>
                     <td style={{ textAlign: "right" }}>
                       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                        <button className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: 11 }} onClick={() => openRecapture(emp)}>Re-capture Photo</button>
                         <button className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: 11 }} onClick={() => openChangePin(emp)}>Change PIN</button>
                         <button className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: 11, color: "var(--crimson)" }} onClick={() => openDelete(emp)}>Delete</button>
                       </div>
@@ -252,6 +301,27 @@ export function Employees() {
                     </button>
                   </div>
                 </form>
+              </motion.div>
+            ) : step === "capture" ? (
+              <motion.div
+                key="capture"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="card glass-panel"
+                style={{ width: "100%", maxWidth: 640, padding: 24, overflow: "hidden" }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>Enroll Face Photo</h2>
+                  <button className="btn btn-ghost" onClick={handleCaptureSkip} style={{ padding: "4px 12px", fontSize: 13 }}>
+                    Skip for now
+                  </button>
+                </div>
+                <WebcamCapture 
+                  onEmbeddingCaptured={handleCaptureComplete} 
+                  onCancel={handleCaptureSkip}
+                  employeeName={newEmp?.name || "Employee"} 
+                />
               </motion.div>
             ) : (
               <motion.div
@@ -394,6 +464,36 @@ export function Employees() {
         onClose={() => setShowAssignExamModal(false)}
         employees={employees}
       />
+
+      {/* Standalone Recapture Modal */}
+      <AnimatePresence>
+        {!showModal && captureTarget && (
+          <div className="qr-modal-overlay">
+            <motion.div
+              key="recapture"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="card glass-panel"
+              style={{ width: "100%", maxWidth: 640, padding: 24, overflow: "hidden" }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
+                  Re-capture Photo for {captureTarget.name}
+                </h2>
+                <button className="btn btn-ghost" onClick={handleCaptureSkip} style={{ padding: "4px 12px", fontSize: 13 }}>
+                  Cancel
+                </button>
+              </div>
+              <WebcamCapture 
+                onEmbeddingCaptured={handleCaptureComplete}
+                onCancel={handleCaptureSkip}
+                employeeName={captureTarget.name}
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Hide actions in print mode */}
       <style>{`

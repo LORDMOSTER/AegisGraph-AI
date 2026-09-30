@@ -2,22 +2,27 @@
  * ExamSession.tsx  — Free-navigation + Lockdown Edition
  *
  * Flow:
- *   UNLOCK → FULLSCREEN REQUEST → SCREENSHARE REQUEST → ACTIVE EXAM → RESULT
+ *   UNLOCK → SCREENSHARE → IDENTITY CHECK → FULLSCREEN → ACTIVE EXAM → RESULT
  *
  * Active Exam features:
  *   • Free navigation via question navigator sidebar (Req #1)
  *   • Color-coded question state: unanswered / answered / marked-for-review (Req #1)
  *   • Immediate answer persistence on every selection/keystroke (Req #2)
- *   • FILL_IN_BLANK text input styled consistently with MCQ buttons (Req #3)
+ *   • FILL_IN_BLANK text input (Req #3)
+ *   • MULTI_SELECT checkbox UI with count display (Section 2)
  *   • Persistent "Submit Exam" bar, always visible (Req #4)
- *   • Confirmation modal counts unanswered questions (Req #4)
- *   • On submit: lockdown teardown + reveal_score logic (Req #5)
- *   • Lockdown monitoring never interrupted by navigation (Req #6)
+ *   • Pre-submit modal with jump-to links for unanswered/review (Section 4)
+ *   • Double-confirm if unanswered count > 0 (Section 4)
+ *   • 3-warning escalation counter shown to worker (Section 6)
+ *   • Anomaly clip recording via rolling buffer (Section 6)
+ *   • Identity verification with face-api.js (Section 5)
  */
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getExam, saveAnswer, submitExam, logLockdownAnomaly } from "../api";
+import { getExam, saveAnswer, submitExam, logLockdownAnomaly, getFaceEmbedding } from "../api";
 import { ExamUnlockScreen } from "../components/ExamUnlockScreen";
+import { FaceVerification } from "../components/FaceVerification";
+import { useAnomalyClipRecorder } from "../hooks/useAnomalyClipRecorder";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,8 +31,9 @@ export interface ExamQuestion {
   rule_id: string;
   question_text: string;
   options: string[];
-  question_type: "MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK";
+  question_type: "MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MULTI_SELECT";
   difficulty?: string;
+  correct_option_indices?: number[]; // for MULTI_SELECT (pre-loaded to validate answer completeness)
 }
 
 interface SubmitResult {
@@ -44,14 +50,14 @@ interface Props {
   onExit: () => void;
 }
 
-type Phase = "unlock" | "fullscreen" | "screenshare" | "active" | "result" | "escalated";
+type Phase = "unlock" | "screenshare" | "identity" | "fullscreen" | "active" | "result" | "escalated";
 
 /** Per-question navigator state */
 type QState = "unanswered" | "answered" | "review";
 
-const OPTION_LABELS = ["A", "B", "C", "D", "E"];
-const MAX_ANOMALY_COUNT = 3;
-const MAX_ANOMALY_DURATION_S = 30;
+const OPTION_LABELS = ["A", "B", "C", "D", "E", "F"];
+const MAX_ANOMALY_COUNT = 3; // auto-escalate after this many warnings
+const MAX_ANOMALY_DURATION_S = 60;
 
 // ─── Question Navigator ───────────────────────────────────────────────────────
 
@@ -87,7 +93,7 @@ function QuestionNavigator({
   return (
     <div
       style={{
-        width: 220,
+        width: 120,
         flexShrink: 0,
         background: "var(--surface)",
         borderRight: "1px solid var(--line)",
@@ -117,13 +123,14 @@ function QuestionNavigator({
         </p>
       </div>
 
-      {/* Grid of question buttons */}
+      {/* Flex grid of question buttons */}
       <div
         style={{
           padding: "14px 12px",
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 6,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+          alignContent: "flex-start",
           flex: 1,
         }}
       >
@@ -143,13 +150,13 @@ function QuestionNavigator({
                   : `Q${i + 1} — Unanswered`
               }
               style={{
-                width: "100%",
-                aspectRatio: "1",
+                width: 40,
+                height: 40,
                 borderRadius: 7,
-                border: isActive
+                border: isActive && state !== "review"
                   ? "2px solid var(--accent)"
-                  : `1.5px solid ${col.border}`,
-                background: isActive ? "var(--accent)" : col.bg,
+                  : state === "review" ? "2px solid #f59e0b" : `1.5px solid ${col.border}`,
+                background: isActive ? (state === "review" ? "#f59e0b" : "var(--accent)") : col.bg,
                 color: isActive ? "#fff" : col.text,
                 fontSize: 12,
                 fontWeight: 700,
@@ -160,6 +167,7 @@ function QuestionNavigator({
                 alignItems: "center",
                 justifyContent: "center",
                 boxShadow: isActive ? "0 2px 8px rgba(37,99,235,0.3)" : "none",
+                flexShrink: 0,
               }}
             >
               {i + 1}
@@ -223,16 +231,23 @@ function SubmitModal({
   reviewCount,
   totalCount,
   submitting,
+  unansweredIndexes,
+  reviewIndexes,
   onConfirm,
   onCancel,
+  onJump,
 }: {
   unansweredCount: number;
   reviewCount: number;
   totalCount: number;
   submitting: boolean;
+  unansweredIndexes: number[];
+  reviewIndexes: number[];
   onConfirm: () => void;
   onCancel: () => void;
+  onJump: (idx: number) => void;
 }) {
+  const [doubleConfirm, setDoubleConfirm] = useState(false);
   return (
     <div
       style={{
@@ -374,13 +389,43 @@ function SubmitModal({
               marginBottom: 20,
               display: "flex",
               gap: 8,
-              alignItems: "flex-start",
+              flexDirection: "column",
               lineHeight: 1.6,
             }}
           >
-            <iconify-icon icon="lucide:alert-circle" style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }} />
-            {unansweredCount} question{unansweredCount !== 1 ? "s" : ""} left unanswered.
-            Unanswered questions will be marked as incorrect.
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <iconify-icon icon="lucide:alert-circle" style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }} />
+              <div>
+                <strong>{unansweredCount} question{unansweredCount !== 1 ? "s" : ""} left unanswered.</strong>
+                <br /> Unanswered questions will be marked as incorrect.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Jump Links (Section 4) */}
+        {(unansweredIndexes.length > 0 || reviewIndexes.length > 0) && (
+          <div style={{ marginBottom: 24 }}>
+            {unansweredIndexes.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Unanswered</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {unansweredIndexes.map(idx => (
+                    <button key={idx} onClick={() => onJump(idx)} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6, color: "#dc2626", padding: "4px 8px", fontSize: 12, cursor: "pointer", fontFamily: "var(--font-mono)" }}>Q{idx + 1}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {reviewIndexes.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Marked for Review</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {reviewIndexes.map(idx => (
+                    <button key={idx} onClick={() => onJump(idx)} style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 6, color: "#f59e0b", padding: "4px 8px", fontSize: 12, cursor: "pointer", fontFamily: "var(--font-mono)" }}>Q{idx + 1}</button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -404,12 +449,18 @@ function SubmitModal({
             Back to Exam
           </button>
           <button
-            onClick={onConfirm}
+            onClick={() => {
+              if (unansweredCount > 0 && !doubleConfirm) {
+                setDoubleConfirm(true);
+              } else {
+                onConfirm();
+              }
+            }}
             disabled={submitting}
             style={{
               flex: 2,
               height: 44,
-              background: "var(--accent)",
+              background: (unansweredCount > 0 && !doubleConfirm) ? "#dc2626" : "var(--accent)",
               border: "none",
               borderRadius: 9,
               fontSize: 13,
@@ -422,7 +473,8 @@ function SubmitModal({
               alignItems: "center",
               justifyContent: "center",
               gap: 7,
-              boxShadow: "0 4px 14px rgba(37,99,235,0.25)",
+              boxShadow: (unansweredCount > 0 && !doubleConfirm) ? "0 4px 14px rgba(220,38,38,0.25)" : "0 4px 14px rgba(37,99,235,0.25)",
+              transition: "all 0.2s",
             }}
           >
             {submitting ? (
@@ -432,6 +484,11 @@ function SubmitModal({
                   style={{ width: 14, height: 14, borderTopColor: "#fff" }}
                 />
                 Submitting...
+              </>
+            ) : unansweredCount > 0 && !doubleConfirm ? (
+              <>
+                <iconify-icon icon="lucide:alert-triangle" style={{ fontSize: 16 }} />
+                Submit with Unanswered
               </>
             ) : (
               <>
@@ -455,13 +512,12 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
   // ── Exam data ─────────────────────────────────────────────────────────────
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [assessmentName, setAssessmentName] = useState("");
-  const [revealScore, setRevealScore] = useState(false);
-  const [passMark, setPassMark] = useState(80);
   const [loading, setLoading] = useState(true);
 
   // ── Navigation & answer state ─────────────────────────────────────────────
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string>>({}); // MCQ / FITB
+  const [multiAnswers, setMultiAnswers] = useState<Record<string, number[]>>({}); // MULTI_SELECT indices
   const [qStates, setQStates] = useState<Record<string, QState>>({});
 
   // ── Submit state ─────────────────────────────────────────────────────────
@@ -476,10 +532,21 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
   const screenshareRef = useRef<MediaStream | null>(null);
   const cameraRef = useRef<MediaStream | null>(null);
 
-  // Save in-flight guard: queue saves so rapid typing doesn't race
+  // Identity verification state (Section 5)
+  const [enrolledEmbedding, setEnrolledEmbedding] = useState<number[] | null | undefined>(undefined); // undefined = loading
+  const examStartTimeRef = useRef<number>(Date.now());
+
+  // Save in-flight guard
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Load questions after unlock+fullscreen granted ────────────────────────
+  // Anomaly clip recorder (Section 6)
+  const { triggerClipSave } = useAnomalyClipRecorder({
+    examSessionId: examId,
+    cameraStream: cameraRef.current,
+    examStartTime: examStartTimeRef.current,
+  });
+
+  // ── Load questions after fullscreen granted ──────────────────────────────────
   useEffect(() => {
     if (phase !== "fullscreen") return;
     async function load() {
@@ -491,25 +558,32 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
         options: q.options ?? [],
         question_type: q.question_type ?? "MCQ",
         difficulty: q.difficulty,
+        correct_option_indices: q.correct_option_indices ?? null,
       }));
       setQuestions(qs);
       setAssessmentName(data.assessment_name ?? "Safety Assessment");
-      setRevealScore(!!data.reveal_score_to_user);
-      setPassMark(data.pass_mark_pct ?? 80);
+      examStartTimeRef.current = Date.now();
 
       // Restore any previously saved answers (crash-recovery)
       if (data.responses && typeof data.responses === "object") {
         const restored: Record<string, string> = {};
+        const multiRestored: Record<string, number[]> = {};
         const states: Record<string, QState> = {};
         for (const q of qs) {
           const raw = data.responses[q.id];
           if (raw !== undefined && raw !== null) {
-            const val = typeof raw === "object" ? (raw.text_answer ?? String(raw.selected_option_index ?? "")) : String(raw);
-            restored[q.id] = val;
-            states[q.id] = "answered";
+            if (q.question_type === "MULTI_SELECT" && typeof raw === "object" && Array.isArray(raw.selected_option_indices)) {
+              multiRestored[q.id] = raw.selected_option_indices;
+              if (raw.selected_option_indices.length > 0) states[q.id] = "answered";
+            } else {
+              const val = typeof raw === "object" ? (raw.text_answer ?? String(raw.selected_option_index ?? "")) : String(raw);
+              restored[q.id] = val;
+              states[q.id] = "answered";
+            }
           }
         }
         setAnswers(restored);
+        setMultiAnswers(multiRestored);
         setQStates(states);
       }
 
@@ -518,22 +592,42 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
     load();
   }, [examId, phase]);
 
-  // ── Lockdown anomaly logger ────────────────────────────────────────────────
-  // Uses functional state update so it never captures stale closures
+  // ── Load face embedding when entering identity phase ───────────────────────
+  useEffect(() => {
+    if (phase !== "identity") return;
+    getFaceEmbedding(employeeCode)
+      .then((data) => setEnrolledEmbedding(data.embedding))
+      .catch(() => setEnrolledEmbedding(null)); // null = skip check
+  }, [phase, employeeCode]);
+
+  // ── Lockdown anomaly logger — Section 6: 3-warning system ────────────────
   const logAnomaly = useCallback(
     async (type: string, durationS: number) => {
-      setAnomalyCount((prev) => prev + 1);
       setCumulativeDuration((prev) => prev + durationS);
 
-      const labels: Record<string, string> = {
-        fullscreen_exit: "⚠️ Fullscreen exited — please press F11 to return.",
-        focus_blur: "⚠️ Window focus lost — please return to this window.",
-        tab_hidden: "⚠️ Tab was hidden — please keep this tab active.",
-        screenshare_stopped: "⚠️ Screen monitoring stopped — please re-share your screen.",
-        screenshare_changed: "⚠️ Shared screen changed — please share the correct screen.",
-      };
-      setAnomalyBanner(labels[type] ?? "⚠️ Lockdown anomaly detected.");
-      setTimeout(() => setAnomalyBanner(null), 6000);
+      // Increment visible warning counter (Section 6)
+      setAnomalyCount((prev) => {
+        const next = prev + 1;
+        const labels: Record<string, string> = {
+          fullscreen_exit: "Fullscreen exited — please press F11 to return.",
+          focus_blur: "Window focus lost — please return to this window.",
+          tab_hidden: "Tab was hidden — please keep this tab active.",
+          screenshare_stopped: "Screen monitoring stopped — please re-share your screen.",
+          screenshare_changed: "Shared screen changed — please share the correct screen.",
+        };
+        const baseMsg = labels[type] ?? "Monitoring anomaly detected.";
+        setAnomalyBanner(`⚠️ Warning ${next} of ${MAX_ANOMALY_COUNT} — ${baseMsg}`);
+        setTimeout(() => setAnomalyBanner(null), 7000);
+
+        // Auto-escalate on 3rd warning (Section 6)
+        if (next >= MAX_ANOMALY_COUNT) {
+          setTimeout(() => setPhase("escalated"), 2000);
+        }
+        return next;
+      });
+
+      // Trigger anomaly clip save (Section 6)
+      triggerClipSave(type).catch(() => {});
 
       try {
         const res = await logLockdownAnomaly(examId, type, durationS);
@@ -542,7 +636,7 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
         // Fire-and-forget; never interrupt exam on network blip
       }
     },
-    [examId]
+    [examId, triggerClipSave]
   );
 
   // Check thresholds as separate effect responding to count/duration changes
@@ -554,6 +648,7 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
       setPhase("escalated");
     }
   }, [anomalyCount, cumulativeDuration, phase]);
+
 
   // ── Fullscreen listener (Req #5 — active only, survives navigation) ────────
   useEffect(() => {
@@ -627,7 +722,7 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
       if (el.requestFullscreen) await el.requestFullscreen();
       else if ((el as any).webkitRequestFullscreen) await (el as any).webkitRequestFullscreen();
     } catch {}
-    setPhase("screenshare");
+    setPhase("active");
   }, []);
 
   // ── Screen-capture request ────────────────────────────────────────────────
@@ -650,8 +745,23 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
           }
         }, 2000);
       }
-    } catch {}
-    setPhase("active");
+    } catch {
+      alert("Screen sharing is required for this exam.");
+      return;
+    }
+
+    try {
+      const camStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720 },
+        audio: false,
+      });
+      cameraRef.current = camStream;
+    } catch {
+      alert("Camera access is required for monitoring.");
+      return;
+    }
+
+    setPhase("identity");
   }, [logAnomaly]);
 
   // ── Answer selection (MCQ / TRUE_FALSE) ───────────────────────────────────
@@ -685,14 +795,36 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
     [examId]
   );
 
-  // ── Toggle Mark for Review ────────────────────────────────────────────────
+  // ── Multi-select toggle (Section 2) ─────────────────────────────────────
+  const handleMultiSelect = useCallback(
+    (qId: string, optionIndex: number) => {
+      setMultiAnswers((prev) => {
+        const current = prev[qId] ?? [];
+        const updated = current.includes(optionIndex)
+          ? current.filter((i) => i !== optionIndex)  // deselect
+          : [...current, optionIndex];                  // select
+        // Update navigator state
+        setQStates((ps) => ({
+          ...ps,
+          [qId]: updated.length > 0 ? (ps[qId] === "review" ? "review" : "answered") : "unanswered",
+        }));
+        // Immediate persistence for multi-select
+        saveAnswer(examId, qId, -1, undefined, updated).catch(() => {});
+        return { ...prev, [qId]: updated };
+      });
+    },
+    [examId]
+  );
+
   const toggleReview = useCallback((qId: string) => {
     setQStates((prev) => {
       const cur = prev[qId] ?? "unanswered";
-      if (cur === "review") return { ...prev, [qId]: answers[qId] ? "answered" : "unanswered" };
+      const isMulti = currentQ?.question_type === "MULTI_SELECT";
+      const hasAnswer = isMulti ? (multiAnswers[qId]?.length ?? 0) > 0 : !!answers[qId]?.trim();
+      if (cur === "review") return { ...prev, [qId]: hasAnswer ? "answered" : "unanswered" };
       return { ...prev, [qId]: "review" };
     });
-  }, [answers]);
+  }, [answers, multiAnswers, currentQ]);
 
   // ── Submit logic ──────────────────────────────────────────────────────────
   const handleConfirmSubmit = async () => {
@@ -712,11 +844,25 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
     }
   };
 
-  // ── Derived values ────────────────────────────────────────────────────────
-  const unansweredCount = questions.filter((q) => !answers[q.id]?.trim()).length;
-  const reviewCount = Object.values(qStates).filter((s) => s === "review").length;
+  // ── Derived values ───────────────────────────────────────────────────────────
+  const unansweredIndexes: number[] = [];
+  const reviewIndexes: number[] = [];
+  let answeredCount = 0;
+
+  questions.forEach((q, idx) => {
+    const isMulti = q.question_type === "MULTI_SELECT";
+    const hasAnswer = isMulti ? (multiAnswers[q.id]?.length ?? 0) > 0 : !!answers[q.id]?.trim();
+    
+    if (hasAnswer) answeredCount++;
+    else unansweredIndexes.push(idx);
+
+    if (qStates[q.id] === "review") reviewIndexes.push(idx);
+  });
+
+  const unansweredCount = unansweredIndexes.length;
+  const reviewCount = reviewIndexes.length;
   const currentQ = questions[currentIndex];
-  const progress = questions.length > 0 ? Object.keys(answers).filter((k) => answers[k]?.trim()).length / questions.length : 0;
+  const progress = questions.length > 0 ? answeredCount / questions.length : 0;
 
   // ════════════════════════════════════════════════════════════════════════════
   // PHASE: UNLOCK
@@ -726,7 +872,7 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
       <ExamUnlockScreen
         examId={examId}
         employeeCode={employeeCode}
-        onUnlocked={() => setPhase("fullscreen")}
+        onUnlocked={() => setPhase("screenshare")}
       />
     );
   }
@@ -809,7 +955,7 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
             </p>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => setPhase("active")} style={secondaryBtnStyle}>Skip</button>
+            <button onClick={() => setPhase("identity")} style={secondaryBtnStyle}>Skip</button>
             <button onClick={requestScreenshare} style={primaryBtnStyle}>
               <iconify-icon icon="lucide:monitor-check" style={{ fontSize: 16 }} />
               Allow Monitoring & Begin
@@ -817,6 +963,30 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
           </div>
         </div>
       </div>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PHASE: IDENTITY CHECK (Section 5)
+  // ══════════════════════════════════════════════════════════════════════════
+  if (phase === "identity") {
+    if (enrolledEmbedding === undefined) {
+      // Still loading embedding from server
+      return (
+        <div style={{ position: "fixed", inset: 0, background: "var(--base)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
+          <div className="spinner" style={{ width: 28, height: 28, borderTopColor: "var(--accent)" }} />
+          <p style={{ color: "var(--muted)", fontSize: 14 }}>Preparing identity check...</p>
+        </div>
+      );
+    }
+    return (
+      <FaceVerification
+        employeeCode={employeeCode}
+        enrolledEmbedding={enrolledEmbedding}
+        onVerified={() => setPhase("fullscreen")}
+        onSkip={() => setPhase("fullscreen")}
+        onSupervisorOverride={onExit}
+      />
     );
   }
 
@@ -1104,7 +1274,7 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
                 </h1>
 
                 {/* ── MCQ / TRUE_FALSE options ─────────────────────────────── */}
-                {currentQ.question_type !== "FILL_IN_BLANK" ? (
+                {(currentQ.question_type === "MCQ" || currentQ.question_type === "TRUE_FALSE") && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {currentQ.options.map((opt, i) => {
                       const isSelected = answers[currentQ.id] === opt;
@@ -1161,8 +1331,76 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
                       );
                     })}
                   </div>
-                ) : (
-                  /* ── FILL_IN_BLANK (Req #3) ─────────────────────────────── */
+                )}
+
+                {/* ── MULTI_SELECT checkboxes (Section 2) ─────────────────── */}
+                {currentQ.question_type === "MULTI_SELECT" && (
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                      <span style={{ background: "rgba(124,58,237,0.08)", color: "#7c3aed", borderRadius: 999, padding: "4px 12px", fontSize: 11, fontWeight: 600 }}>
+                        Select all that apply
+                      </span>
+                      {(multiAnswers[currentQ.id]?.length ?? 0) > 0 && (
+                        <span style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-mono)" }}>
+                          {multiAnswers[currentQ.id]?.length} selected
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {currentQ.options.map((opt, i) => {
+                        const sel = multiAnswers[currentQ.id] ?? [];
+                        const isChecked = sel.includes(i);
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => handleMultiSelect(currentQ.id, i)}
+                            style={{
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: 14,
+                              padding: "14px 18px",
+                              textAlign: "left",
+                              background: isChecked ? "rgba(124,58,237,0.05)" : "var(--surface)",
+                              border: isChecked ? "2px solid #7c3aed" : "1px solid var(--line)",
+                              borderRadius: 10,
+                              color: isChecked ? "var(--ink)" : "var(--muted)",
+                              fontSize: 14,
+                              cursor: "pointer",
+                              minHeight: 56,
+                              transition: "all 0.12s",
+                              fontFamily: "var(--font-sans)",
+                              width: "100%",
+                            }}
+                          >
+                            {/* Checkbox visual */}
+                            <span
+                              style={{
+                                display: "grid",
+                                placeItems: "center",
+                                width: 22,
+                                height: 22,
+                                borderRadius: 5,
+                                background: isChecked ? "#7c3aed" : "var(--raised)",
+                                border: isChecked ? "none" : "1.5px solid var(--line)",
+                                flexShrink: 0,
+                                marginTop: 2,
+                                transition: "all 0.12s",
+                              }}
+                            >
+                              {isChecked && (
+                                <iconify-icon icon="lucide:check" style={{ fontSize: 13, color: "#fff" }} />
+                              )}
+                            </span>
+                            <span style={{ lineHeight: 1.55, flex: 1 }}>{opt}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── FILL_IN_BLANK (Req #3) ───────────────────────────────── */}
+                {currentQ.question_type === "FILL_IN_BLANK" && (
                   <div>
                     <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10, fontStyle: "italic" }}>
                       Type your answer below. Whether your answer is correct will be revealed only after submission.
@@ -1199,6 +1437,7 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
                     )}
                   </div>
                 )}
+
 
                 {/* ── Prev / Next navigation ───────────────────────────────── */}
                 <div
@@ -1337,11 +1576,37 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
             reviewCount={reviewCount}
             totalCount={questions.length}
             submitting={submitting}
+            unansweredIndexes={unansweredIndexes}
+            reviewIndexes={reviewIndexes}
             onConfirm={handleConfirmSubmit}
             onCancel={() => setShowSubmitModal(false)}
+            onJump={(idx) => {
+              setCurrentIndex(idx);
+              setShowSubmitModal(false);
+            }}
           />
         )}
       </AnimatePresence>
+
+      {/* Floating Webcam PiP */}
+      {cameraRef.current && (
+        <div style={{
+          position: "fixed", bottom: 24, left: 24, zIndex: 9999,
+          width: 200, height: 150, borderRadius: 12, overflow: "hidden",
+          border: "2px solid rgba(255,255,255,0.1)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.4)"
+        }}>
+          <video 
+            autoPlay playsInline muted 
+            ref={el => { if (el) el.srcObject = cameraRef.current; }}
+            style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }}
+          />
+          <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.6)", padding: "2px 6px", borderRadius: 4, fontSize: 10, color: "#fff", display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "pulse 2s infinite" }} />
+            Recording
+          </div>
+        </div>
+      )}
     </div>
   );
 }

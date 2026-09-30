@@ -15,6 +15,7 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
   const [companyName, setCompanyName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
+  const [retentionDays, setRetentionDays] = useState(localStorage.getItem("aegis_clip_retention_days") || "30");
 
   useEffect(() => {
     const fetchCompanyInfo = async () => {
@@ -59,7 +60,8 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
       });
 
       if (res.ok) {
-        alert("Profile updated successfully!");
+        localStorage.setItem("aegis_clip_retention_days", retentionDays);
+        alert("Profile and settings updated successfully!");
         setAdminPassword(""); // Clear the password field after successful update
       } else {
         const errorData = await res.json();
@@ -203,6 +205,27 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
               className="input-field" 
               style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)" }}
             />
+          </div>
+        </div>
+
+        {/* Data & Storage Section */}
+        <div className="card" style={{ padding: 32, display: "flex", flexDirection: "column", gap: 24 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>Data & Storage</h2>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>Local Video Clip Retention (Days)</label>
+            <input 
+              type="number" 
+              min="1"
+              max="365"
+              value={retentionDays}
+              onChange={(e) => setRetentionDays(e.target.value)}
+              className="input-field" 
+              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)" }}
+            />
+            <p style={{ fontSize: 12, color: "var(--muted)" }}>
+              Anomaly video clips are stored locally in the browser (IndexedDB). They will be automatically deleted after this many days.
+            </p>
           </div>
         </div>
 

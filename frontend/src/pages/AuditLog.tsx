@@ -9,29 +9,34 @@
  */
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getAuditTimeline, AuditTimeline, AuditTimelineEvent } from "../api";
+import { getAuditTimeline, AuditTimeline, AuditTimelineEvent, getPendingAttempts, issueCertificate } from "../api";
+import { getClipsForSession, AnomalyClip } from "../hooks/useAnomalyClipRecorder";
 
 // ─── Colour palette (Void-Industrial) ───────────────────────────────────────
 const C = {
-  void: "#07070e",
-  surface: "#0c0c14",
-  glass: "rgba(255,255,255,0.03)",
-  border: "rgba(255,255,255,0.1)",
-  shadow: "inset 2px 2px 5px rgba(0,0,0,.8),inset -2px -2px 5px rgba(255,255,255,.04)",
-  text: "#f3f3f3",
-  muted: "#888899",
-  violet: "#8a2be2",
-  cyan: "#00ffcc",
-  amber: "#ffb000",
-  red: "#ff3366",
+  void: "var(--base)",
+  surface: "var(--surface)",
+  glass: "var(--surface-raised)",
+  border: "var(--border-subtle)",
+  shadow: "var(--shadow-card)",
+  text: "var(--ink)",
+  muted: "var(--muted)",
+  violet: "var(--accent)",
+  cyan: "var(--emerald)",
+  amber: "var(--amber)",
+  red: "var(--red)",
+  cyanDim: "var(--emerald-dim)",
+  amberDim: "var(--amber-dim)",
+  redDim: "var(--red-dim)",
+  violetDim: "var(--accent-dim)",
 };
-const MONO = "'JetBrains Mono','Fira Code',monospace";
-const SANS = "'Inter','IBM Plex Sans',sans-serif";
+const MONO = "var(--font-mono)";
+const SANS = "var(--font-sans)";
 
 // ─── Source badge config ──────────────────────────────────────────────────────
-const SOURCE_META: Record<string, { label: string; color: string; icon: string }> = {
-  mediapipe: { label: "MediaPipe", color: C.cyan, icon: "lucide:eye" },
-  lockdown: { label: "Lockdown", color: C.amber, icon: "lucide:shield-alert" },
+const SOURCE_META: Record<string, { label: string; color: string; dim: string; icon: string }> = {
+  mediapipe: { label: "MediaPipe", color: C.cyan, dim: C.cyanDim, icon: "lucide:eye" },
+  lockdown: { label: "Lockdown", color: C.amber, dim: C.amberDim, icon: "lucide:shield-alert" },
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -45,35 +50,9 @@ const TYPE_LABELS: Record<string, string> = {
   unlock_failure: "Unlock Failure",
 };
 
-// ─── Mock attempt list (replace with real /audit/attempts when ready) ─────────
-const MOCK_ATTEMPTS = [
-  {
-    id: "att-101",
-    employeeName: "John Doe",
-    jobTitle: "CNC Machine Operator",
-    assessmentName: "Safety Protocol Beta",
-    sciScore: 92.5,
-    integrityScore: 98.2,
-    lockdownEscalated: false,
-    completedAt: "2026-09-25T14:30:00Z",
-    examSessionId: null as string | null,
-  },
-  {
-    id: "att-102",
-    employeeName: "Jane Smith",
-    jobTitle: "Forklift Operator",
-    assessmentName: "Vehicle Operations Q3",
-    sciScore: 88.0,
-    integrityScore: 62.4,
-    lockdownEscalated: true,
-    completedAt: "2026-09-24T09:15:00Z",
-    examSessionId: null as string | null,
-  },
-];
-
 // ─── Timeline event row ───────────────────────────────────────────────────────
-function TimelineEvent({ ev, index }: { ev: AuditTimelineEvent; index: number }) {
-  const meta = SOURCE_META[ev.source] ?? { label: ev.source, color: C.muted, icon: "lucide:activity" };
+function TimelineEvent({ ev, index, clip, onPlayClip }: { ev: AuditTimelineEvent; index: number; clip?: AnomalyClip; onPlayClip?: (clip: AnomalyClip) => void }) {
+  const meta = SOURCE_META[ev.source] ?? { label: ev.source, color: C.muted, dim: "transparent", icon: "lucide:activity" };
   const label = TYPE_LABELS[ev.type] ?? ev.type;
   const ts = ev.ts ? new Date(ev.ts).toLocaleTimeString() : "—";
   const dur = ev.duration_s != null ? `${ev.duration_s.toFixed(1)}s` : null;
@@ -98,8 +77,8 @@ function TimelineEvent({ ev, index }: { ev: AuditTimelineEvent; index: number })
           width: 28,
           height: 28,
           borderRadius: 6,
-          background: `${meta.color}18`,
-          border: `1px solid ${meta.color}55`,
+          background: meta.dim,
+          border: `1px solid ${meta.color}`,
           display: "grid",
           placeItems: "center",
           flexShrink: 0,
@@ -117,7 +96,7 @@ function TimelineEvent({ ev, index }: { ev: AuditTimelineEvent; index: number })
               fontWeight: 600,
               padding: "2px 8px",
               borderRadius: 999,
-              background: `${meta.color}18`,
+              background: meta.dim,
               color: meta.color,
               fontFamily: MONO,
               letterSpacing: "0.04em",
@@ -132,9 +111,30 @@ function TimelineEvent({ ev, index }: { ev: AuditTimelineEvent; index: number })
             </span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 16, fontSize: 11, color: C.muted, fontFamily: MONO }}>
+        <div style={{ display: "flex", gap: 16, fontSize: 11, color: C.muted, fontFamily: MONO, alignItems: "center" }}>
           <span>⏱ {ts}</span>
           {dur && <span>⏳ {dur} outside lockdown</span>}
+          {clip && onPlayClip && (
+            <button
+              onClick={() => onPlayClip(clip)}
+              style={{
+                marginLeft: "auto",
+                background: "rgba(255,255,255,0.1)",
+                border: "none",
+                borderRadius: 4,
+                padding: "2px 8px",
+                color: C.cyan,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 10,
+                textTransform: "uppercase",
+              }}
+            >
+              <iconify-icon icon="lucide:play" /> Play Clip
+            </button>
+          )}
         </div>
       </div>
     </motion.div>
@@ -147,53 +147,61 @@ function AttemptDetail({
   onIssueCertificate,
   processing,
 }: {
-  attempt: (typeof MOCK_ATTEMPTS)[0];
+  attempt: any;
   onIssueCertificate: (id: string) => void;
   processing: boolean;
 }) {
   const [timeline, setTimeline] = useState<AuditTimeline | null>(null);
   const [tlLoading, setTlLoading] = useState(false);
+  const [clips, setClips] = useState<AnomalyClip[]>([]);
+  const [playingClip, setPlayingClip] = useState<AnomalyClip | null>(null);
 
   useEffect(() => {
-    if (!attempt.examSessionId) return;
+    if (!attempt.id) return;
     setTlLoading(true);
-    getAuditTimeline(attempt.examSessionId)
-      .then(setTimeline)
-      .catch(() => setTimeline(null))
-      .finally(() => setTlLoading(false));
-  }, [attempt.examSessionId]);
+    
+    Promise.all([
+      getAuditTimeline(attempt.id).catch(() => null),
+      getClipsForSession(attempt.id).catch(() => [])
+    ]).then(([tl, loadedClips]) => {
+      if (tl) setTimeline(tl as AuditTimeline);
+      setClips(loadedClips as AnomalyClip[]);
+    }).finally(() => {
+      setTlLoading(false);
+    });
+  }, [attempt.id]);
 
-  const integrityWarning = attempt.integrityScore < 80;
+  const integrityWarning = (attempt.integrity_score ?? 100) < 80;
 
   // Build a mock timeline if no real session ID (demo fallback)
   const mockTimeline: AuditTimelineEvent[] = [
     {
       source: "mediapipe",
       type: "gaze_anomaly",
-      ts: attempt.completedAt,
+      ts: attempt.completed_at,
       duration_s: 4.2,
       detail: { type: "gaze_anomaly" },
     },
-    ...(attempt.lockdownEscalated
+    ...(attempt.lockdown_escalated
       ? [
           {
             source: "lockdown" as const,
             type: "fullscreen_exit",
-            ts: attempt.completedAt,
+            ts: attempt.completed_at,
             duration_s: 12.0,
             detail: { type: "fullscreen_exit" },
           },
           {
             source: "lockdown" as const,
             type: "focus_blur",
-            ts: attempt.completedAt,
+            ts: attempt.completed_at,
             duration_s: 8.5,
             detail: { type: "focus_blur" },
           },
           {
             source: "lockdown" as const,
             type: "tab_hidden",
-            ts: attempt.completedAt,
+            ts: attempt.completed_at,
             duration_s: 15.3,
             detail: { type: "tab_hidden" },
           },
@@ -202,7 +210,9 @@ function AttemptDetail({
   ];
 
   const events = timeline?.timeline ?? mockTimeline;
-  const lockdownEscalated = timeline?.lockdown_escalated ?? attempt.lockdownEscalated;
+  const lockdownEscalated = timeline?.lockdown_escalated ?? attempt.lockdown_escalated;
+  const sciScore = attempt.score ?? 0;
+  const integrityScore = attempt.integrity_score ?? 100;
 
   return (
     <div style={{ padding: "24px", backgroundColor: C.surface, boxShadow: C.shadow }}>
@@ -225,7 +235,7 @@ function AttemptDetail({
           >
             <iconify-icon icon="lucide:activity" style={{ fontSize: 14 }} />
             Combined Integrity Timeline
-            <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 999, background: `${C.violet}22`, color: C.violet, marginLeft: "auto" }}>
+            <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 999, background: C.violetDim, color: C.violet, marginLeft: "auto" }}>
               MediaPipe + Lockdown
             </span>
           </h4>
@@ -234,8 +244,8 @@ function AttemptDetail({
             <div
               style={{
                 padding: "10px 14px",
-                background: `${C.red}10`,
-                border: `1px solid ${C.red}40`,
+                background: C.redDim,
+                border: `1px solid ${C.red}`,
                 borderRadius: 6,
                 marginBottom: 14,
                 display: "flex",
@@ -261,9 +271,14 @@ function AttemptDetail({
             </div>
           ) : (
             <div>
-              {events.map((ev, i) => (
-                <TimelineEvent key={i} ev={ev} index={i} />
-              ))}
+              {events.map((ev, i) => {
+                const tsMs = ev.ts ? new Date(ev.ts).getTime() : 0;
+                // find closest clip of same type within 15 seconds
+                const clip = clips.find(c => c.anomalyType === ev.type && Math.abs(new Date(c.capturedAt).getTime() - tsMs) < 15000);
+                return (
+                  <TimelineEvent key={i} ev={ev} index={i} clip={clip} onPlayClip={setPlayingClip} />
+                );
+              })}
             </div>
           )}
         </div>
@@ -276,13 +291,13 @@ function AttemptDetail({
             <div style={{ padding: "14px", background: C.glass, border: `1px solid ${C.border}`, borderRadius: 8 }}>
               <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>SCI Score</div>
               <div style={{ fontFamily: MONO, fontSize: 20, color: C.cyan, fontWeight: 700 }}>
-                {attempt.sciScore.toFixed(1)}%
+                {sciScore.toFixed(1)}%
               </div>
             </div>
             <div style={{ padding: "14px", background: C.glass, border: `1px solid ${C.border}`, borderRadius: 8 }}>
               <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Integrity</div>
               <div style={{ fontFamily: MONO, fontSize: 20, color: integrityWarning ? C.red : C.text, fontWeight: 700 }}>
-                {attempt.integrityScore.toFixed(1)}%
+                {integrityScore.toFixed(1)}%
               </div>
             </div>
           </div>
@@ -318,26 +333,38 @@ function AttemptDetail({
               overflow: "hidden",
             }}
           >
-            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Proctoring Recording
+            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", justifyContent: "space-between" }}>
+              <span>Proctoring Recording</span>
+              {playingClip && <span style={{ color: C.cyan }}>Playing: {TYPE_LABELS[playingClip.anomalyType] || playingClip.anomalyType}</span>}
             </div>
-            <div
-              style={{
-                aspectRatio: "16/9",
-                background: "rgba(0,0,0,0.5)",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                padding: 16,
-              }}
-            >
-              <iconify-icon icon="lucide:video-off" style={{ fontSize: 28, color: C.muted }} />
-              <span style={{ fontSize: 11, color: C.muted, textAlign: "center", lineHeight: 1.5 }}>
-                Live-only monitoring — no video was stored. Anomaly events are shown in the timeline above.
-              </span>
-            </div>
+            {playingClip ? (
+              <video
+                src={URL.createObjectURL(playingClip.blob)}
+                controls
+                autoPlay
+                style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", display: "block", background: "#000" }}
+              />
+            ) : (
+              <div
+                style={{
+                  aspectRatio: "16/9",
+                  background: "rgba(0,0,0,0.5)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  padding: 16,
+                }}
+              >
+                <iconify-icon icon="lucide:video-off" style={{ fontSize: 28, color: C.muted }} />
+                <span style={{ fontSize: 11, color: C.muted, textAlign: "center", lineHeight: 1.5 }}>
+                  {clips.length > 0
+                    ? `Session has ${clips.length} recorded clip(s). Click "Play Clip" in the timeline.`
+                    : "Live-only monitoring — no video was stored. Anomaly events are shown in the timeline above."}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Issue certificate */}
@@ -359,7 +386,7 @@ function AttemptDetail({
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
-              boxShadow: `0 4px 15px ${C.violet}44`,
+              boxShadow: C.shadow,
               transition: "opacity 0.2s",
               opacity: processing ? 0.6 : 1,
               fontFamily: SANS,
@@ -376,14 +403,27 @@ function AttemptDetail({
 
 // ─── Main AuditLog page ───────────────────────────────────────────────────────
 export const AuditLog: React.FC = () => {
-  const [attempts, setAttempts] = useState(MOCK_ATTEMPTS);
+  const [attempts, setAttempts] = useState<any[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadAttempts();
+  }, []);
+
+  const loadAttempts = async () => {
+    try {
+      const data = await getPendingAttempts();
+      setAttempts(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleIssueCertificate = async (id: string) => {
     setProcessingId(id);
     try {
-      await new Promise((r) => setTimeout(r, 1200));
+      await issueCertificate(id);
       setAttempts((prev) => prev.filter((a) => a.id !== id));
       setExpandedId(null);
     } finally {
@@ -405,7 +445,7 @@ export const AuditLog: React.FC = () => {
       <header style={{ marginBottom: "40px", borderBottom: `1px solid ${C.border}`, paddingBottom: "20px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <h1 style={{ fontSize: "2rem", margin: 0, fontWeight: 300, letterSpacing: "-0.02em" }}>
+            <h1 style={{ fontFamily: "var(--font-display)", fontSize: "2rem", margin: 0, fontWeight: 700, letterSpacing: "-0.02em" }}>
               AUDIT <span style={{ color: C.violet, fontWeight: 700 }}>REVIEW</span>
             </h1>
             <p style={{ color: C.muted, marginTop: "8px", fontSize: "0.9rem", margin: "8px 0 0" }}>
@@ -413,11 +453,11 @@ export const AuditLog: React.FC = () => {
             </p>
           </div>
           <div style={{ display: "flex", gap: 12 }}>
-            <div style={{ padding: "8px 14px", background: `${C.cyan}10`, border: `1px solid ${C.cyan}40`, borderRadius: 6, fontSize: 12, color: C.cyan, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ padding: "8px 14px", background: C.cyanDim, border: `1px solid ${C.cyan}`, borderRadius: 6, fontSize: 12, color: C.cyan, display: "flex", alignItems: "center", gap: 6 }}>
               <iconify-icon icon="lucide:eye" style={{ fontSize: 13 }} />
               MediaPipe
             </div>
-            <div style={{ padding: "8px 14px", background: `${C.amber}10`, border: `1px solid ${C.amber}40`, borderRadius: 6, fontSize: 12, color: C.amber, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ padding: "8px 14px", background: C.amberDim, border: `1px solid ${C.amber}`, borderRadius: 6, fontSize: 12, color: C.amber, display: "flex", alignItems: "center", gap: 6 }}>
               <iconify-icon icon="lucide:shield-alert" style={{ fontSize: 13 }} />
               Lockdown
             </div>
@@ -425,21 +465,23 @@ export const AuditLog: React.FC = () => {
         </div>
       </header>
 
-      {/* Table */}
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         {attempts.map((attempt) => {
           const isExpanded = expandedId === attempt.id;
-          const warn = attempt.integrityScore < 80 || attempt.lockdownEscalated;
+          const integrityScore = attempt.integrity_score ?? 100;
+          const lockdownEscalated = attempt.lockdown_escalated ?? false;
+          const warn = integrityScore < 80 || lockdownEscalated;
 
           return (
             <div
               key={attempt.id}
+              className="glass-panel"
               style={{
-                backgroundColor: C.glass,
-                border: `1px solid ${warn ? C.red + "44" : C.border}`,
-                borderRadius: 0,
+                border: `1px solid ${warn ? C.red : C.border}`,
+                borderRadius: "12px",
                 overflow: "hidden",
                 transition: "all 0.3s",
+                marginBottom: 16,
               }}
             >
               {/* Row header */}
@@ -450,28 +492,28 @@ export const AuditLog: React.FC = () => {
                   gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1fr auto",
                   padding: "20px",
                   cursor: "pointer",
-                  backgroundColor: isExpanded ? `${C.violet}08` : "transparent",
+                  backgroundColor: isExpanded ? C.violetDim : "transparent",
                   borderBottom: isExpanded ? `1px solid ${C.border}` : "none",
                   alignItems: "center",
                   gap: 12,
                 }}
               >
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{attempt.employeeName}</div>
-                  <div style={{ fontSize: "0.8rem", color: C.muted }}>{attempt.jobTitle}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{attempt.employee_name}</div>
+                  <div style={{ fontSize: "0.8rem", color: C.muted }}>{attempt.job_title}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: "0.75rem", color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Assessment</div>
-                  <div style={{ fontSize: "0.85rem", marginTop: 2 }}>{attempt.assessmentName}</div>
+                  <div style={{ fontSize: "0.85rem", marginTop: 2 }}>{attempt.assessment_name}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: "0.75rem", color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>SCI Score</div>
-                  <div style={{ fontFamily: MONO, color: C.cyan, fontSize: 16, marginTop: 2 }}>{attempt.sciScore.toFixed(1)}%</div>
+                  <div style={{ fontFamily: MONO, color: C.cyan, fontSize: 16, marginTop: 2 }}>{(attempt.score ?? 0).toFixed(1)}%</div>
                 </div>
                 <div>
                   <div style={{ fontSize: "0.75rem", color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Integrity</div>
-                  <div style={{ fontFamily: MONO, color: attempt.integrityScore < 80 ? C.red : C.text, fontSize: 16, marginTop: 2 }}>
-                    {attempt.integrityScore.toFixed(1)}%
+                  <div style={{ fontFamily: MONO, color: integrityScore < 80 ? C.red : C.text, fontSize: 16, marginTop: 2 }}>
+                    {integrityScore.toFixed(1)}%
                   </div>
                 </div>
                 <div>
@@ -482,12 +524,12 @@ export const AuditLog: React.FC = () => {
                         width: 7,
                         height: 7,
                         borderRadius: "50%",
-                        background: attempt.lockdownEscalated ? C.red : C.cyan,
+                        background: lockdownEscalated ? C.red : C.cyan,
                         flexShrink: 0,
                       }}
                     />
-                    <span style={{ color: attempt.lockdownEscalated ? C.red : C.cyan, fontFamily: MONO }}>
-                      {attempt.lockdownEscalated ? "Escalated" : "Clean"}
+                    <span style={{ color: lockdownEscalated ? C.red : C.cyan, fontFamily: MONO }}>
+                      {lockdownEscalated ? "Escalated" : "Clean"}
                     </span>
                   </div>
                 </div>

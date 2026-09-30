@@ -111,88 +111,16 @@ async def assemble_exam_for_role(
         section_targets[big] += 1
         total_assigned += 1
 
-    # --- Difficulty targets (Req #7) -------------------------------------------
-    n_easy_medium = round(0.4 * total_questions)  # bucket A
-    n_medium_hard = total_questions - n_easy_medium  # bucket B  (always sums to N)
-
-    # --- Seen variants for this employee (Req #8) ------------------------------
-    seen_ids: set[uuid.UUID] = set()
-    lru_order: dict[uuid.UUID, int] = {}
-    if employee_id:
-        seen_ids = await _get_seen_variant_ids(db, employee_id)
-        if seen_ids:
-            lru_order = await _get_lru_seen_order(db, employee_id)
-
-    # --- Fetch approved variants per section -----------------------------------
-    all_unseen: list[QuestionVariant] = []
-    all_seen: list[QuestionVariant] = []  # fallback pool ordered by LRU
-
-    for section_name in section_targets:
-        stmt = (
-            select(QuestionVariant)
-            .join(Rule, QuestionVariant.rule_id == Rule.id)
-            .join(SubCategory, Rule.subcategory_id == SubCategory.id)
-            .join(Section, SubCategory.section_id == Section.id)
-            .where(
-                Section.name == section_name,
-                QuestionVariant.review_status == "approved",
-            )
-            .options(selectinload(QuestionVariant.rule))
-        )
-        result = await db.execute(stmt)
-        variants = result.scalars().all()
-
-        for v in variants:
-            if v.id not in seen_ids:
-                all_unseen.append(v)
-            else:
-                all_seen.append(v)
-
-    random.shuffle(all_unseen)
-    # Sort seen by LRU (rank 0 = used longest ago first)
-    all_seen.sort(key=lambda v: lru_order.get(v.id, 0))
-
-    # --- Difficulty split (Req #7) ---------------------------------------------
-    unseen_em = [v for v in all_unseen if _is_easy_medium(v)]
-    unseen_mh = [v for v in all_unseen if _is_medium_hard(v)]
-
-    # Medium is eligible for both buckets; greedy fill bucket A first then B
-    selected_em: list[QuestionVariant] = unseen_em[:n_easy_medium]
-    selected_ids = {v.id for v in selected_em}
-
-    # Bucket B: medium_hard not already chosen
-    candidates_mh = [v for v in unseen_mh if v.id not in selected_ids]
-    selected_mh: list[QuestionVariant] = candidates_mh[:n_medium_hard]
-
-    selected = selected_em + selected_mh
-    selected_ids = {v.id for v in selected}
-
-    # Shortfall — either bucket couldn't be filled from unseen
+    selected: list[QuestionVariant] = []
+    selected_ids: set[uuid.UUID] = set()
+    
+    # We always generate live based on the user's explicit request
+    await _live_generate_backfill(db, selected, selected_ids, section_targets, total_questions)
+    
     shortfall = total_questions - len(selected)
-    if shortfall > 0:
-        # Try more unseen (ignoring difficulty)
-        extras = [v for v in all_unseen if v.id not in selected_ids]
-        selected += extras[:shortfall]
-        selected_ids = {v.id for v in selected}
-        shortfall = total_questions - len(selected)
-
-    # Still short? Use LRU seen (Req #8 fallback)
-    repeat_variant_ids: list[str] = []
-    if shortfall > 0:
-        fallback = [v for v in all_seen if v.id not in selected_ids][:shortfall]
-        repeat_variant_ids = [str(v.id) for v in fallback]
-        selected += fallback
-        shortfall = total_questions - len(selected)
-
-    # If we STILL can't meet the count, try generating from rules on the fly
-    if shortfall > 0:
-        # Live generation from rules that have no approved variants yet
-        await _live_generate_backfill(db, selected, selected_ids, section_targets, shortfall)
-        shortfall = total_questions - len(selected)
-
     incomplete = shortfall > 0
     reason = (
-        f"Could not source enough questions: still {shortfall} short after exhausting all approved variants and generation attempts."
+        f"Could not source enough questions: still {shortfall} short after generating."
         if incomplete
         else None
     )
@@ -200,7 +128,7 @@ async def assemble_exam_for_role(
     random.shuffle(selected)
     return {
         "questions": selected[:total_questions],
-        "repeat_variant_ids": repeat_variant_ids,
+        "repeat_variant_ids": [],
         "incomplete": incomplete,
         "reason": reason,
     }
@@ -236,7 +164,7 @@ async def _live_generate_backfill(
                 Rule.review_status == "approved",
                 ~Rule.id.in_(  # rules whose variants are already picked
                     [v.rule_id for v in selected]
-                ),
+                ) if selected else True,
             )
             .order_by(func.random())
             .limit(needed * 2)
@@ -287,58 +215,55 @@ async def _live_generate_backfill(
 
     # Fallback to ANY approved rule if we still need more (to fulfill count guarantee)
     if needed > 0:
-        stmt = (
-            select(Rule)
-            .where(
-                Rule.review_status == "approved",
-                ~Rule.id.in_([v.rule_id for v in selected]) if selected else True,
-            )
-            .order_by(func.random())
-            .limit(needed * 2)
-        )
+        stmt = select(Rule).where(Rule.review_status == "approved")
         result = await db.execute(stmt)
         fallback_rules = result.scalars().all()
 
-        for rule in fallback_rules:
-            if needed <= 0:
-                break
-            try:
-                variants_data = await generate_question_variants(
-                    rule.text,
-                    risk_score=rule.risk_score,
-                    cognitive_level=rule.cognitive_level,
-                    count=1,
-                    question_type="multiple_choice",
-                    previously_generated_stems=stems_seen,
-                )
-                for vd in variants_data:
-                    passed, confidence, notes = run_all_checks(rule.text, vd)
-                    if not passed:
-                        continue
-                    difficulty = derive_difficulty(rule.cognitive_level, rule.risk_score).value
-                    q = QuestionVariant(
-                        id=uuid.uuid4(),
-                        rule_id=rule.id,
-                        question_text=vd["question_text"],
-                        options=vd.get("options"),
-                        correct_option_index=vd.get("correct_option_index"),
-                        correct_answer=vd.get("correct_answer"),
-                        question_type=vd.get("question_type", "MCQ"),
-                        bloom_level=vd.get("bloom_level", rule.cognitive_level),
-                        difficulty=difficulty,
-                        review_status="approved",
-                        confidence=confidence,
-                        grounding_verified=passed,
-                        reviewer_notes="; ".join(notes) if notes else None,
-                        rule=rule,
+        if fallback_rules:
+            attempts = 0
+            max_attempts = needed * 4  # Prevent infinite loop if grounding keeps failing
+            
+            while needed > 0 and attempts < max_attempts:
+                rule = random.choice(fallback_rules)
+                attempts += 1
+                try:
+                    variants_data = await generate_question_variants(
+                        rule.text,
+                        risk_score=rule.risk_score,
+                        cognitive_level=rule.cognitive_level,
+                        count=1,
+                        question_type="multiple_choice",
+                        previously_generated_stems=stems_seen,
                     )
-                    db.add(q)
-                    selected.append(q)
-                    selected_ids.add(q.id)
-                    stems_seen.append(q.question_text[:200])
-                    needed -= 1
-            except Exception as e:
-                logger.warning("Global fallback live-generate failed for rule %s: %s", rule.id, e)
+                    for vd in variants_data:
+                        passed, confidence, notes = run_all_checks(rule.text, vd)
+                        if not passed:
+                            continue
+                        difficulty = derive_difficulty(rule.cognitive_level, rule.risk_score).value
+                        q = QuestionVariant(
+                            id=uuid.uuid4(),
+                            rule_id=rule.id,
+                            question_text=vd["question_text"],
+                            options=vd.get("options"),
+                            correct_option_index=vd.get("correct_option_index"),
+                            correct_answer=vd.get("correct_answer"),
+                            question_type=vd.get("question_type", "MCQ"),
+                            bloom_level=vd.get("bloom_level", rule.cognitive_level),
+                            difficulty=difficulty,
+                            review_status="approved",
+                            confidence=confidence,
+                            grounding_verified=passed,
+                            reviewer_notes="; ".join(notes) if notes else None,
+                            rule=rule,
+                        )
+                        db.add(q)
+                        selected.append(q)
+                        selected_ids.add(q.id)
+                        stems_seen.append(q.question_text[:200])
+                        needed -= 1
+                        break # Successfully generated 1 variant for this rule iteration
+                except Exception as e:
+                    logger.warning("Global fallback live-generate failed for rule %s: %s", rule.id, e)
 
     try:
         await db.commit()

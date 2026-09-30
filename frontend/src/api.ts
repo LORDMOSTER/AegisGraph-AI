@@ -187,6 +187,14 @@ export async function deleteAssignedExam(examId: string): Promise<void> {
   return fetchWithRetry<void>(`${BASE}/assessment/exam/${examId}`, { method: "DELETE" });
 }
 
+export async function resetAssignedExam(examId: string): Promise<void> {
+  return fetchWithRetry<void>(`${BASE}/assessment/all-assigned-exams/${examId}/reset`, { method: "POST" });
+}
+
+export async function retakeExam(sessionId: string): Promise<{ status: string; new_session_id: string }> {
+  return fetchWithRetry<{ status: string; new_session_id: string }>(`${BASE}/assessment/exam/${sessionId}/retake`, { method: "POST" });
+}
+
 export async function assembleExam(jobTitle: string, targetCount: number): Promise<any> {
   return fetchWithRetry<any>(`${BASE}/assessment/assemble`, {
     method: "POST",
@@ -214,7 +222,8 @@ export async function swapQuestion(ruleId: string, currentVariantId: string): Pr
 export async function assignExam(
   assessmentId: string,
   employeeIds: string[],
-  examKey?: string
+  examKey?: string,
+  revealScore?: boolean
 ): Promise<any> {
   return fetchWithRetry<any>(`${BASE}/assessment/assign`, {
     method: "POST",
@@ -223,6 +232,7 @@ export async function assignExam(
       assessment_id: assessmentId,
       employee_ids: employeeIds,
       ...(examKey ? { exam_key: examKey } : {}),
+      ...(revealScore !== undefined ? { reveal_score_to_user: revealScore } : {}),
     }),
   });
 }
@@ -239,15 +249,17 @@ export async function saveAnswer(
   examId: string,
   variantId: string,
   index: number,
-  fillText?: string
+  fillText?: string,
+  selectedIndices?: number[]
 ): Promise<any> {
   return fetchWithRetry<any>(`${BASE}/assessment/exam/${examId}/answer`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       question_variant_id: variantId,
-      selected_option_index: index,
-      ...(fillText !== undefined ? { fill_text: fillText } : {}),
+      selected_option_index: index >= 0 ? index : null,
+      selected_option_indices: selectedIndices ?? null,
+      text_answer: fillText ?? null,
     }),
   });
 }
@@ -275,14 +287,13 @@ export async function getMyCertificates(): Promise<any[]> {
 export async function unlockExam(
   examId: string,
   employeeCode: string,
-  pin: string,
   examKey: string
 ): Promise<boolean> {
   try {
     const res = await fetch(`${BASE}/assessment/exam/${examId}/unlock`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employee_code: employeeCode, pin, exam_key: examKey }),
+      body: JSON.stringify({ employee_code: employeeCode, exam_key: examKey }),
     });
     return res.ok;
   } catch {
@@ -594,6 +605,7 @@ export interface Employee {
   pin: string;
   status: "Active" | "Inactive";
   lastCertified: string | null;
+  face_embedding_stored?: boolean;
 }
 
 export async function getDepartments(): Promise<Department[]> {
@@ -687,6 +699,18 @@ export async function deleteEmployee(empId: string): Promise<void> {
   return fetchWithRetry<void>(`${BASE}/v1/users/${empId}`, {
     method: "DELETE"
   });
+}
+
+export async function storeFaceEmbedding(employeeCode: string, embedding: number[]): Promise<void> {
+  return fetchWithRetry<void>(`${BASE}/v1/users/${employeeCode}/face-embedding`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ embedding })
+  });
+}
+
+export async function getFaceEmbedding(employeeCode: string): Promise<{ embedding: number[] }> {
+  return fetchWithRetry<{ embedding: number[] }>(`${BASE}/v1/users/${employeeCode}/face-embedding`);
 }
 
 export interface ActivityEvent {
@@ -1040,5 +1064,13 @@ export async function promoteFilteredBlock(blockId: string): Promise<{ status: s
   return fetchWithRetry<{ status: string; rule_id: string }>(`${BASE}/v1/hierarchy/filtered-blocks/${blockId}/promote`, {
     method: "POST"
   });
+}
+
+export async function getPendingAttempts(): Promise<any[]> {
+  return fetchWithRetry<any[]>(`${BASE}/audit/attempts`);
+}
+
+export async function issueCertificate(attemptId: string): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/audit/attempts/${attemptId}/issue-certificate`, { method: "POST" });
 }
 

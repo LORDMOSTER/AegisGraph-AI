@@ -21,7 +21,12 @@ class AttemptResponse(BaseModel):
     employee_id: uuid.UUID
     assessment_id: uuid.UUID
     status: ExamStatus
+    employee_name: str
+    job_title: str
+    assessment_name: str
     score: Optional[float]
+    integrity_score: Optional[float]
+    lockdown_escalated: bool
     completed_at: Optional[datetime]
     model_config = ConfigDict(from_attributes=True)
 
@@ -52,12 +57,30 @@ async def get_pending_attempts(
     # Assuming pending review is either COMPLETED or PENDING_REVIEW
     stmt = (
         select(ExamSession)
+        .options(selectinload(ExamSession.employee), selectinload(ExamSession.assessment))
         .where(
             ExamSession.status.in_([ExamStatus.COMPLETED, ExamStatus.PENDING_REVIEW])
         )
     )
     result = await db.execute(stmt)
-    return result.scalars().all()
+    sessions = result.scalars().all()
+    
+    attempts = []
+    for s in sessions:
+        attempts.append({
+            "id": s.id,
+            "employee_id": s.employee_id,
+            "assessment_id": s.assessment_id,
+            "status": s.status,
+            "score": s.score,
+            "integrity_score": s.integrity_score,
+            "lockdown_escalated": s.status == ExamStatus.PENDING_REVIEW,
+            "completed_at": s.completed_at,
+            "employee_name": s.employee.full_name or s.employee.employee_code,
+            "job_title": s.employee.designation or "Employee",
+            "assessment_name": s.assessment.name if s.assessment else "Assessment",
+        })
+    return attempts
 
 @router.post("/attempts/{attempt_id}/issue-certificate", response_model=IssueCertificateResponse)
 async def issue_certificate(

@@ -15,7 +15,7 @@ from app.models.assessment_session import Assessment
 from app.models.user import User
 from app.models.question_usage_history import QuestionUsageHistory
 from app.api.deps import get_current_active_user
-from app.services.llm.generator import grade_fill_in_blank
+from app.services.llm.generator import grade_fill_in_blank, grade_multi_select
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -259,6 +259,7 @@ class AssignRequest(BaseModel):
     use_weighted_marks: Optional[bool] = None
     pass_mark_pct: Optional[float] = None
     pass_mark_abs: Optional[int] = None
+    reveal_score_to_user: Optional[bool] = None
 
 @router.post("/assign", summary="Assign an exam to employees")
 async def assign_exam(
@@ -269,7 +270,7 @@ async def assign_exam(
     # Optionally update marking config on the Assessment record
     if any(x is not None for x in [
         request.marks_per_question, request.use_weighted_marks,
-        request.pass_mark_pct, request.pass_mark_abs,
+        request.pass_mark_pct, request.pass_mark_abs, request.reveal_score_to_user,
     ]):
         a_stmt = select(Assessment).where(Assessment.id == request.assessment_id)
         a_res = await db.execute(a_stmt)
@@ -283,6 +284,8 @@ async def assign_exam(
                 assessment.pass_mark_pct = request.pass_mark_pct
             if request.pass_mark_abs is not None:
                 assessment.pass_mark_abs = request.pass_mark_abs
+            if request.reveal_score_to_user is not None:
+                assessment.reveal_score_to_user = request.reveal_score_to_user
 
     # Map employee codes to User UUIDs
     stmt = select(User).where(User.employee_code.in_(request.employee_ids))
@@ -311,6 +314,35 @@ async def assign_exam(
     await db.commit()
     return {"status": "success", "assigned_count": len(sessions)}
 
+@router.post("/exam/{session_id}/retake", summary="Retake a failed exam (spawn new session)")
+async def retake_exam(
+    session_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    stmt = select(ExamSession).where(ExamSession.id == session_id, ExamSession.employee_id == current_user.id)
+    res = await db.execute(stmt)
+    old_session = res.scalar_one_or_none()
+    if not old_session:
+        raise HTTPException(status_code=404, detail="Exam session not found or you don't have permission")
+    
+    if old_session.status != ExamStatus.FAILED:
+        raise HTTPException(status_code=400, detail="You can only retake failed exams")
+    
+    new_session = ExamSession(
+        assessment_id=old_session.assessment_id,
+        employee_id=current_user.id,
+        status=ExamStatus.ASSIGNED,
+        assigned_at=datetime.now(timezone.utc),
+        responses={},
+        exam_key_hash=old_session.exam_key_hash, # Copy the key so they can reuse it
+        lockdown_anomalies=[],
+        lockdown_escalated=False,
+    )
+    db.add(new_session)
+    await db.commit()
+    await db.refresh(new_session)
+    return {"status": "success", "new_session_id": new_session.id}
 
 # ---------------------------------------------------------------------------
 # Lockdown flow — Dual-factor unlock (Req #2)
@@ -318,10 +350,9 @@ async def assign_exam(
 
 class UnlockRequest(BaseModel):
     employee_code: str
-    pin: str
     exam_key: str
 
-@router.post("/exam/{exam_id}/unlock", summary="Dual-factor unlock before exam start")
+@router.post("/exam/{exam_id}/unlock", summary="Unlock before exam start (Key only)")
 async def unlock_exam(
     exam_id: uuid.UUID,
     request: UnlockRequest,
@@ -340,22 +371,7 @@ async def unlock_exam(
 
     failure_reason: Optional[str] = None
 
-    # Check 1: employee PIN
-    emp_stmt = select(User).where(User.employee_code == request.employee_code)
-    emp_res = await db.execute(emp_stmt)
-    emp = emp_res.scalar_one_or_none()
-
-    import bcrypt
-    pin_ok = False
-    if emp and emp.password_hash:
-        try:
-            pin_ok = bcrypt.checkpw(request.pin.encode(), emp.password_hash.encode())
-        except Exception:
-            pin_ok = False
-    if not pin_ok:
-        failure_reason = "pin_mismatch"
-
-    # Check 2: supervisor Exam Key
+    # Check 1: supervisor Exam Key
     key_ok = False
     if session.exam_key_hash:
         pepper = "aegis-lockdown-v1"
@@ -599,6 +615,7 @@ async def get_exam(
                 "question_type": variant.question_type,          # expose type (Req #5)
                 "options": variant.options,
                 "difficulty": variant.difficulty,
+                "correct_option_indices": variant.correct_option_indices,  # for MULTI_SELECT
                 # Intentionally omitting correct_option_index / correct_answer
             })
 
@@ -616,6 +633,7 @@ async def get_exam(
 class AnswerRequest(BaseModel):
     question_variant_id: str
     selected_option_index: Optional[int] = None    # MCQ / TRUE_FALSE
+    selected_option_indices: Optional[list] = None # MULTI_SELECT
     text_answer: Optional[str] = None              # FILL_IN_BLANK (Req #5)
 
 @router.put("/exam/{exam_id}/answer", summary="Save single answer")
@@ -632,9 +650,10 @@ async def save_answer(
         raise HTTPException(status_code=404)
 
     new_responses = dict(exam.responses)
-    # Store both so scoring can pick the right one
+    # Store all fields so scoring can pick the right one per question type
     new_responses[request.question_variant_id] = {
         "selected_option_index": request.selected_option_index,
+        "selected_option_indices": request.selected_option_indices,
         "text_answer": request.text_answer,
     }
     exam.responses = new_responses
@@ -694,7 +713,7 @@ async def submit_exam(
             selected_idx = raw_resp
             text_answer = None
 
-        # Grade depending on question type (Req #5)
+        # Grade depending on question type
         q_type = variant.question_type
         correct = False
         if q_type == "FILL_IN_BLANK":
@@ -704,6 +723,14 @@ async def submit_exam(
                     variant.correct_answer or "",
                     variant.blank_answer_variants,
                 )
+        elif q_type == "MULTI_SELECT":
+            # Retrieve selected_indices from response
+            if isinstance(raw_resp, dict):
+                selected_indices = raw_resp.get("selected_option_indices", [])
+            else:
+                selected_indices = []
+            correct_indices = variant.correct_option_indices or []
+            correct = grade_multi_select(selected_indices, correct_indices)
         else:
             correct = (selected_idx == variant.correct_option_index)
 
@@ -727,6 +754,7 @@ async def submit_exam(
         passed = sci_score >= pass_pct
 
     exam.score = sci_score
+    exam.integrity_score = request.integrity_score
     exam.completed_at = datetime.utcnow()
 
     # Save usage history
@@ -770,9 +798,25 @@ async def submit_exam(
         "status": exam.status,
         "score": sci_score,
         "passed": passed,
-        "reveal_score_to_user": assessment.reveal_score_to_user,
+        "reveal_score_to_user": exam.assessment.reveal_score_to_user,
         "pass_mark_pct": pass_pct,
     }
+
+@router.post("/all-assigned-exams/{session_id}/reset", summary="Reset an assigned exam (Admin)")
+async def reset_assigned_exam(session_id: uuid.UUID, db: AsyncSession = Depends(get_db_session)):
+    stmt = select(ExamSession).where(ExamSession.id == session_id)
+    res = await db.execute(stmt)
+    session = res.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Exam session not found")
+    
+    session.status = ExamStatus.ASSIGNED
+    session.score = None
+    session.integrity_score = None
+    session.lockdown_anomalies = []
+    
+    await db.commit()
+    return {"message": "Assigned exam reset"}
 
 @router.get("/certificates", summary="Get my certificates")
 async def get_my_certificates(

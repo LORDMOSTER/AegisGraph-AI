@@ -163,7 +163,7 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
       const { saveAssembledExam, assignExam } = await import("../../api");
       const saveRes = await saveAssembledExam(`${roleTemplate} Certification`, manifest);
       if (saveRes && saveRes.assessment_id) {
-        await assignExam(saveRes.assessment_id, [selectedEmployeeId], examKey || undefined);
+        await assignExam(saveRes.assessment_id, [selectedEmployeeId], examKey || undefined, revealScore);
       }
       
       setStep(4);

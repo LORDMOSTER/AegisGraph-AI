@@ -21,10 +21,12 @@ import { VerifyCertificate } from "./pages/VerifyCertificate";
 import { Rules } from "./pages/Rules";
 import { QuestionBank } from "./pages/QuestionBank";
 import { Settings } from "./pages/Settings";
+import { AuditLog } from "./pages/AuditLog";
 import { ThemeToggle } from "./components/ThemeToggle";
 import SpecularButton from "./components/SpecularButton";
 import { LogoMark } from "./components/BrandAssets";
 import { AdminExams } from "./pages/AdminExams";
+import { deleteClipsOlderThan } from "./hooks/useAnomalyClipRecorder";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & helpers
@@ -134,6 +136,16 @@ export default function App() {
     const id = setInterval(checkBackend, 10000);
     return () => clearInterval(id);
   }, [checkBackend]);
+
+  // Storage Cleanup (Section 8)
+  useEffect(() => {
+    const retentionDays = parseInt(localStorage.getItem("aegis_clip_retention_days") || "30", 10);
+    deleteClipsOlderThan(retentionDays).then(deletedCount => {
+      if (deletedCount > 0) {
+        console.log(`[Storage Cleanup] Deleted ${deletedCount} anomaly clips older than ${retentionDays} days.`);
+      }
+    }).catch(err => console.error("Failed to cleanup clips:", err));
+  }, []);
 
   const totalRequested = Object.values(constraints).reduce((a, b) => a + b, 0);
 
@@ -283,8 +295,14 @@ export default function App() {
           </motion.div>
         )}
 
+        {activeTab === "audit" && (
+          <motion.div key="audit" {...pageVariants}>
+            <AuditLog />
+          </motion.div>
+        )}
+
         {/* Placeholders for remaining tabs */}
-        {["audit"].includes(activeTab) && (
+        {([].includes(activeTab as never)) && (
           <motion.div key={activeTab} {...pageVariants} className="qr-center" style={{ height: 400 }}>
             <div className="qr-status-card glass-panel" style={{ textAlign: "center" }}>
               <h3 className="qr-status-label" style={{ textTransform: "capitalize" }}>{activeTab}</h3>
