@@ -31,6 +31,7 @@ class EmployeeResponse(BaseModel):
     status: str
     lastCertified: str | None = None
     face_embedding_stored: bool = False
+    photo: str | None = None
 
     class Config:
         from_attributes = True
@@ -66,7 +67,8 @@ async def list_employees(
             pin="******",
             status="Active" if u.is_active else "Inactive",
             lastCertified=None,
-            face_embedding_stored=u.face_embedding is not None
+            face_embedding_stored=u.face_embedding is not None,
+            photo=u.photo
         ))
     return res
 
@@ -161,7 +163,8 @@ async def create_employee(
         pin=pin,
         status="Active",
         lastCertified=None,
-        face_embedding_stored=False
+        face_embedding_stored=False,
+        photo=None
     )
 
 class PinUpdate(BaseModel):
@@ -226,6 +229,7 @@ async def verify_admin(
 
 class FaceEmbeddingUpdate(BaseModel):
     embedding: list  # Float array from face-api.js FaceRecognitionNet
+    photo: str | None = None  # Base64 string from webcam
 
 
 @router.put("/{employee_code}/face-embedding")
@@ -248,8 +252,11 @@ async def store_face_embedding(
         raise HTTPException(status_code=404, detail="Employee not found")
 
     user.face_embedding = payload.embedding
+    if payload.photo:
+        user.photo = payload.photo
+        
     await db.commit()
-    return {"status": "success", "message": "Face embedding stored"}
+    return {"status": "success", "message": "Face embedding and photo stored"}
 
 
 @router.get("/{employee_code}/face-embedding")
@@ -277,6 +284,7 @@ async def get_face_embedding(
 
 @router.get("/activity")
 async def get_recent_activity(
+    limit: int = 5,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -289,7 +297,7 @@ async def get_recent_activity(
         .where(User.company_id == current_user.company_id)
         .where(User.role == RoleEnum.OPERATOR)
         .order_by(User.created_at.desc())
-        .limit(5)
+        .limit(limit)
     )
     recent_users = result.scalars().all()
     
@@ -313,7 +321,7 @@ async def get_recent_activity(
         .join(Manual, Section.manual_id == Manual.id)
         .where(Manual.company_id == current_user.company_id)
         .order_by(Rule.created_at.desc())
-        .limit(5)
+        .limit(limit)
     )
     for rule, sec_name in rule_res.all():
         events.append({
@@ -329,7 +337,7 @@ async def get_recent_activity(
         select(Assessment)
         .where(Assessment.company_id == current_user.company_id)
         .order_by(Assessment.created_at.desc())
-        .limit(5)
+        .limit(limit)
     )
     for asm in assessment_res.scalars().all():
         events.append({
@@ -346,7 +354,7 @@ async def get_recent_activity(
         .join(User, CertificateRecord.user_id == User.id)
         .where(User.company_id == current_user.company_id)
         .order_by(CertificateRecord.created_at.desc())
-        .limit(5)
+        .limit(limit)
     )
     for cert, full_name, emp_code in cert_res.all():
         name = full_name or emp_code
@@ -357,6 +365,6 @@ async def get_recent_activity(
             "timestamp": cert.created_at.isoformat() if cert.created_at else ""
         })
 
-    # Sort combined events and take top 5
+    # Sort combined events and take top `limit`
     events.sort(key=lambda x: x["timestamp"], reverse=True)
-    return events[:5]
+    return events[:limit]

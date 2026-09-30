@@ -815,6 +815,7 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
     },
     [examId]
   );
+  const currentQ = questions[currentIndex];
 
   const toggleReview = useCallback((qId: string) => {
     setQStates((prev) => {
@@ -861,7 +862,6 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
 
   const unansweredCount = unansweredIndexes.length;
   const reviewCount = reviewIndexes.length;
-  const currentQ = questions[currentIndex];
   const progress = questions.length > 0 ? answeredCount / questions.length : 0;
 
   // ════════════════════════════════════════════════════════════════════════════

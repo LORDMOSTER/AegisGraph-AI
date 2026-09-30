@@ -314,8 +314,8 @@ async def assign_exam(
     await db.commit()
     return {"status": "success", "assigned_count": len(sessions)}
 
-@router.post("/exam/{session_id}/retake", summary="Retake a failed exam (spawn new session)")
-async def retake_exam(
+@router.post("/exam/{session_id}/request-retake", summary="Request a retake")
+async def request_retake(
     session_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
@@ -326,12 +326,43 @@ async def retake_exam(
     if not old_session:
         raise HTTPException(status_code=404, detail="Exam session not found or you don't have permission")
     
-    if old_session.status != ExamStatus.FAILED:
-        raise HTTPException(status_code=400, detail="You can only retake failed exams")
+    if old_session.status not in [ExamStatus.FAILED, ExamStatus.COMPLETED]:
+        raise HTTPException(status_code=400, detail="You can only request retake for completed or failed exams")
     
+    old_session.status = ExamStatus.RETAKE_REQUESTED
+    await db.commit()
+    return {"status": "success"}
+
+@router.post("/exam/{session_id}/grant-retake", summary="Admin grants retake")
+async def grant_retake(
+    session_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    stmt = select(ExamSession).options(selectinload(ExamSession.assessment)).where(ExamSession.id == session_id)
+    res = await db.execute(stmt)
+    old_session = res.scalar_one_or_none()
+    
+    if not old_session:
+        raise HTTPException(status_code=404, detail="Exam session not found")
+        
+    old_assessment = old_session.assessment
+    
+    # Generate new assessment using old constraints
+    constraints = old_assessment.section_breakdown
+    
+    # We construct a mock ConstraintRequest to pass to our internal function
+    from app.api.assessment import generate_assessment
+    from app.models.schemas import ConstraintRequest
+    req = ConstraintRequest(constraints=constraints)
+    new_assess_resp = await generate_assessment(req, db, current_user)
+    
+    if new_assess_resp.status != "ready":
+        raise HTTPException(status_code=400, detail=f"Could not generate new questions: {new_assess_resp.message}")
+        
     new_session = ExamSession(
-        assessment_id=old_session.assessment_id,
-        employee_id=current_user.id,
+        assessment_id=new_assess_resp.assessment_id,
+        employee_id=old_session.employee_id,
         status=ExamStatus.ASSIGNED,
         assigned_at=datetime.now(timezone.utc),
         responses={},
@@ -340,9 +371,10 @@ async def retake_exam(
         lockdown_escalated=False,
     )
     db.add(new_session)
+    
+    old_session.status = ExamStatus.RETAKE_GRANTED
     await db.commit()
-    await db.refresh(new_session)
-    return {"status": "success", "new_session_id": new_session.id}
+    return {"status": "success"}
 
 # ---------------------------------------------------------------------------
 # Lockdown flow — Dual-factor unlock (Req #2)

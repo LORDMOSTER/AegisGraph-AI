@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getMyExams, getMyCertificates, retakeExam } from "../api";
+import { getMyExams, getMyCertificates, requestRetake } from "../api";
 
 export interface AssignedExam {
   id: string;
@@ -19,15 +19,17 @@ export interface Certificate {
 }
 interface Props {
   onStartExam: (examId: string) => void;
+  userProfile?: any;
 }
 
 const EXAM_ICONS: string[] = ["shield-alert", "lock", "hard-hat", "flame", "zap"];
 
-export function ExamDashboard({ onStartExam }: Props) {
+export function ExamDashboard({ onStartExam, userProfile }: Props) {
   const [exams, setExams] = useState<AssignedExam[]>([]);
   const [certs, setCerts] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNotification, setShowNotification] = useState(false);
+  const [toastError, setToastError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -77,7 +79,6 @@ export function ExamDashboard({ onStartExam }: Props) {
     groupedExams[ex.title].push(ex);
   });
 
-  const MAX_ATTEMPTS = 3;
   const pendingCount = exams.filter(e => e.status === "assigned" || e.status === "in_progress").length;
 
   return (
@@ -128,19 +129,23 @@ export function ExamDashboard({ onStartExam }: Props) {
             <span style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Employee Portal</span>
           </div>
           <h1 style={{ fontFamily: "var(--font-display)", fontSize: 32, fontWeight: 700, color: "var(--ink)", marginBottom: 8, letterSpacing: "-0.02em" }}>
-            Welcome back, Operator
+            Welcome back, {userProfile?.full_name || "Operator"}
           </h1>
           <p style={{ fontSize: 15, color: "var(--text-secondary)" }}>Complete your assigned safety certifications to maintain compliance.</p>
         </div>
 
         {/* Premium ID strip */}
         <div className="glass-panel" style={{ display: "flex", alignItems: "center", gap: 20, borderRadius: 16, padding: "16px 24px", boxShadow: "0 8px 32px rgba(0,0,0,0.12)", border: "1px solid var(--border-subtle)", background: "var(--surface-raised)" }}>
-          <div style={{ width: 56, height: 56, borderRadius: 12, background: "linear-gradient(135deg, #1e293b, #0f172a)", border: "1px solid rgba(255,255,255,0.05)", display: "grid", placeItems: "center", fontSize: 28, flexShrink: 0, boxShadow: "inset 0 2px 10px rgba(255,255,255,0.05)" }}>
-            👷
+          <div style={{ width: 56, height: 56, borderRadius: 12, background: "linear-gradient(135deg, #1e293b, #0f172a)", border: "1px solid rgba(255,255,255,0.05)", display: "grid", placeItems: "center", fontSize: 28, flexShrink: 0, boxShadow: "inset 0 2px 10px rgba(255,255,255,0.05)", overflow: "hidden" }}>
+            {userProfile?.photo ? (
+              <img src={userProfile.photo} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              "👷"
+            )}
           </div>
           <div>
-            <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", marginBottom: 4 }}>Operator ID</p>
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em", textShadow: "0 2px 10px rgba(255,255,255,0.1)" }}>OP-KIOSK-AGX</p>
+            <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", marginBottom: 4 }}>{userProfile?.designation || "Operator"} ID</p>
+            <p style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em", textShadow: "0 2px 10px rgba(255,255,255,0.1)" }}>{userProfile?.employee_code || "OP-KIOSK-AGX"}</p>
             <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
               <iconify-icon icon="lucide:shield-check" style={{ color: "#10b981", fontSize: 14 }} />
               <p style={{ fontSize: 11, color: "var(--emerald)", fontWeight: 500 }}>Verified · 100% Offline</p>
@@ -177,12 +182,12 @@ export function ExamDashboard({ onStartExam }: Props) {
           <div style={{ display: "grid", gap: 24, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
             {Object.entries(groupedExams).map(([title, sessions], i) => {
               const attemptNumber = sessions.length;
-              const attemptsLeft = Math.max(0, MAX_ATTEMPTS - attemptNumber + (sessions[sessions.length-1].status === 'assigned' ? 1 : 0));
               const latestSession = sessions[sessions.length - 1]; // Because we sorted by assignedAt
               
               const isPending = latestSession.status === "assigned" || latestSession.status === "in_progress";
               const isPassed = latestSession.status === "completed";
               const isFailed = latestSession.status === "failed";
+              const isRetakeRequested = latestSession.status === "retake_requested";
               
               return (
                 <motion.div
@@ -241,16 +246,12 @@ export function ExamDashboard({ onStartExam }: Props) {
 
                   <div style={{ background: "rgba(0,0,0,0.2)", borderRadius: 8, padding: "12px 16px", marginBottom: 24, border: "1px solid var(--border-subtle)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
-                      <span style={{ color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}><iconify-icon icon="lucide:hash" /> Attempt</span>
-                      <span style={{ fontWeight: 600, color: "var(--ink)" }}>{attemptNumber} of {MAX_ATTEMPTS}</span>
+                      <span style={{ color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}><iconify-icon icon="lucide:hash" /> Attempt Number</span>
+                      <span style={{ fontWeight: 600, color: "var(--ink)" }}>{attemptNumber}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
                       <span style={{ color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}><iconify-icon icon="lucide:help-circle" /> Questions</span>
                       <span style={{ fontWeight: 600, color: "var(--ink)" }}>{latestSession.totalQuestions}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                      <span style={{ color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}><iconify-icon icon="lucide:rotate-cw" /> Attempts Left</span>
-                      <span style={{ fontWeight: 600, color: attemptsLeft > 0 ? "var(--ink)" : "#ef4444" }}>{attemptsLeft}</span>
                     </div>
                   </div>
 
@@ -270,7 +271,7 @@ export function ExamDashboard({ onStartExam }: Props) {
                       <iconify-icon icon="lucide:play-circle" style={{ fontSize: 18 }} />
                       Begin Attempt {attemptNumber}
                     </button>
-                  ) : (!isPending && attemptsLeft > 0 && isFailed) ? (
+                  ) : (!isPending && (isFailed || isPassed) && !isRetakeRequested) ? (
                     <button
                       className="btn btn-primary"
                       style={{
@@ -292,15 +293,16 @@ export function ExamDashboard({ onStartExam }: Props) {
                       }}
                       onClick={async () => {
                         try {
-                          await retakeExam(latestSession.id);
+                          await requestRetake(latestSession.id);
                           load();
                         } catch (e) {
-                          alert("Failed to create a new attempt");
+                          setToastError("Failed to request a new attempt");
+                          setTimeout(() => setToastError(null), 4000);
                         }
                       }}
                     >
                       <iconify-icon icon="lucide:rotate-cw" style={{ fontSize: 18 }} />
-                      Retake Exam
+                      Request Retake
                     </button>
                   ) : (
                     <button
@@ -322,8 +324,8 @@ export function ExamDashboard({ onStartExam }: Props) {
                         gap: 8
                       }}
                     >
-                      <iconify-icon icon={isPassed ? "lucide:check" : "lucide:lock"} style={{ fontSize: 18 }} />
-                      {isPassed ? "Certification Earned" : "No Attempts Available"}
+                      <iconify-icon icon={isRetakeRequested ? "lucide:clock" : "lucide:lock"} style={{ fontSize: 18 }} />
+                      {isRetakeRequested ? "Retake Requested" : "No Pending Assessment"}
                     </button>
                   )}
                 </motion.div>
@@ -379,6 +381,37 @@ export function ExamDashboard({ onStartExam }: Props) {
           )}
         </div>
       </section>
+
+      <AnimatePresence>
+        {toastError && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.95 }}
+            style={{
+              position: "fixed",
+              bottom: 32,
+              right: 32,
+              background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+              color: "white",
+              padding: "16px 24px",
+              borderRadius: "12px",
+              boxShadow: "0 12px 24px rgba(220, 38, 38, 0.25)",
+              zIndex: 1001,
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              fontWeight: 600,
+              border: "1px solid rgba(255,255,255,0.1)"
+            }}
+          >
+            <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: "50%", width: 32, height: 32, display: "grid", placeItems: "center" }}>
+              <iconify-icon icon="lucide:alert-circle" style={{ fontSize: 18 }} />
+            </div>
+            {toastError}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

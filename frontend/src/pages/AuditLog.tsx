@@ -9,7 +9,7 @@
  */
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getAuditTimeline, AuditTimeline, AuditTimelineEvent, getPendingAttempts, issueCertificate } from "../api";
+import { getAuditTimeline, AuditTimeline, AuditTimelineEvent, getPendingAttempts, issueCertificate, grantRetake } from "../api";
 import { getClipsForSession, AnomalyClip } from "../hooks/useAnomalyClipRecorder";
 
 // ─── Colour palette (Void-Industrial) ───────────────────────────────────────
@@ -145,10 +145,12 @@ function TimelineEvent({ ev, index, clip, onPlayClip }: { ev: AuditTimelineEvent
 function AttemptDetail({
   attempt,
   onIssueCertificate,
+  onGrantRetake,
   processing,
 }: {
   attempt: any;
   onIssueCertificate: (id: string) => void;
+  onGrantRetake: (id: string) => void;
   processing: boolean;
 }) {
   const [timeline, setTimeline] = useState<AuditTimeline | null>(null);
@@ -367,34 +369,63 @@ function AttemptDetail({
             )}
           </div>
 
-          {/* Issue certificate */}
-          <button
-            onClick={() => onIssueCertificate(attempt.id)}
-            disabled={processing}
-            style={{
-              padding: "14px",
-              background: C.violet,
-              border: "none",
-              borderRadius: 8,
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 13,
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              cursor: processing ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              boxShadow: C.shadow,
-              transition: "opacity 0.2s",
-              opacity: processing ? 0.6 : 1,
-              fontFamily: SANS,
-            }}
-          >
-            <iconify-icon icon="lucide:award" style={{ fontSize: 16 }} />
-            {processing ? "Processing..." : "Issue Certificate & Reveal Score"}
-          </button>
+          {attempt.is_retake_requested || attempt.status === "failed" ? (
+            <button
+              onClick={() => onGrantRetake(attempt.id)}
+              disabled={processing}
+              style={{
+                padding: "14px",
+                background: attempt.status === "failed" && !attempt.is_retake_requested ? C.red : C.amber,
+                border: "none",
+                borderRadius: 8,
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: 13,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                cursor: processing ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                boxShadow: C.shadow,
+                transition: "opacity 0.2s",
+                opacity: processing ? 0.6 : 1,
+                fontFamily: SANS,
+              }}
+            >
+              <iconify-icon icon="lucide:refresh-cw" style={{ fontSize: 16 }} />
+              {processing ? "Processing..." : "Grant Retake (Generate New Questions)"}
+            </button>
+          ) : (
+            <button
+              onClick={() => onIssueCertificate(attempt.id)}
+              disabled={processing}
+              style={{
+                padding: "14px",
+                background: C.violet,
+                border: "none",
+                borderRadius: 8,
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: 13,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                cursor: processing ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                boxShadow: C.shadow,
+                transition: "opacity 0.2s",
+                opacity: processing ? 0.6 : 1,
+                fontFamily: SANS,
+              }}
+            >
+              <iconify-icon icon="lucide:award" style={{ fontSize: 16 }} />
+              {processing ? "Processing..." : "Issue Certificate & Reveal Score"}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -406,6 +437,7 @@ export const AuditLog: React.FC = () => {
   const [attempts, setAttempts] = useState<any[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [toastError, setToastError] = useState<string | null>(null);
 
   useEffect(() => {
     loadAttempts();
@@ -431,39 +463,39 @@ export const AuditLog: React.FC = () => {
     }
   };
 
+  const handleGrantRetake = async (id: string) => {
+    setProcessingId(id);
+    try {
+      await grantRetake(id);
+      setAttempts((prev) => prev.filter((a) => a.id !== id));
+      setExpandedId(null);
+    } catch (e: any) {
+      setToastError("Failed to grant retake: " + (e.message || e.toString()));
+      setTimeout(() => setToastError(null), 4000);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   return (
-    <div
-      style={{
-        padding: "40px",
-        backgroundColor: C.void,
-        minHeight: "100vh",
-        color: C.text,
-        fontFamily: SANS,
-      }}
-    >
-      {/* Header */}
-      <header style={{ marginBottom: "40px", borderBottom: `1px solid ${C.border}`, paddingBottom: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <h1 style={{ fontFamily: "var(--font-display)", fontSize: "2rem", margin: 0, fontWeight: 700, letterSpacing: "-0.02em" }}>
-              AUDIT <span style={{ color: C.violet, fontWeight: 700 }}>REVIEW</span>
-            </h1>
-            <p style={{ color: C.muted, marginTop: "8px", fontSize: "0.9rem", margin: "8px 0 0" }}>
-              MediaPipe gaze tracking + lockdown integrity events — unified timeline per attempt.
-            </p>
+    <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)" }}>Audit Log</h1>
+          <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>Review MediaPipe gaze tracking + lockdown integrity events.</p>
+        </div>
+        
+        <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ padding: "8px 14px", background: C.cyanDim, border: `1px solid ${C.cyan}`, borderRadius: 6, fontSize: 12, color: C.cyan, display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}>
+            <iconify-icon icon="lucide:eye" style={{ fontSize: 14 }} />
+            MediaPipe Active
           </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            <div style={{ padding: "8px 14px", background: C.cyanDim, border: `1px solid ${C.cyan}`, borderRadius: 6, fontSize: 12, color: C.cyan, display: "flex", alignItems: "center", gap: 6 }}>
-              <iconify-icon icon="lucide:eye" style={{ fontSize: 13 }} />
-              MediaPipe
-            </div>
-            <div style={{ padding: "8px 14px", background: C.amberDim, border: `1px solid ${C.amber}`, borderRadius: 6, fontSize: 12, color: C.amber, display: "flex", alignItems: "center", gap: 6 }}>
-              <iconify-icon icon="lucide:shield-alert" style={{ fontSize: 13 }} />
-              Lockdown
-            </div>
+          <div style={{ padding: "8px 14px", background: C.amberDim, border: `1px solid ${C.amber}`, borderRadius: 6, fontSize: 12, color: C.amber, display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}>
+            <iconify-icon icon="lucide:shield-alert" style={{ fontSize: 14 }} />
+            Lockdown Active
           </div>
         </div>
-      </header>
+      </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         {attempts.map((attempt) => {
@@ -478,10 +510,12 @@ export const AuditLog: React.FC = () => {
               className="glass-panel"
               style={{
                 border: `1px solid ${warn ? C.red : C.border}`,
-                borderRadius: "12px",
+                borderRadius: "var(--card-radius)",
                 overflow: "hidden",
                 transition: "all 0.3s",
                 marginBottom: 16,
+                background: "var(--surface)",
+                boxShadow: "var(--shadow-card)",
               }}
             >
               {/* Row header */}
@@ -490,9 +524,9 @@ export const AuditLog: React.FC = () => {
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1fr auto",
-                  padding: "20px",
+                  padding: "20px 24px",
                   cursor: "pointer",
-                  backgroundColor: isExpanded ? C.violetDim : "transparent",
+                  backgroundColor: isExpanded ? "var(--surface-raised)" : "transparent",
                   borderBottom: isExpanded ? `1px solid ${C.border}` : "none",
                   alignItems: "center",
                   gap: 12,
@@ -517,20 +551,26 @@ export const AuditLog: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: "0.75rem", color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Lockdown</div>
+                  <div style={{ fontSize: "0.75rem", color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Status</div>
                   <div style={{ fontSize: 12, marginTop: 4, display: "flex", alignItems: "center", gap: 5 }}>
-                    <div
-                      style={{
-                        width: 7,
-                        height: 7,
-                        borderRadius: "50%",
-                        background: lockdownEscalated ? C.red : C.cyan,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span style={{ color: lockdownEscalated ? C.red : C.cyan, fontFamily: MONO }}>
-                      {lockdownEscalated ? "Escalated" : "Clean"}
-                    </span>
+                    {attempt.is_retake_requested ? (
+                      <>
+                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.amber, flexShrink: 0 }} />
+                        <span style={{ color: C.amber, fontFamily: MONO }}>Retake Req.</span>
+                      </>
+                    ) : attempt.status === "failed" ? (
+                      <>
+                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.red, flexShrink: 0 }} />
+                        <span style={{ color: C.red, fontFamily: MONO }}>Failed</span>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: lockdownEscalated ? C.red : C.cyan, flexShrink: 0 }} />
+                        <span style={{ color: lockdownEscalated ? C.red : C.cyan, fontFamily: MONO }}>
+                          {lockdownEscalated ? "Escalated" : "Clean"}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div>
@@ -560,6 +600,7 @@ export const AuditLog: React.FC = () => {
                     <AttemptDetail
                       attempt={attempt}
                       onIssueCertificate={handleIssueCertificate}
+                      onGrantRetake={handleGrantRetake}
                       processing={processingId === attempt.id}
                     />
                   </motion.div>
@@ -584,6 +625,37 @@ export const AuditLog: React.FC = () => {
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {toastError && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.95 }}
+            style={{
+              position: "fixed",
+              bottom: 32,
+              right: 32,
+              background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+              color: "white",
+              padding: "16px 24px",
+              borderRadius: "12px",
+              boxShadow: "0 12px 24px rgba(220, 38, 38, 0.25)",
+              zIndex: 1001,
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              fontWeight: 600,
+              border: "1px solid rgba(255,255,255,0.1)"
+            }}
+          >
+            <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: "50%", width: 32, height: 32, display: "grid", placeItems: "center" }}>
+              <iconify-icon icon="lucide:alert-circle" style={{ fontSize: 18 }} />
+            </div>
+            {toastError}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

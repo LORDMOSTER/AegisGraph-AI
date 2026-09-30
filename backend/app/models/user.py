@@ -1,7 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import String, Boolean, ForeignKey, UniqueConstraint
+from sqlalchemy import String, Boolean, ForeignKey, UniqueConstraint, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,6 +36,9 @@ class User(Base, TimestampMixin, UUIDMixin):
 
     # Face embedding for identity verification (stored as float array, not raw image)
     face_embedding: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+
+    # Base64 encoded employee photo
+    photo: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     company: Mapped["Company"] = relationship(back_populates="users")
     exam_sessions: Mapped[list["ExamSession"]] = relationship(back_populates="employee", cascade="all, delete-orphan")

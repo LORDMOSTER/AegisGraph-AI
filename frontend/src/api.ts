@@ -191,8 +191,16 @@ export async function resetAssignedExam(examId: string): Promise<void> {
   return fetchWithRetry<void>(`${BASE}/assessment/all-assigned-exams/${examId}/reset`, { method: "POST" });
 }
 
-export async function retakeExam(sessionId: string): Promise<{ status: string; new_session_id: string }> {
-  return fetchWithRetry<{ status: string; new_session_id: string }>(`${BASE}/assessment/exam/${sessionId}/retake`, { method: "POST" });
+export async function requestRetake(sessionId: string): Promise<{ status: string }> {
+  return fetchWithRetry<{ status: string }>(`${BASE}/assessment/exam/${sessionId}/request-retake`, { method: "POST" });
+}
+
+export async function grantRetake(sessionId: string): Promise<{ status: string }> {
+  return fetchWithRetry<{ status: string }>(`${BASE}/assessment/exam/${sessionId}/grant-retake`, { method: "POST" });
+}
+
+export async function getMe(): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/v1/auth/me`);
 }
 
 export async function assembleExam(jobTitle: string, targetCount: number): Promise<any> {
@@ -606,6 +614,7 @@ export interface Employee {
   status: "Active" | "Inactive";
   lastCertified: string | null;
   face_embedding_stored?: boolean;
+  photo?: string;
 }
 
 export async function getDepartments(): Promise<Department[]> {
@@ -701,11 +710,11 @@ export async function deleteEmployee(empId: string): Promise<void> {
   });
 }
 
-export async function storeFaceEmbedding(employeeCode: string, embedding: number[]): Promise<void> {
+export async function storeFaceEmbedding(employeeCode: string, embedding: number[], photoBase64?: string): Promise<void> {
   return fetchWithRetry<void>(`${BASE}/v1/users/${employeeCode}/face-embedding`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ embedding })
+    body: JSON.stringify({ embedding, photo: photoBase64 })
   });
 }
 
@@ -720,8 +729,8 @@ export interface ActivityEvent {
   timestamp: string; // ISO string
 }
 
-export async function getRecentActivity(): Promise<ActivityEvent[]> {
-  return fetchWithRetry<ActivityEvent[]>(`${BASE}/v1/users/activity`, { method: "GET" });
+export async function getRecentActivity(limit: number = 5): Promise<ActivityEvent[]> {
+  return fetchWithRetry<ActivityEvent[]>(`${BASE}/v1/users/activity?limit=${limit}`, { method: "GET" });
 }
 
 export interface DashboardStats {

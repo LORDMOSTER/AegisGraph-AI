@@ -40,6 +40,9 @@ app.include_router(analytics.router,  prefix="/api/analytics",  tags=["Analytics
 app.include_router(question_bank.router, prefix="/api/questions", tags=["Question Bank"])
 
 from app.api.v1.api import api_router as v1_router
+from app.api.v1.endpoints import audit
+
+app.include_router(audit.router, prefix="/api/audit", tags=["Audit"])
 app.include_router(v1_router, prefix="/api/v1")
 
 

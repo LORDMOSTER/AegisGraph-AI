@@ -55,6 +55,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewAllActivity, setViewAllActivity] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,7 +63,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
     try {
       const [mockStats, mockActivity] = await Promise.all([
         getDashboardStats(),
-        getRecentActivity()
+        getRecentActivity(viewAllActivity ? 1000 : 5)
       ]);
       setStats(mockStats);
       setActivity(mockActivity);
@@ -76,7 +77,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [backendOnline]);
+  }, [backendOnline, viewAllActivity]);
 
   useEffect(() => {
     load();
@@ -304,7 +305,16 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
 
       {/* Bottom Row: Recent Activity */}
       <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--card-radius)", padding: 24, boxShadow: "var(--shadow-card)" }}>
-        <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 600, color: "var(--ink)", marginBottom: 20 }}>Recent activity</h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 600, color: "var(--ink)", margin: 0 }}>Recent activity</h3>
+          <button 
+            className="btn btn-ghost"
+            style={{ fontSize: 13, padding: "4px 8px" }}
+            onClick={() => setViewAllActivity(!viewAllActivity)}
+          >
+            {viewAllActivity ? "Show Top 5" : "View All"}
+          </button>
+        </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
           {activity.length === 0 ? (
             <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
@@ -322,18 +332,9 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
               if (event.type === "exam") { icon = "check-square"; color = "#6d28d9"; bg = "rgba(109,40,217,0.08)"; }
 
               const eventDate = new Date(event.timestamp);
-              const today = new Date();
-              const yesterday = new Date(today);
-              yesterday.setDate(yesterday.getDate() - 1);
-
-              let dateStr = "";
-              if (eventDate.toDateString() === today.toDateString()) {
-                dateStr = "Today";
-              } else if (eventDate.toDateString() === yesterday.toDateString()) {
-                dateStr = "Yesterday";
-              } else {
-                dateStr = eventDate.toLocaleDateString("en-GB", { day: '2-digit', month: '2-digit', year: '2-digit' });
-              }
+              
+              // Always format as dd/mm/yyyy as requested
+              const dateStr = eventDate.toLocaleDateString("en-GB", { day: '2-digit', month: '2-digit', year: 'numeric' });
               const timeStr = eventDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
               const formattedTime = `${dateStr}, ${timeStr}`;
               

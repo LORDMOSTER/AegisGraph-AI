@@ -13,7 +13,7 @@ declare global {
 }
 
 interface WebcamCaptureProps {
-  onEmbeddingCaptured: (embedding: number[]) => void;
+  onEmbeddingCaptured: (embedding: number[], photoBase64: string) => void;
   onCancel: () => void;
   employeeName: string;
 }
@@ -27,6 +27,7 @@ export function WebcamCapture({ onEmbeddingCaptured, onCancel, employeeName }: W
   const [state, setState] = useState<CaptureState>("loading");
   const [message, setMessage] = useState("Initializing camera...");
   const [faceApiLoaded, setFaceApiLoaded] = useState(false);
+  const [isFaceLiveDetected, setIsFaceLiveDetected] = useState(false);
 
   // Load face-api.js models
   useEffect(() => {
@@ -83,6 +84,46 @@ export function WebcamCapture({ onEmbeddingCaptured, onCancel, employeeName }: W
     };
   }, []);
 
+  // Live detection loop
+  useEffect(() => {
+    let isActive = true;
+    if (state !== "ready" || !faceApiLoaded || !videoRef.current || !window.faceapi) return;
+
+    const detectLoop = async () => {
+      if (!isActive) return;
+      const video = videoRef.current;
+      if (video && video.readyState >= 2 && video.videoWidth > 0) {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(video, 0, 0);
+            const detection = await window.faceapi.detectSingleFace(
+              canvas,
+              new window.faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.2 })
+            );
+            if (isActive) {
+              setIsFaceLiveDetected(!!detection);
+            }
+          }
+        } catch (e) {
+          // ignore live loop errors
+        }
+      }
+      if (isActive) {
+        setTimeout(detectLoop, 300); // 300ms interval for live feedback
+      }
+    };
+    detectLoop();
+
+    return () => {
+      isActive = false;
+      setIsFaceLiveDetected(false);
+    };
+  }, [state, faceApiLoaded]);
+
   const handleCapture = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current || !window.faceapi || !faceApiLoaded) return;
     setState("capturing");
@@ -101,7 +142,7 @@ export function WebcamCapture({ onEmbeddingCaptured, onCancel, employeeName }: W
 
       // Detect face and compute embedding
       const detection = await window.faceapi
-        .detectSingleFace(canvas, new window.faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.3 }))
+        .detectSingleFace(canvas, new window.faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.2 }))
         .withFaceLandmarks(true)
         .withFaceDescriptor();
 
@@ -117,13 +158,14 @@ export function WebcamCapture({ onEmbeddingCaptured, onCancel, employeeName }: W
 
       // embedding is a Float32Array — convert to regular number[]
       const embedding = Array.from(detection.descriptor as Float32Array);
+      const photoBase64 = canvas.toDataURL("image/jpeg", 0.8);
       setState("success");
       setMessage("Face captured successfully!");
 
       // Stop camera
       streamRef.current?.getTracks().forEach((t) => t.stop());
 
-      setTimeout(() => onEmbeddingCaptured(embedding), 800);
+      setTimeout(() => onEmbeddingCaptured(embedding, photoBase64), 800);
     } catch (err: any) {
       setState("error");
       setMessage(`Error during capture: ${err.message}`);
@@ -235,9 +277,9 @@ export function WebcamCapture({ onEmbeddingCaptured, onCancel, employeeName }: W
             lineHeight: 1.6,
           }}
         >
-          <strong style={{ color: "var(--ink)" }}>Privacy:</strong> Only the mathematical face
-          embedding (128 numbers) is stored — never the raw photo. This is used solely for identity
-          verification at exam start.
+          <strong style={{ color: "var(--ink)" }}>Privacy:</strong> The photo and mathematical face
+          embedding are stored to be used solely for identity
+          verification.
         </div>
 
         {/* Video feed */}
@@ -289,10 +331,11 @@ export function WebcamCapture({ onEmbeddingCaptured, onCancel, employeeName }: W
                 width: 160,
                 height: 190,
                 borderRadius: "50%",
-                border: `3px solid ${statusColor}`,
+                border: `3px solid ${isFaceLiveDetected ? "#10b981" : statusColor}`,
                 pointerEvents: "none",
                 opacity: 0.7,
-                boxShadow: `0 0 0 4px ${statusColor}22`,
+                boxShadow: `0 0 0 4px ${isFaceLiveDetected ? "#10b981" : statusColor}22`,
+                transition: "all 0.3s ease"
               }}
             />
           )}
@@ -325,17 +368,17 @@ export function WebcamCapture({ onEmbeddingCaptured, onCancel, employeeName }: W
           </button>
           <button
             onClick={handleCapture}
-            disabled={state !== "ready"}
+            disabled={state !== "ready" || !isFaceLiveDetected}
             style={{
               flex: 2,
               height: 42,
-              background: state === "ready" ? "var(--accent)" : "var(--raised)",
+              background: state === "ready" && isFaceLiveDetected ? "var(--accent)" : "var(--raised)",
               border: "none",
               borderRadius: 9,
               fontSize: 13,
               fontWeight: 700,
-              color: state === "ready" ? "#fff" : "var(--muted)",
-              cursor: state === "ready" ? "pointer" : "not-allowed",
+              color: state === "ready" && isFaceLiveDetected ? "#fff" : "var(--muted)",
+              cursor: state === "ready" && isFaceLiveDetected ? "pointer" : "not-allowed",
               fontFamily: "var(--font-sans)",
               display: "flex",
               alignItems: "center",

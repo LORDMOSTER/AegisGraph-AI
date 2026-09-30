@@ -35,6 +35,31 @@ async def get_manuals(
         })
     return response
 
+@router.delete("/manuals/{manual_id}")
+async def delete_manual(
+    manual_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Delete a manual and cascade delete its sections, subcategories, rules, etc."""
+    stmt = select(Manual).where(Manual.company_id == current_user.company_id, Manual.id == manual_id)
+    result = await db.execute(stmt)
+    manual = result.scalar_one_or_none()
+    
+    if not manual:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Manual not found")
+        
+    import os
+    if manual.file_path and os.path.exists(manual.file_path):
+        try:
+            os.remove(manual.file_path)
+        except OSError:
+            pass
+            
+    await db.delete(manual)
+    await db.commit()
+    return {"status": "success", "message": "Manual and all associated rules deleted."}
+
 
 @router.get("/tree", response_model=HierarchyTreeResponse)
 async def get_hierarchy_tree(

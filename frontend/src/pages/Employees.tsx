@@ -22,6 +22,7 @@ export function Employees() {
   // Credential & Capture State
   const [newEmp, setNewEmp] = useState<Employee | null>(null);
   const [captureTarget, setCaptureTarget] = useState<Employee | null>(null);
+  const [viewPhotoTarget, setViewPhotoTarget] = useState<Employee | null>(null);
 
   // Custom Dialog States
   const [dialog, setDialog] = useState<{
@@ -62,11 +63,11 @@ export function Employees() {
     setStep("capture"); // Go to capture step instead of credential
   };
 
-  const handleCaptureComplete = async (embedding: number[]) => {
+  const handleCaptureComplete = async (embedding: number[], photoBase64: string) => {
     try {
       const target = newEmp || captureTarget;
       if (target) {
-        await storeFaceEmbedding(target.id, embedding);
+        await storeFaceEmbedding(target.id, embedding, photoBase64);
         await loadData();
       }
       if (newEmp) {
@@ -222,7 +223,15 @@ export function Employees() {
                     <td style={{ color: "var(--text-secondary)" }}>{emp.designation}</td>
                     <td>{emp.departmentName}</td>
                     <td>
-                      {emp.face_embedding_stored ? (
+                      {emp.photo ? (
+                        <button 
+                          className="btn btn-ghost" 
+                          style={{ padding: "4px 8px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 4 }} 
+                          onClick={() => setViewPhotoTarget(emp)}
+                        >
+                          <iconify-icon icon="lucide:image" /> View Photo
+                        </button>
+                      ) : emp.face_embedding_stored ? (
                         <span style={{ fontSize: 11, color: "var(--emerald)", display: "inline-flex", alignItems: "center", gap: 4 }}>
                           <iconify-icon icon="lucide:check-circle" /> Enrolled
                         </span>
@@ -490,6 +499,31 @@ export function Employees() {
                 onCancel={handleCaptureSkip}
                 employeeName={captureTarget.name}
               />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* View Photo Modal */}
+      <AnimatePresence>
+        {viewPhotoTarget && viewPhotoTarget.photo && (
+          <div className="qr-modal-overlay" style={{ zIndex: 10000 }}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="card glass-panel"
+              style={{ width: "100%", maxWidth: 400, padding: 24, textAlign: "center" }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+                  Photo - {viewPhotoTarget.name}
+                </h3>
+                <button className="btn btn-ghost" onClick={() => setViewPhotoTarget(null)} style={{ padding: 4 }}>
+                  <iconify-icon icon="lucide:x" style={{ fontSize: 20 }} />
+                </button>
+              </div>
+              <img src={viewPhotoTarget.photo} alt={viewPhotoTarget.name} style={{ width: "100%", borderRadius: 12, objectFit: "cover" }} />
             </motion.div>
           </div>
         )}

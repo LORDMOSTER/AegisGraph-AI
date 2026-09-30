@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getMe } from "../api";
 import { ExamDashboard } from "../pages/ExamDashboard";
 import { ExamSession } from "../pages/ExamSession";
 
@@ -10,8 +11,14 @@ export function EmployeeShell({ onLogout }: Props) {
   const [route, setRoute] = useState<"dashboard" | "exam">("dashboard");
   const [activeExamId, setActiveExamId] = useState<string | null>(null);
 
+  const [userProfile, setUserProfile] = useState<any>(null);
+
   // Employee code is stored on login (employee_code from JWT/login response)
   const employeeCode = localStorage.getItem("aegis_employee_code") || "";
+
+  useEffect(() => {
+    getMe().then((data) => setUserProfile(data)).catch(console.error);
+  }, []);
 
   const handleStartExam = (examId: string) => {
     setActiveExamId(examId);
@@ -37,9 +44,9 @@ export function EmployeeShell({ onLogout }: Props) {
           </div>
           <div>
             <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--text-primary)" }}>
-              Welcome back, Employee
+              Welcome back, {userProfile?.full_name || "Employee"}
             </p>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--cyan)" }}>Line Operator</p>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--cyan)" }}>{userProfile?.designation || "Line Operator"}</p>
           </div>
         </div>
         <button
@@ -51,7 +58,7 @@ export function EmployeeShell({ onLogout }: Props) {
       </header>
 
       <main style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 1 }}>
-        <ExamDashboard onStartExam={handleStartExam} />
+        <ExamDashboard onStartExam={handleStartExam} userProfile={userProfile} />
       </main>
 
       <footer style={{ padding: "16px 24px", borderTop: "1px solid var(--border-subtle)", background: "var(--void)", display: "flex", justifyContent: "space-between", alignItems: "center", color: "var(--text-tertiary)", fontSize: 11 }}>

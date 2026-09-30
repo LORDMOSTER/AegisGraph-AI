@@ -14,6 +14,8 @@ class ExamStatus(str, enum.Enum):
     COMPLETED = "completed"
     PENDING_REVIEW = "pending_supervisor_review"
     FAILED = "failed"
+    RETAKE_REQUESTED = "retake_requested"
+    RETAKE_GRANTED = "retake_granted"
 
 class ExamSession(Base, TimestampMixin, UUIDMixin):
     __tablename__ = "exam_sessions"

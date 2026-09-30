@@ -86,6 +86,7 @@ export function IngestionTerminal() {
   const [error, setError]             = useState<string | null>(null);
   const [progress, setProgress]       = useState<{current: number, total: number} | null>(null);
   const [manuals, setManuals]         = useState<any[]>([]);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logEndRef    = useRef<HTMLDivElement>(null);
 
@@ -103,6 +104,28 @@ export function IngestionTerminal() {
       console.error("Failed to fetch manuals", err);
     }
   }, []);
+
+  const handleDeleteManual = async (manualId: string) => {
+    try {
+      const token = localStorage.getItem("aegis_token");
+      const res = await fetch(`http://localhost:8000/api/v1/hierarchy/manuals/${manualId}`, {
+        method: "DELETE",
+        headers: token ? { "Authorization": `Bearer ${token}` } : undefined
+      });
+      if (res.ok) {
+        addLog("Manual deleted successfully.", "success");
+        fetchManuals();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        addLog(`Failed to delete manual: ${body.detail || 'Unknown error'}`, "error");
+      }
+    } catch (err) {
+      addLog("Failed to delete manual", "error");
+      console.error(err);
+    } finally {
+      setConfirmDeleteId(null);
+    }
+  };
 
   useEffect(() => {
     fetchManuals();
@@ -511,15 +534,24 @@ export function IngestionTerminal() {
                       {m.upload_date ? new Date(m.upload_date).toLocaleDateString() : "N/A"}
                     </td>
                     <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                      <a 
-                        href={`http://localhost:8000${m.url}`} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="btn btn-primary"
-                        style={{ padding: "6px 12px", fontSize: 12, textDecoration: "none", display: "inline-block" }}
-                      >
-                        View & Download
-                      </a>
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                        <button
+                          className="btn btn-ghost"
+                          style={{ padding: "6px 12px", fontSize: 12, color: "var(--crimson)" }}
+                          onClick={() => setConfirmDeleteId(m.id)}
+                        >
+                          Delete
+                        </button>
+                        <a 
+                          href={`http://localhost:8000${m.url}`} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="btn btn-primary"
+                          style={{ padding: "6px 12px", fontSize: 12, textDecoration: "none", display: "inline-block" }}
+                        >
+                          View & Download
+                        </a>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -528,6 +560,34 @@ export function IngestionTerminal() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {confirmDeleteId && (
+          <div className="qr-modal-overlay" style={{ zIndex: 9999 }}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="card glass-panel"
+              style={{ width: "100%", maxWidth: 400, padding: 24, textAlign: "center" }}
+            >
+              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 12, color: "var(--text-primary)" }}>Confirm Deletion</h3>
+              <p style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 24, lineHeight: 1.5 }}>
+                Are you sure you want to delete this manual? All associated rules will also be deleted.
+              </p>
+              <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                <button className="btn btn-ghost" onClick={() => setConfirmDeleteId(null)}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" style={{ background: "var(--crimson)", borderColor: "var(--crimson)" }} onClick={() => handleDeleteManual(confirmDeleteId)}>
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

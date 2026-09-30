@@ -27,6 +27,7 @@ class AttemptResponse(BaseModel):
     score: Optional[float]
     integrity_score: Optional[float]
     lockdown_escalated: bool
+    is_retake_requested: bool = False
     completed_at: Optional[datetime]
     model_config = ConfigDict(from_attributes=True)
 
@@ -59,7 +60,7 @@ async def get_pending_attempts(
         select(ExamSession)
         .options(selectinload(ExamSession.employee), selectinload(ExamSession.assessment))
         .where(
-            ExamSession.status.in_([ExamStatus.COMPLETED, ExamStatus.PENDING_REVIEW])
+            ExamSession.status.in_([ExamStatus.COMPLETED, ExamStatus.PENDING_REVIEW, ExamStatus.RETAKE_REQUESTED, ExamStatus.FAILED])
         )
     )
     result = await db.execute(stmt)
@@ -75,6 +76,7 @@ async def get_pending_attempts(
             "score": s.score,
             "integrity_score": s.integrity_score,
             "lockdown_escalated": s.status == ExamStatus.PENDING_REVIEW,
+            "is_retake_requested": s.status == ExamStatus.RETAKE_REQUESTED,
             "completed_at": s.completed_at,
             "employee_name": s.employee.full_name or s.employee.employee_code,
             "job_title": s.employee.designation or "Employee",
