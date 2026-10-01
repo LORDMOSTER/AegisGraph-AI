@@ -28,6 +28,12 @@ export const Certificates: React.FC = () => {
   const [certs, setCerts] = useState<AdminCertificate[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -218,7 +224,7 @@ export const Certificates: React.FC = () => {
                       const urlPath = cert.pdfUrl.startsWith('/') ? cert.pdfUrl : `/${cert.pdfUrl}`;
                       window.open(`http://localhost:8000${urlPath}`, '_blank');
                     } else {
-                      alert("No document available for this certificate.");
+                      showToast("No document available for this certificate.");
                     }
                   }} 
                   className="btn" 
@@ -250,6 +256,35 @@ export const Certificates: React.FC = () => {
           );
         })}
       </div>
+
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            style={{
+              position: "fixed",
+              bottom: 24,
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "var(--surface-raised)",
+              color: "var(--text-primary)",
+              padding: "12px 24px",
+              borderRadius: 8,
+              border: "1px solid var(--border)",
+              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
+              zIndex: 9999,
+              display: "flex",
+              alignItems: "center",
+              gap: 8
+            }}
+          >
+            <iconify-icon icon="lucide:info" style={{ color: "var(--amber)" }}></iconify-icon>
+            {toastMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {isModalOpen && (

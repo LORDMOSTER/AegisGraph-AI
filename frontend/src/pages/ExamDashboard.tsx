@@ -9,6 +9,7 @@ export interface AssignedExam {
   totalQuestions: number;
   status: string;
   score: number | null;
+  revealScoreToUser: boolean;
   assignedAt: string;
 }
 
@@ -42,6 +43,7 @@ export function ExamDashboard({ onStartExam, userProfile }: Props) {
       totalQuestions: exam.total_questions,
       status: exam.status,
       score: exam.score,
+      revealScoreToUser: exam.reveal_score_to_user ?? false,
       assignedAt: exam.assigned_at
     })).sort((a, b) => new Date(a.assignedAt).getTime() - new Date(b.assignedAt).getTime());
 
@@ -225,7 +227,7 @@ export function ExamDashboard({ onStartExam, userProfile }: Props) {
                       }}>
                         {latestSession.status.replace("_", " ")}
                       </span>
-                      {latestSession.score !== null && (
+                      {(latestSession.score !== null && latestSession.revealScoreToUser) && (
                         <span style={{ fontSize: 12, fontWeight: 600, color: isPassed ? "#10b981" : "#ef4444" }}>
                           Score: {latestSession.score.toFixed(0)}%
                         </span>

@@ -18,6 +18,7 @@
  *   • Identity verification with face-api.js (Section 5)
  */
 import { useEffect, useRef, useState, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
 import { motion, AnimatePresence } from "framer-motion";
 import { getExam, saveAnswer, submitExam, logLockdownAnomaly, getFaceEmbedding } from "../api";
 import { ExamUnlockScreen } from "../components/ExamUnlockScreen";
@@ -513,6 +514,7 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [assessmentName, setAssessmentName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   // ── Navigation & answer state ─────────────────────────────────────────────
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -540,10 +542,18 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Anomaly clip recorder (Section 6)
-  const { triggerClipSave } = useAnomalyClipRecorder({
+  const { triggerClipSave: triggerCamSave, isRecording: isCamRecording } = useAnomalyClipRecorder({
     examSessionId: examId,
-    cameraStream: cameraRef.current,
+    mediaStream: cameraRef.current,
     examStartTime: examStartTimeRef.current,
+    prefix: "cam"
+  });
+
+  const { triggerClipSave: triggerScreenSave, isRecording: isScreenRecording } = useAnomalyClipRecorder({
+    examSessionId: examId,
+    mediaStream: screenshareRef.current,
+    examStartTime: examStartTimeRef.current,
+    prefix: "screen"
   });
 
   // ── Load questions after fullscreen granted ──────────────────────────────────
@@ -563,6 +573,9 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
       setQuestions(qs);
       setAssessmentName(data.assessment_name ?? "Safety Assessment");
       examStartTimeRef.current = Date.now();
+      if (data.duration_mins) {
+        setTimeLeft(data.duration_mins * 60);
+      }
 
       // Restore any previously saved answers (crash-recovery)
       if (data.responses && typeof data.responses === "object") {
@@ -591,6 +604,21 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
     }
     load();
   }, [examId, phase]);
+
+  // ── Timer Countdown ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (phase !== "fullscreen" || timeLeft === null) return;
+    if (timeLeft <= 0) {
+      if (!submitting) {
+        handleConfirmSubmit();
+      }
+      return;
+    }
+    const timerId = setInterval(() => {
+      setTimeLeft(prev => (prev !== null ? prev - 1 : null));
+    }, 1000);
+    return () => clearInterval(timerId);
+  }, [phase, timeLeft, submitting]);
 
   // ── Load face embedding when entering identity phase ───────────────────────
   useEffect(() => {
@@ -627,7 +655,8 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
       });
 
       // Trigger anomaly clip save (Section 6)
-      triggerClipSave(type).catch(() => {});
+      triggerCamSave(type).catch(() => {});
+      triggerScreenSave(type).catch(() => {});
 
       try {
         const res = await logLockdownAnomaly(examId, type, durationS);
@@ -636,7 +665,7 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
         // Fire-and-forget; never interrupt exam on network blip
       }
     },
-    [examId, triggerClipSave]
+    [examId, triggerCamSave, triggerScreenSave]
   );
 
   // Check thresholds as separate effect responding to count/duration changes
@@ -729,7 +758,7 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
   const requestScreenshare = useCallback(async () => {
     try {
       const stream = await (navigator.mediaDevices as any).getDisplayMedia({
-        video: { frameRate: 1 },
+        video: { frameRate: { ideal: 15 } },
         audio: false,
       });
       screenshareRef.current = stream;
@@ -761,7 +790,7 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
       return;
     }
 
-    setPhase("identity");
+    setPhase("fullscreen");
   }, [logAnomaly]);
 
   // ── Answer selection (MCQ / TRUE_FALSE) ───────────────────────────────────
@@ -828,9 +857,15 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
   }, [answers, multiAnswers, currentQ]);
 
   // ── Submit logic ──────────────────────────────────────────────────────────
-  const handleConfirmSubmit = async () => {
+  async function handleConfirmSubmit() {
     setSubmitting(true);
     try {
+      // Trigger a final clip save containing the entire session buffer for both feeds
+      const promises = [];
+      if (isCamRecording) promises.push(triggerCamSave("full_session"));
+      if (isScreenRecording) promises.push(triggerScreenSave("full_session"));
+      await Promise.all(promises);
+      
       // Compute a simple integrity score from anomaly count (lower = worse)
       const integrityScore = Math.max(0, 100 - anomalyCount * 15 - cumulativeDuration * 0.5);
       const res = await submitExam(examId, integrityScore);
@@ -955,7 +990,7 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
             </p>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => setPhase("identity")} style={secondaryBtnStyle}>Skip</button>
+            <button onClick={() => setPhase("fullscreen")} style={secondaryBtnStyle}>Skip</button>
             <button onClick={requestScreenshare} style={primaryBtnStyle}>
               <iconify-icon icon="lucide:monitor-check" style={{ fontSize: 16 }} />
               Allow Monitoring & Begin
@@ -1151,6 +1186,15 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
             </p>
           </div>
 
+          {timeLeft !== null && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: timeLeft < 60 ? "var(--red-dim)" : "var(--surface-hover)", padding: "4px 12px", borderRadius: 999, border: `1px solid ${timeLeft < 60 ? "var(--red)" : "transparent"}` }}>
+              <iconify-icon icon="lucide:clock" style={{ fontSize: 14, color: timeLeft < 60 ? "var(--red)" : "var(--muted)" }} />
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: timeLeft < 60 ? "var(--red)" : "var(--ink)" }}>
+                {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}
+              </span>
+            </div>
+          )}
+
           {/* Progress bar */}
           <div style={{ flex: 2, height: 6, background: "var(--raised)", borderRadius: 4, overflow: "hidden" }}>
             <motion.div
@@ -1270,7 +1314,13 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
                     letterSpacing: "-0.01em",
                   }}
                 >
-                  {currentQ.question_text}
+                  <ReactMarkdown
+                    components={{
+                      p: ({ node, ...props }) => <span {...props} />
+                    }}
+                  >
+                    {currentQ.question_text}
+                  </ReactMarkdown>
                 </h1>
 
                 {/* ── MCQ / TRUE_FALSE options ─────────────────────────────── */}

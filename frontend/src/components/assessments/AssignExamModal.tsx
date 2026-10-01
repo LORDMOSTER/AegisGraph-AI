@@ -101,6 +101,7 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
   // Step 3 State
   const [revealScore, setRevealScore] = useState(false);
   const [examKey, setExamKey] = useState("");
+  const [durationMins, setDurationMins] = useState("");
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -111,6 +112,7 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
       setQuestions([]);
       setRevealScore(false);
       setExamKey("");
+      setDurationMins("");
       setErrorMsg(null);
     }
   }, [isOpen]);
@@ -161,7 +163,9 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
       }));
 
       const { saveAssembledExam, assignExam } = await import("../../api");
-      const saveRes = await saveAssembledExam(`${roleTemplate} Certification`, manifest);
+      const parsedDuration = parseInt(durationMins, 10);
+      const finalDuration = isNaN(parsedDuration) || parsedDuration <= 0 ? null : parsedDuration;
+      const saveRes = await saveAssembledExam(`${roleTemplate} Certification`, manifest, finalDuration);
       if (saveRes && saveRes.assessment_id) {
         await assignExam(saveRes.assessment_id, [selectedEmployeeId], examKey || undefined, revealScore);
       }
@@ -472,6 +476,33 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                   />
                   <p style={{ margin: "8px 0 0", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
                     This key is verbal-only — do <strong>not</strong> send it digitally. The worker must enter it at test time in the presence of a supervisor. It is stored hashed and never revealed.
+                  </p>
+                </div>
+
+                <div style={{ marginTop: 20 }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+                    Exam Duration <span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.75rem" }}>(in minutes)</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={durationMins}
+                    onChange={(e) => setDurationMins(e.target.value)}
+                    placeholder="e.g. 30 (leave blank for no limit)"
+                    style={{
+                      width: "100%",
+                      padding: "12px 14px",
+                      fontSize: "1.1rem",
+                      fontFamily: "monospace",
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid var(--border-muted)",
+                      borderRadius: 8,
+                      color: "var(--text-primary)",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <p style={{ margin: "8px 0 0", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                    Setting a duration limit will auto-submit the exam when time runs out.
                   </p>
                 </div>
 

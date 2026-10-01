@@ -9,8 +9,8 @@ import { useRef, useCallback, useEffect } from "react";
 
 const DB_NAME = "aegis_anomaly_clips";
 const STORE_NAME = "clips";
-const ROLLING_BUFFER_SECONDS = 5;
-const MAX_CLIP_DURATION_MS = 15000; // 15 seconds max clip
+const ROLLING_BUFFER_SECONDS = 3600; // Store up to 1 hour for full session recording
+const MAX_CLIP_DURATION_MS = 3600000; // 1 hour max clip
 
 export interface AnomalyClip {
   id: string;
@@ -106,8 +106,9 @@ export async function deleteClipsForSession(examSessionId: string): Promise<void
 
 interface UseAnomalyClipRecorderOptions {
   examSessionId: string;
-  cameraStream: MediaStream | null;
+  mediaStream: MediaStream | null;
   examStartTime: number; // Date.now() when exam started
+  prefix?: string;
 }
 
 interface UseAnomalyClipRecorderReturn {
@@ -117,8 +118,9 @@ interface UseAnomalyClipRecorderReturn {
 
 export function useAnomalyClipRecorder({
   examSessionId,
-  cameraStream,
+  mediaStream,
   examStartTime,
+  prefix = "cam",
 }: UseAnomalyClipRecorderOptions): UseAnomalyClipRecorderReturn {
   // Rolling buffer: store last N seconds of Blob chunks
   const bufferRef = useRef<{ blob: Blob; timestamp: number }[]>([]);
@@ -128,7 +130,7 @@ export function useAnomalyClipRecorder({
 
   // Start rolling buffer recording
   useEffect(() => {
-    if (!cameraStream) return;
+    if (!mediaStream) return;
 
     const supported = typeof MediaRecorder !== "undefined";
     if (!supported) return;
@@ -142,9 +144,9 @@ export function useAnomalyClipRecorder({
     if (!mimeType) return;
 
     try {
-      const recorder = new MediaRecorder(cameraStream, {
+      const recorder = new MediaRecorder(mediaStream, {
         mimeType,
-        videoBitsPerSecond: 500_000, // 500kbps — enough for anomaly review
+        videoBitsPerSecond: 2_500_000, // 2.5Mbps for clear text
       });
       recorderRef.current = recorder;
       isActiveRef.current = true;
@@ -180,7 +182,7 @@ export function useAnomalyClipRecorder({
       recorderRef.current = null;
       bufferRef.current = [];
     };
-  }, [cameraStream]);
+  }, [mediaStream]);
 
   const triggerClipSave = useCallback(
     async (anomalyType: string): Promise<void> => {

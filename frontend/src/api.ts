@@ -211,11 +211,11 @@ export async function assembleExam(jobTitle: string, targetCount: number): Promi
   });
 }
 
-export async function saveAssembledExam(name: string, manifest: any[]): Promise<any> {
+export async function saveAssembledExam(name: string, manifest: any[], duration_mins: number | null = null): Promise<any> {
   return fetchWithRetry<any>(`${BASE}/assessment/save-assembled`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, manifest })
+    body: JSON.stringify({ name, manifest, duration_mins })
   });
 }
 
@@ -357,6 +357,8 @@ export interface AuditTimeline {
   status: string;
   score: number | null;
   lockdown_escalated: boolean;
+  started_at: string | null;
+  completed_at: string | null;
   timeline: AuditTimelineEvent[];
 }
 
@@ -365,7 +367,27 @@ export interface AuditTimeline {
  */
 export async function getAuditTimeline(examId: string): Promise<AuditTimeline> {
   return fetchWithRetry<AuditTimeline>(
-    `${BASE}/assessment/exam/${examId}/audit-timeline`,
+    `${BASE}/audit/attempts/${examId}/timeline`,
+    { method: "GET" }
+  );
+}
+
+export interface AttemptReviewItem {
+  question_text: string;
+  options: string[];
+  correct_answer: string;
+  user_answer: string | null;
+  is_correct: boolean;
+}
+
+export interface AttemptReviewResponse {
+  attempt_id: string;
+  items: AttemptReviewItem[];
+}
+
+export async function getAttemptReview(attemptId: string): Promise<AttemptReviewResponse> {
+  return fetchWithRetry<AttemptReviewResponse>(
+    `${BASE}/audit/attempts/${attemptId}/review`,
     { method: "GET" }
   );
 }

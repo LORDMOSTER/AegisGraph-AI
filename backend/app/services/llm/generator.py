@@ -103,7 +103,7 @@ def _levenshtein(a: str, b: str) -> int:
 _SHARED_CONSTRAINTS = """
 ADDITIONAL CONSTRAINTS (safety-critical assessment):
 - Do NOT combine a negatively phrased stem ("which should NOT be done") with "none of the above" as an answer option. This combination is ambiguous in safety contexts. Negative stems are fine when necessary, but must pair with specific, concrete incorrect options only.
-- Vary sentence structure: rotate between (a) direct fact-recall questions, (b) scenario-based questions ("A worker notices X, what should they do?"), and (c) definition/identification questions. Do not start every question with the same template phrase.
+- VARY SENTENCE STRUCTURE EXTREMELY. DO NOT start questions with "A worker notices..." or "A worker observes...". You MUST rotate between direct fact-recall questions, practical procedural questions, and identification questions. Ensure a wide variety of question formats.
 - Every distractor must be independently and clearly false based on the rule — not just "less complete" than a correct answer.
 - Ground every claim in the literal text of the rule provided. Never introduce facts not present in the rule.
 """

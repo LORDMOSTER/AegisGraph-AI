@@ -348,20 +348,12 @@ async def grant_retake(
         
     old_assessment = old_session.assessment
     
-    # Generate new assessment using old constraints
-    constraints = old_assessment.section_breakdown
-    
-    # We construct a mock ConstraintRequest to pass to our internal function
-    from app.api.assessment import generate_assessment
-    from app.models.schemas import ConstraintRequest
-    req = ConstraintRequest(constraints=constraints)
-    new_assess_resp = await generate_assessment(req, db, current_user)
-    
-    if new_assess_resp.status != "ready":
-        raise HTTPException(status_code=400, detail=f"Could not generate new questions: {new_assess_resp.message}")
+    # In AegisGraph offline Edge-AI mode, retakes reuse the same assembled assessment.
+    # This prevents the need to dynamically hit the LLM/Question Bank again.
+    new_assessment_id = old_session.assessment_id
         
     new_session = ExamSession(
-        assessment_id=new_assess_resp.assessment_id,
+        assessment_id=new_assessment_id,
         employee_id=old_session.employee_id,
         status=ExamStatus.ASSIGNED,
         assigned_at=datetime.now(timezone.utc),
@@ -572,6 +564,7 @@ async def get_my_exams(
         "status": e.status,
         "assigned_at": e.assigned_at,
         "score": e.score,
+        "reveal_score_to_user": e.assessment.reveal_score_to_user,
         "total_questions": e.assessment.total_question_count
     } for e in exams]
 
@@ -592,6 +585,7 @@ async def get_all_assigned_exams(
     
     return [{
         "exam_session_id": e.id,
+        "employee_id": e.employee.employee_code,
         "employee_name": e.employee.full_name or e.employee.employee_code,
         "assessment_name": e.assessment.name,
         "status": e.status,
@@ -630,7 +624,7 @@ async def get_exam(
 
     if exam.status == ExamStatus.ASSIGNED:
         exam.status = ExamStatus.IN_PROGRESS
-        exam.started_at = datetime.utcnow()
+        exam.started_at = datetime.now(timezone.utc)
         await db.commit()
 
     questions = []
@@ -660,6 +654,7 @@ async def get_exam(
         "pass_mark_pct": exam.assessment.pass_mark_pct,
         "use_weighted_marks": exam.assessment.use_weighted_marks,
         "reveal_score_to_user": exam.assessment.reveal_score_to_user,
+        "duration_mins": exam.assessment.duration_mins,
     }
 
 class AnswerRequest(BaseModel):
@@ -787,7 +782,7 @@ async def submit_exam(
 
     exam.score = sci_score
     exam.integrity_score = request.integrity_score
-    exam.completed_at = datetime.utcnow()
+    exam.completed_at = datetime.now(timezone.utc)
 
     # Save usage history
     for entry in usage_history_entries:
@@ -870,6 +865,7 @@ async def get_my_certificates(
 class SaveAssembledRequest(BaseModel):
     name: str
     manifest: list[dict]
+    duration_mins: Optional[int] = None
 
 @router.post("/save-assembled", summary="Save assembled questions as an assessment")
 async def save_assembled_assessment(
@@ -897,7 +893,8 @@ async def save_assembled_assessment(
         name=request.name,
         manifest=request.manifest,
         total_question_count=len(request.manifest),
-        section_breakdown={}
+        section_breakdown={},
+        duration_mins=request.duration_mins
     )
     db.add(assessment)
     await db.commit()

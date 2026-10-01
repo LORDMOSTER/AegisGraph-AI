@@ -9,6 +9,10 @@ export function Employees() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // Search and Sort State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: "asc" | "desc" } | null>(null);
+  
   // Modal State
   const [showModal, setShowModal] = useState(false);
   const [step, setStep] = useState<"form" | "capture" | "credential">("form");
@@ -169,6 +173,43 @@ export function Employees() {
       setLoading(false);
     }
   };
+  const handleSort = (key: string) => {
+    let direction: "asc" | "desc" = "asc";
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const filteredEmployees = [...employees]
+    .filter(emp => 
+      emp.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      emp.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.job_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.department_name.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a: any, b: any) => {
+      if (!sortConfig) return 0;
+      const { key, direction } = sortConfig;
+      const aVal = a[key] || "";
+      const bVal = b[key] || "";
+      if (aVal < bVal) return direction === "asc" ? -1 : 1;
+      if (aVal > bVal) return direction === "asc" ? 1 : -1;
+      return 0;
+    });
+
+  const renderSortableHeader = (label: string, key: string) => (
+    <th onClick={() => handleSort(key)} style={{ cursor: "pointer", userSelect: "none" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        {label}
+        {sortConfig?.key === key ? (
+          <iconify-icon icon={sortConfig.direction === "asc" ? "lucide:chevron-up" : "lucide:chevron-down"} style={{ fontSize: 14 }} />
+        ) : (
+          <iconify-icon icon="lucide:chevrons-up-down" style={{ fontSize: 14, color: "var(--text-tertiary)", opacity: 0.5 }} />
+        )}
+      </div>
+    </th>
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, height: "100%" }}>
@@ -177,7 +218,17 @@ export function Employees() {
           <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)" }}>Employees</h1>
           <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>Manage workforce access and certification history.</p>
         </div>
-        <div style={{ display: "flex", gap: "12px" }}>
+        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          <div style={{ position: "relative" }}>
+            <iconify-icon icon="lucide:search" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-tertiary)" }} />
+            <input
+              type="text"
+              placeholder="Search employees..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ padding: "8px 12px 8px 36px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontSize: 13, width: 220 }}
+            />
+          </div>
           <button className="btn btn-secondary" onClick={() => setShowAssignExamModal(true)}>
             Assign Exam
           </button>
@@ -194,10 +245,10 @@ export function Employees() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Employee ID</th>
-                <th>Name</th>
-                <th>Job Title</th>
-                <th>Department</th>
+                {renderSortableHeader("Employee ID", "id")}
+                {renderSortableHeader("Name", "name")}
+                {renderSortableHeader("Job Title", "job_title")}
+                {renderSortableHeader("Department", "department_name")}
                 <th>Photo</th>
                 <th>Status</th>
                 <th>Last Certified</th>
@@ -205,14 +256,14 @@ export function Employees() {
               </tr>
             </thead>
             <tbody>
-              {employees.length === 0 ? (
+              {filteredEmployees.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: 40, color: "var(--text-tertiary)" }}>
-                    No employees found.
+                  <td colSpan={8} style={{ textAlign: "center", padding: 40, color: "var(--text-tertiary)" }}>
+                    No employees found matching your search.
                   </td>
                 </tr>
               ) : (
-                employees.map(emp => (
+                filteredEmployees.map(emp => (
                   <tr key={emp.id}>
                     <td>
                       <span className="mono" style={{ fontSize: 12, color: "var(--cyan)" }}>

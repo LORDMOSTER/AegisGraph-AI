@@ -36,6 +36,7 @@ class Assessment(Base, TimestampMixin, UUIDMixin):
     valid_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reveal_score_to_user: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     role_template_used: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    duration_mins: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     company: Mapped["Company"] = relationship(back_populates="assessments")
     exam_sessions: Mapped[list["ExamSession"]] = relationship(

@@ -264,7 +264,7 @@ async def save_imported_certificate(
     # Create the CertificateRecord
     new_record = CertificateRecord(
         user_id=user.id,
-        sci_score=score,
+        sci_score=score if score is not None else 100.0,
         issue_date=issue_date,
         expiry_date=exp_dt,
         is_imported=True
