@@ -169,7 +169,7 @@ export function Rules() {
               ) : (
                 displayedRules.map(rule => (
                   <tr key={rule.id}>
-                    <td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
                       <span className="mono" style={{ fontSize: 12, color: "var(--cyan)" }}>
                         {rule.rule_code}
                       </span>
@@ -192,12 +192,36 @@ export function Rules() {
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 8, whiteSpace: 'nowrap' }}>
                         <button 
                           onClick={() => setEditingRule(rule)}
-                          style={{ padding: '6px 12px', fontSize: 12, borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer' }}
+                          style={{ padding: '6px 12px', fontSize: 12, borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer', whiteSpace: 'nowrap' }}
                         >
                           View / Edit
+                        </button>
+                        <button 
+                          onClick={async () => {
+                            if (!window.confirm(`Are you sure you want to delete rule ${rule.rule_code}?`)) return;
+                            try {
+                              const token = localStorage.getItem("aegis_token");
+                              const response = await fetch(`http://localhost:8000/api/v1/hierarchy/rules/${rule.id}`, {
+                                method: 'DELETE',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`
+                                }
+                              });
+                              if (response.ok) {
+                                setRules(prev => prev.filter(r => r.id !== rule.id));
+                              } else {
+                                console.error("Failed to delete rule");
+                              }
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }}
+                          style={{ padding: '6px 12px', fontSize: 12, borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--red)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                        >
+                          Delete
                         </button>
                       </div>
                     </td>

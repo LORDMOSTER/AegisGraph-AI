@@ -29,6 +29,9 @@ export const Certificates: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("name-asc");
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -107,6 +110,28 @@ export const Certificates: React.FC = () => {
     return expDate > today && expDate <= thirtyDaysFromNow;
   });
 
+  const filteredCerts = certs
+    .filter(c => 
+      (c.employeeName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.employeeId || "").toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (sortBy === "name-asc") {
+        return (a.employeeName || "").localeCompare(b.employeeName || "");
+      } else if (sortBy === "name-desc") {
+        return (b.employeeName || "").localeCompare(a.employeeName || "");
+      } else if (sortBy === "expiry-asc") {
+        return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
+      } else if (sortBy === "expiry-desc") {
+        return new Date(b.expiryDate).getTime() - new Date(a.expiryDate).getTime();
+      } else if (sortBy === "score-desc") {
+        return (b.score || 0) - (a.score || 0);
+      } else if (sortBy === "score-asc") {
+        return (a.score || 0) - (b.score || 0);
+      }
+      return 0;
+    });
+
   const handleImport = async (e: React.FormEvent) => {
     e.preventDefault();
     setImportError(null);
@@ -166,9 +191,38 @@ export const Certificates: React.FC = () => {
         </div>
       )}
 
+      <div style={{ display: "flex", gap: "16px", marginBottom: "24px" }}>
+        <input 
+          type="text" 
+          placeholder="Search certificates by name or ID..." 
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="field-input"
+          style={{ flex: 1, maxWidth: "400px" }}
+        />
+        <select 
+          value={sortBy} 
+          onChange={(e) => setSortBy(e.target.value)}
+          className="field-input"
+          style={{ width: "200px" }}
+        >
+          <option value="name-asc">Name (A-Z)</option>
+          <option value="name-desc">Name (Z-A)</option>
+          <option value="expiry-asc">Expiry Date (Earliest)</option>
+          <option value="expiry-desc">Expiry Date (Latest)</option>
+          <option value="score-desc">Score (Highest)</option>
+          <option value="score-asc">Score (Lowest)</option>
+        </select>
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))", gap: "24px" }}>
-        {certs.map((cert) => {
-          const d = new Date(cert.expiryDate);
+        {filteredCerts.length === 0 ? (
+          <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px", color: "var(--text-tertiary)" }}>
+            No certificates found.
+          </div>
+        ) : (
+          filteredCerts.map((cert) => {
+            const d = new Date(cert.expiryDate);
           const expDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
           return (
             <div key={cert.id} className="card">
@@ -254,7 +308,7 @@ export const Certificates: React.FC = () => {
               </div>
             </div>
           );
-        })}
+        }))}
       </div>
 
       <AnimatePresence>
@@ -350,7 +404,7 @@ export const Certificates: React.FC = () => {
                         setImportEmp(extractedName);
                         
                         // Attempt exact match
-                        const empMatch = employees.find(emp => emp.name.toLowerCase() === extractedName.toLowerCase() || extractedName.toLowerCase().includes(emp.name.toLowerCase()));
+                        const empMatch = employees.find(emp => emp.name.toLowerCase() === (extractedName || "").toLowerCase() || (extractedName || "").toLowerCase().includes(emp.name.toLowerCase()));
                         if (empMatch) {
                             setImportEmpId(empMatch.id);
                         } else {

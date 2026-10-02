@@ -44,14 +44,17 @@ export function Employees() {
   }, []);
 
   const loadData = async () => {
-    setLoading(true);
-    const [emps, deps] = await Promise.all([getEmployees(), getDepartments()]);
-    setEmployees(emps);
-    setDepartments(deps);
-    if (deps.length > 0 && !deptCode) {
-      setDeptCode(deps[0].code);
+    if (employees.length === 0) setLoading(true);
+    try {
+      const [emps, deps] = await Promise.all([getEmployees(), getDepartments()]);
+      setEmployees(emps);
+      setDepartments(deps);
+      if (deps.length > 0 && !deptCode) {
+        setDeptCode(deps[0].code);
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -59,12 +62,17 @@ export function Employees() {
     if (!name || !deptCode || !designation) return;
     
     setSaving(true);
-    const dep = departments.find(d => d.code === deptCode);
-    const emp = await createEmployee(name, deptCode, dep?.name || "", designation);
-    setNewEmp(emp);
-    await loadData();
-    setSaving(false);
-    setStep("capture"); // Go to capture step instead of credential
+    try {
+      const dep = departments.find(d => d.code === deptCode);
+      const emp = await createEmployee(name, deptCode, dep?.name || "", designation);
+      setNewEmp(emp);
+      await loadData();
+      setStep("capture"); // Go to capture step instead of credential
+    } catch (err: any) {
+      alert(`Error creating employee: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCaptureComplete = async (embedding: number[], photoBase64: string) => {
@@ -140,17 +148,19 @@ export function Employees() {
     }
     
     if (pinInput && pinInput.length === 6 && /^\d+$/.test(pinInput)) {
-      setLoading(true);
-      const isValid = await verifyAdminPassword(adminPassInput);
-      if (!isValid) {
-        setLoading(false);
-        setDialog({ type: "alert", title: "Error", message: "Incorrect admin password." });
-        return;
+      try {
+        const isValid = await verifyAdminPassword(adminPassInput);
+        if (!isValid) {
+          setDialog({ type: "alert", title: "Error", message: "Incorrect admin password." });
+          return;
+        }
+        
+        setDialog({ type: "none" });
+        await updateEmployeePin(emp.id, pinInput);
+        await loadData();
+      } catch (err) {
+        setDialog({ type: "alert", title: "Error", message: "Failed to update PIN." });
       }
-      
-      setDialog({ type: "none" });
-      await updateEmployeePin(emp.id, pinInput);
-      await loadData();
     } else {
       setDialog({ type: "alert", title: "Invalid PIN", message: "PIN must be exactly 6 digits." });
     }
@@ -164,13 +174,11 @@ export function Employees() {
     const emp = dialog.targetEmp;
     if (!emp) return;
     setDialog({ type: "none" });
-    setLoading(true);
     try {
       await deleteEmployee(emp.id);
       await loadData();
     } catch (err) {
       setDialog({ type: "alert", title: "Error", message: "Failed to delete employee." });
-      setLoading(false);
     }
   };
   const handleSort = (key: string) => {
@@ -183,10 +191,10 @@ export function Employees() {
 
   const filteredEmployees = [...employees]
     .filter(emp => 
-      emp.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      emp.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.job_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.department_name.toLowerCase().includes(searchQuery.toLowerCase())
+      (emp.name || "").toLowerCase().includes(searchQuery.toLowerCase()) || 
+      (emp.id || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (emp.designation || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (emp.departmentName || "").toLowerCase().includes(searchQuery.toLowerCase())
     )
     .sort((a: any, b: any) => {
       if (!sortConfig) return 0;

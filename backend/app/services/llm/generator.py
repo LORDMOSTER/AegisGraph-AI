@@ -102,8 +102,8 @@ def _levenshtein(a: str, b: str) -> int:
 # Shared constraint suffix injected into every system prompt
 _SHARED_CONSTRAINTS = """
 ADDITIONAL CONSTRAINTS (safety-critical assessment):
-- Do NOT combine a negatively phrased stem ("which should NOT be done") with "none of the above" as an answer option. This combination is ambiguous in safety contexts. Negative stems are fine when necessary, but must pair with specific, concrete incorrect options only.
-- VARY SENTENCE STRUCTURE EXTREMELY. DO NOT start questions with "A worker notices..." or "A worker observes...". You MUST rotate between direct fact-recall questions, practical procedural questions, and identification questions. Ensure a wide variety of question formats.
+- STRICTLY PROHIBITED: Do NOT use negatively phrased questions under any circumstances (e.g., "Which of the following is NOT...", "Which is incorrect", etc.). All questions MUST be positively phrased, asking the worker what they SHOULD do, what IS required, or what IS correct.
+- VARY SENTENCE STRUCTURE EXTREMELY. DO NOT start questions with "A worker notices..." or "A worker observes...". You MUST rotate between direct fact-recall questions, practical procedural scenarios, role-based responsibilities, and situational identification questions. Ensure a wide variety of positive question formats.
 - Every distractor must be independently and clearly false based on the rule — not just "less complete" than a correct answer.
 - Ground every claim in the literal text of the rule provided. Never introduce facts not present in the rule.
 """

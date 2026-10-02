@@ -26,6 +26,11 @@ static_dir = os.path.join(os.getcwd(), "static")
 os.makedirs(static_dir, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+cert_dir = os.path.join(os.getcwd(), "certs")
+os.makedirs(cert_dir, exist_ok=True)
+app.mount("/certs", StaticFiles(directory=cert_dir), name="certs")
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

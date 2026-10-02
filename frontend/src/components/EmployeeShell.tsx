@@ -37,7 +37,16 @@ export function EmployeeShell({ onLogout }: Props) {
   // Dashboard layout with top bar
   return (
     <div className="employee-layout">
-      <header className="employee-topbar">
+      <header 
+        className="employee-topbar clay-card" 
+        style={{ 
+          margin: "24px 32px", 
+          borderRadius: "24px", 
+          padding: "0 24px", 
+          border: "none", 
+          justifyContent: "space-between" 
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--void-4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
             👤
@@ -50,9 +59,21 @@ export function EmployeeShell({ onLogout }: Props) {
           </div>
         </div>
         <button
-          className="btn btn-ghost touch-target"
+          className="btn"
           onClick={onLogout}
+          style={{ 
+            backgroundColor: "var(--red)", 
+            color: "white", 
+            borderColor: "var(--red)",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            boxShadow: "var(--shadow-btn)",
+            padding: "6px 14px",
+            fontSize: "13px"
+          }}
         >
+          <iconify-icon icon="lucide:log-out" style={{ fontSize: 14 }} />
           Logout
         </button>
       </header>

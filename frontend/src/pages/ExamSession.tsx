@@ -607,18 +607,22 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
 
   // ── Timer Countdown ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (phase !== "fullscreen" || timeLeft === null) return;
-    if (timeLeft <= 0) {
-      if (!submitting) {
-        handleConfirmSubmit();
-      }
-      return;
-    }
+    if (phase !== "active") return;
+    
     const timerId = setInterval(() => {
-      setTimeLeft(prev => (prev !== null ? prev - 1 : null));
+      setTimeLeft(prev => {
+        if (prev === null) return null;
+        if (prev <= 1 && !submitting) {
+          clearInterval(timerId);
+          handleConfirmSubmit();
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
+    
     return () => clearInterval(timerId);
-  }, [phase, timeLeft, submitting]);
+  }, [phase, submitting]);
 
   // ── Load face embedding when entering identity phase ───────────────────────
   useEffect(() => {
@@ -1648,7 +1652,7 @@ export function ExamSession({ examId, employeeCode, onExit }: Props) {
         }}>
           <video 
             autoPlay playsInline muted 
-            ref={el => { if (el) el.srcObject = cameraRef.current; }}
+            ref={el => { if (el && el.srcObject !== cameraRef.current) el.srcObject = cameraRef.current; }}
             style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }}
           />
           <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.6)", padding: "2px 6px", borderRadius: 4, fontSize: 10, color: "#fff", display: "flex", alignItems: "center", gap: 4 }}>

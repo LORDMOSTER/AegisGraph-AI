@@ -138,6 +138,7 @@ export function AdminExams() {
                 {renderSortableHeader("Employee ID", "employee_id")}
                 {renderSortableHeader("Employee Name", "employee_name")}
                 {renderSortableHeader("Assessment Name", "assessment_name")}
+                {renderSortableHeader("Score", "score")}
                 {renderSortableHeader("Status", "status")}
                 {renderSortableHeader("Assigned At", "assigned_at")}
                 <th>Enable Attempt</th>
@@ -147,7 +148,7 @@ export function AdminExams() {
             <tbody>
               {filteredExams.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: 40, color: "var(--text-tertiary)" }}>
+                  <td colSpan={8} style={{ textAlign: "center", padding: 40, color: "var(--text-tertiary)" }}>
                     No assigned exams found matching your search.
                   </td>
                 </tr>
@@ -162,8 +163,17 @@ export function AdminExams() {
                     <td style={{ fontWeight: 500 }}>{e.employee_name}</td>
                     <td>{e.assessment_name}</td>
                     <td>
+                      {e.score !== null && e.score !== undefined ? (
+                        <span style={{ fontWeight: 600, color: e.score >= 80 ? "var(--emerald)" : "var(--rose)" }}>
+                          {Number(e.score).toFixed(1)}%
+                        </span>
+                      ) : (
+                        <span style={{ color: "var(--muted)" }}>-</span>
+                      )}
+                    </td>
+                    <td>
                       <span className={`badge badge-${String(e.status).toUpperCase() === 'COMPLETED' ? 'emerald' : String(e.status).toUpperCase() === 'FAILED' ? 'rose' : 'amber'}`}>
-                        {e.status}
+                        {String(e.status).toUpperCase() === 'COMPLETED' ? 'Passed' : String(e.status).toUpperCase() === 'FAILED' ? 'Failed' : e.status}
                       </span>
                     </td>
                     <td>{new Date(e.assigned_at).toLocaleString()}</td>

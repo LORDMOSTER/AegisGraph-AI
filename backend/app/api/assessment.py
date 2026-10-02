@@ -226,7 +226,7 @@ async def swap_question(
     # Get all approved variants for this rule
     stmt = select(QuestionVariant).where(
         QuestionVariant.rule_id == request.rule_id,
-        QuestionVariant.status == "APPROVED"
+        QuestionVariant.review_status == "approved"
     )
     result = await db.execute(stmt)
     variants = result.scalars().all()
@@ -235,8 +235,38 @@ async def swap_question(
     other_variants = [v for v in variants if v.id != request.current_variant_id]
     
     if not other_variants:
-        # If no other variants, just return the current one or a generated dummy
-        return {"error": "No alternative questions available for this rule"}
+        # Fallback to generating a new question dynamically
+        from app.models.hierarchy import Rule
+        from app.services.llm.generator import generate_question_variants
+        import uuid
+        
+        rule = await db.scalar(select(Rule).where(Rule.id == request.rule_id))
+        if not rule:
+            return {"error": "No alternative questions available and rule not found"}
+            
+        try:
+            variants_data = await generate_question_variants(
+                rule.text,
+                risk_score=rule.risk_score,
+                cognitive_level=rule.cognitive_level,
+                count=1,
+                question_type="multiple_choice",
+                previously_generated_stems=[],
+            )
+            if variants_data and len(variants_data) > 0:
+                vd = variants_data[0]
+                return {
+                    "id": str(uuid.uuid4()),
+                    "question_text": vd.get("question_text", ""),
+                    "options": vd.get("options", []),
+                    "correct_answer_index": vd.get("correct_option_index", 0),
+                    "rule_id": str(rule.id)
+                }
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Swap AI generation failed: {e}")
+            
+        return {"error": "No alternative questions available and AI generation failed"}
         
     import random
     q = random.choice(other_variants)

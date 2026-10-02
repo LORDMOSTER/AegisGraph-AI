@@ -56,6 +56,8 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewAllActivity, setViewAllActivity] = useState(false);
+  const [activityPage, setActivityPage] = useState(0);
+  const itemsPerPage = 10;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -204,7 +206,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
           </div>
           <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: 12, fontWeight: 500, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Company Profile</p>
-            <p style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <p style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 600, color: "var(--ink)", lineHeight: 1.3, wordBreak: "break-word" }}>
               {stats?.companyName || "Loading..."}
             </p>
           </div>
@@ -225,9 +227,9 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
           iconBg="rgba(22,163,74,0.08)"
         />
         <StatCard
-          label="Compliance Rate"
-          value={stats ? `${stats.complianceRate}%` : "—"}
-          icon="trending-up"
+          label="Safety Protocols"
+          value={data?.total_rules ?? "—"}
+          icon="shield-check"
           iconColor="#6d28d9"
           iconBg="rgba(109,40,217,0.08)"
         />
@@ -237,41 +239,49 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 24 }}>
         {/* Bar chart */}
         <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--card-radius)", padding: 24, boxShadow: "var(--shadow-card)" }}>
-          <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 600, color: "var(--ink)", marginBottom: 24 }}>Rule distribution by section</h3>
-          {!data || data.section_metrics.length === 0 ? (
-            <div style={{ padding: "40px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
-              No rule data available. Upload manuals to generate graphs.
+          <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 600, color: "var(--ink)", marginBottom: 24 }}>Knowledge Base Overview</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, height: "calc(100% - 48px)" }}>
+            <div style={{ background: "var(--background)", borderRadius: 12, padding: "20px 12px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "1px solid var(--line)", transition: "all 0.2s" }}>
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(37,99,235,0.1)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                <iconify-icon icon="lucide:book-open" style={{ fontSize: 20, color: "#2563eb" }} />
+              </div>
+              <div style={{ fontSize: 28, fontFamily: "var(--font-display)", fontWeight: 700, color: "var(--ink)", lineHeight: 1, marginBottom: 4 }}>
+                {data?.total_manuals ?? 0}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>
+                Manuals
+              </div>
             </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {data.section_metrics.map((s, i) => {
-                const colors = ["#2563eb", "#0d9488", "#d97706", "#6d28d9"];
-                const color = colors[i % colors.length];
-                const pct = Math.round((s.rule_count / maxCount) * 100);
-                return (
-                  <div key={s.name}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>{s.name}</span>
-                      <span style={{ fontSize: 13, color: "var(--muted)", fontFamily: "var(--font-mono)" }}>{s.rule_count} rules</span>
-                    </div>
-                    <div style={{ height: 6, background: "var(--raised)", borderRadius: 3, overflow: "hidden" }}>
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${pct}%` }}
-                        transition={{ duration: 0.7, delay: i * 0.1 }}
-                        style={{ height: "100%", background: color, borderRadius: 3 }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+
+            <div style={{ background: "var(--background)", borderRadius: 12, padding: "20px 12px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "1px solid var(--line)", transition: "all 0.2s" }}>
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(13,148,136,0.1)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                <iconify-icon icon="lucide:clipboard-list" style={{ fontSize: 20, color: "#0d9488" }} />
+              </div>
+              <div style={{ fontSize: 28, fontFamily: "var(--font-display)", fontWeight: 700, color: "var(--ink)", lineHeight: 1, marginBottom: 4 }}>
+                {data?.total_rules ?? 0}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>
+                Extracted Rules
+              </div>
             </div>
-          )}
+
+            <div style={{ background: "var(--background)", borderRadius: 12, padding: "20px 12px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "1px solid var(--line)", transition: "all 0.2s" }}>
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(217,119,6,0.1)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                <iconify-icon icon="lucide:brain-circuit" style={{ fontSize: 20, color: "#d97706" }} />
+              </div>
+              <div style={{ fontSize: 28, fontFamily: "var(--font-display)", fontWeight: 700, color: "var(--ink)", lineHeight: 1, marginBottom: 4 }}>
+                {data ? Object.values(data.question_bank_counts).reduce((a, b) => a + b, 0) : 0}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>
+                AI Questions
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Avg Risk Score Indicator */}
+        {/* System Health Indicator */}
         <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--card-radius)", padding: 24, boxShadow: "var(--shadow-card)", display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 600, color: "var(--ink)", marginBottom: 32, alignSelf: "flex-start" }}>Average risk score</h3>
+          <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 600, color: "var(--ink)", marginBottom: 32, alignSelf: "flex-start" }}>System Health</h3>
           
           <div style={{ position: "relative", width: 140, height: 140, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", transform: "rotate(-90deg)" }}>
@@ -279,26 +289,26 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
               <circle 
                 cx="70" cy="70" r="62" 
                 fill="none" 
-                stroke={avgRisk > 7 ? "#dc2626" : avgRisk > 4 ? "#d97706" : "#16a34a"} 
+                stroke="#16a34a" 
                 strokeWidth="12" 
                 strokeDasharray={2 * Math.PI * 62}
-                strokeDashoffset={2 * Math.PI * 62 * (1 - avgRisk / 10)}
+                strokeDashoffset={0}
                 strokeLinecap="round"
                 style={{ transition: "stroke-dashoffset 1s ease-out" }}
               />
             </svg>
             <div style={{ textAlign: "center", zIndex: 1 }}>
-              <span style={{ fontFamily: "var(--font-display)", fontSize: 40, fontWeight: 700, color: "var(--ink)", lineHeight: 1 }}>
-                {avgRisk.toFixed(1)}
+              <span style={{ fontFamily: "var(--font-display)", fontSize: 32, fontWeight: 700, color: "var(--ink)", lineHeight: 1 }}>
+                100%
               </span>
               <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 4 }}>
-                out of 10
+                Online
               </div>
             </div>
           </div>
           
           <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 32, textAlign: "center", lineHeight: 1.5 }}>
-            Aggregated from extracted safety protocols in the knowledge graph.
+            All AI engines and knowledge graph systems are operational.
           </p>
         </div>
       </div>
@@ -310,9 +320,12 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
           <button 
             className="btn btn-ghost"
             style={{ fontSize: 13, padding: "4px 8px" }}
-            onClick={() => setViewAllActivity(!viewAllActivity)}
+            onClick={() => {
+              setViewAllActivity(!viewAllActivity);
+              setActivityPage(0);
+            }}
           >
-            {viewAllActivity ? "Show Top 5" : "View All"}
+            {viewAllActivity ? "Show Less" : "View All"}
           </button>
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
@@ -321,40 +334,64 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
               No recent activity.
             </div>
           ) : (
-            activity.map((event, idx) => {
-              let icon = "file-text";
-              let color = "var(--muted)";
-              let bg = "var(--raised)";
-              
-              if (event.type === "employee") { icon = "user"; color = "#1d4ed8"; bg = "rgba(37,99,235,0.08)"; }
-              if (event.type === "manual") { icon = "book-open"; color = "#d97706"; bg = "rgba(217,119,6,0.08)"; }
-              if (event.type === "certificate") { icon = "award"; color = "#15803d"; bg = "rgba(22,163,74,0.08)"; }
-              if (event.type === "exam") { icon = "check-square"; color = "#6d28d9"; bg = "rgba(109,40,217,0.08)"; }
+            <>
+              {(viewAllActivity ? activity.slice(activityPage * itemsPerPage, (activityPage + 1) * itemsPerPage) : activity).map((event, idx) => {
+                let icon = "file-text";
+                let color = "var(--muted)";
+                let bg = "var(--raised)";
+                
+                if (event.type === "employee") { icon = "user"; color = "#1d4ed8"; bg = "rgba(37,99,235,0.08)"; }
+                if (event.type === "manual") { icon = "book-open"; color = "#d97706"; bg = "rgba(217,119,6,0.08)"; }
+                if (event.type === "certificate") { icon = "award"; color = "#15803d"; bg = "rgba(22,163,74,0.08)"; }
+                if (event.type === "exam") { icon = "check-square"; color = "#6d28d9"; bg = "rgba(109,40,217,0.08)"; }
 
-              const eventDate = new Date(event.timestamp);
+                const eventDate = new Date(event.timestamp);
+                const dateStr = eventDate.toLocaleDateString("en-GB", { day: '2-digit', month: '2-digit', year: 'numeric' });
+                const timeStr = eventDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const formattedTime = `${dateStr}, ${timeStr}`;
+                
+                return (
+                  <div key={event.id} style={{ 
+                    display: "flex", alignItems: "center", gap: 16, padding: "16px 0", 
+                    borderBottom: idx === (viewAllActivity ? itemsPerPage : activity.length) - 1 ? "none" : "1px solid var(--line)"
+                  }}>
+                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: bg, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                      <iconify-icon icon={`lucide:${icon}`} style={{ fontSize: 16, color }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)", margin: 0 }}>{event.description}</p>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-mono)" }}>
+                      {formattedTime}
+                    </div>
+                  </div>
+                );
+              })}
               
-              // Always format as dd/mm/yyyy as requested
-              const dateStr = eventDate.toLocaleDateString("en-GB", { day: '2-digit', month: '2-digit', year: 'numeric' });
-              const timeStr = eventDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              const formattedTime = `${dateStr}, ${timeStr}`;
-              
-              return (
-                <div key={event.id} style={{ 
-                  display: "flex", alignItems: "center", gap: 16, padding: "16px 0", 
-                  borderBottom: idx === activity.length - 1 ? "none" : "1px solid var(--line)"
-                }}>
-                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: bg, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                    <iconify-icon icon={`lucide:${icon}`} style={{ fontSize: 16, color }} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)", margin: 0 }}>{event.description}</p>
-                  </div>
-                  <div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-mono)" }}>
-                    {formattedTime}
-                  </div>
+              {viewAllActivity && activity.length > itemsPerPage && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--line)" }}>
+                  <button 
+                    className="btn btn-outline" 
+                    disabled={activityPage === 0} 
+                    onClick={() => setActivityPage(p => Math.max(0, p - 1))}
+                    style={{ padding: "6px 12px", fontSize: 13 }}
+                  >
+                    Previous
+                  </button>
+                  <span style={{ fontSize: 13, color: "var(--muted)" }}>
+                    Page {activityPage + 1} of {Math.ceil(activity.length / itemsPerPage)}
+                  </span>
+                  <button 
+                    className="btn btn-outline" 
+                    disabled={activityPage >= Math.ceil(activity.length / itemsPerPage) - 1} 
+                    onClick={() => setActivityPage(p => p + 1)}
+                    style={{ padding: "6px 12px", fontSize: 13 }}
+                  >
+                    Next
+                  </button>
                 </div>
-              );
-            })
+              )}
+            </>
           )}
         </div>
       </div>

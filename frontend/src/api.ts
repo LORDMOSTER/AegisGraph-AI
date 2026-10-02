@@ -2,7 +2,8 @@
 // AegisGraph AI — Typed API Client
 // ─────────────────────────────────────────────────────────────────────────────
 
-const BASE = "http://localhost:8000/api";
+const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const BASE = `http://${host}:8000/api`;
 
 // ---------------------------------------------------------------------------
 // Shared Types
@@ -941,6 +942,7 @@ export interface VerificationResult {
     assessmentName?: string;
     score: number | null;
     issueDate: string;
+    expiryDate?: string;
     signature?: string;
   };
 }
@@ -1101,7 +1103,11 @@ export async function getPendingAttempts(): Promise<any[]> {
   return fetchWithRetry<any[]>(`${BASE}/audit/attempts`);
 }
 
-export async function issueCertificate(attemptId: string): Promise<any> {
-  return fetchWithRetry<any>(`${BASE}/audit/attempts/${attemptId}/issue-certificate`, { method: "POST" });
+export async function issueCertificate(attemptId: string, validityMonths: number = 12): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/audit/attempts/${attemptId}/issue-certificate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ validity_months: validityMonths })
+  });
 }
 

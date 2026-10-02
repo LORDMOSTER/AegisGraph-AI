@@ -292,6 +292,38 @@ async def save_imported_certificate(
     
     return {"message": "Import successful", "pdf_url": pdf_url}
 
+@router.post("/employee-upload")
+async def employee_upload_certificate(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    import shutil
+    import os
+    
+    os.makedirs("uploads/certs", exist_ok=True)
+    file_path = f"uploads/certs/{uuid.uuid4()}_{file.filename}"
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    issue_date = datetime.now(timezone.utc)
+    exp_dt = issue_date + timedelta(days=365)
+    
+    new_record = CertificateRecord(
+        user_id=current_user.id,
+        sci_score=-1.0,  # -1.0 means pending approval
+        issue_date=issue_date,
+        expiry_date=exp_dt,
+        is_imported=True,
+        file_path_or_blob=f"http://localhost:8000/{file_path}"
+    )
+    db.add(new_record)
+    await db.commit()
+    await db.refresh(new_record)
+    
+    return {"message": "Certificate uploaded successfully, pending admin approval"}
+
 @router.get("/verify/{cert_id}")
 async def verify_certificate(cert_id: uuid.UUID, db: AsyncSession = Depends(get_db_session)):
     # Check regular certificates
@@ -302,15 +334,19 @@ async def verify_certificate(cert_id: uuid.UUID, db: AsyncSession = Depends(get_
     result = await db.execute(stmt)
     cert = result.scalar_one_or_none()
     
+    from datetime import timedelta
+    
     if cert:
         return {
             "status": "Verified",
             "is_imported": False,
             "employee_name": cert.employee.full_name or "Unknown",
+            "employee_id": str(cert.employee.id),
             "company": cert.employee.company.name if cert.employee.company else "Unknown",
             "assessment_name": cert.exam_session.assessment.name if cert.exam_session.assessment else "Safety Assessment",
             "score": cert.exam_session.score,
             "issue_date": cert.issued_at.isoformat(),
+            "expiry_date": (cert.issued_at + timedelta(days=365)).isoformat(),
             "signature": cert.signed_payload
         }
         
@@ -326,6 +362,7 @@ async def verify_certificate(cert_id: uuid.UUID, db: AsyncSession = Depends(get_
             "status": "Verified",
             "is_imported": True,
             "employee_name": record.user.full_name or "Unknown",
+            "employee_id": str(record.user.id),
             "company": record.user.company.name if record.user.company else "Unknown",
             "assessment_name": "Imported Certificate",
             "score": record.sci_score,

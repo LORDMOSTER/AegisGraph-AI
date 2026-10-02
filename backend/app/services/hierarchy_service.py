@@ -321,3 +321,16 @@ class HierarchyService:
                 
         await self.session.commit()
         return rule
+
+    async def delete_rule(self, rule_id: uuid.UUID) -> bool:
+        """Deletes a rule."""
+        stmt = select(Rule).where(Rule.id == rule_id)
+        result = await self.session.execute(stmt)
+        rule = result.scalar_one_or_none()
+        
+        if not rule:
+            return False
+            
+        await self.session.delete(rule)
+        await self.session.commit()
+        return True

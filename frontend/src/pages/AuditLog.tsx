@@ -149,7 +149,7 @@ function AttemptDetail({
   processing,
 }: {
   attempt: any;
-  onIssueCertificate: (id: string) => void;
+  onIssueCertificate: (id: string, validityMonths: number) => void;
   onGrantRetake: (id: string) => void;
   processing: boolean;
 }) {
@@ -159,6 +159,15 @@ function AttemptDetail({
   const [playingClip, setPlayingClip] = useState<AnomalyClip | null>(null);
   const [review, setReview] = useState<AttemptReviewResponse | null>(null);
   const [reviewLoading, setReviewLoading] = useState(false);
+  const [validityMonths, setValidityMonths] = useState(12);
+
+  const formatValidity = (months: number) => {
+    if (months === 12) return "1 yr";
+    if (months < 12) return `${months} months`;
+    const yrs = Math.floor(months / 12);
+    const mos = months % 12;
+    return `${yrs} yr${yrs > 1 ? 's' : ''} ${mos > 0 ? mos + ' month' + (mos > 1 ? 's' : '') : ''}`;
+  };
 
   useEffect(() => {
     if (!attempt.id) return;
@@ -307,9 +316,23 @@ function AttemptDetail({
                     <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
                       <span style={{ color: C.muted, fontSize: 13 }}>{idx + 1}.</span>
                       <div style={{ flex: 1 }}>
-                        <p style={{ margin: "0 0 12px 0", fontSize: 13, color: C.text, lineHeight: 1.5 }}>
-                          {item.question_text}
-                        </p>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                          <p style={{ margin: "0", fontSize: 13, color: C.text, lineHeight: 1.5, flex: 1 }}>
+                            {item.question_text}
+                          </p>
+                          <span style={{ 
+                            marginLeft: 12, 
+                            padding: "3px 8px", 
+                            borderRadius: 4, 
+                            fontSize: 11, 
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            background: item.is_correct ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)",
+                            color: item.is_correct ? "#10b981" : "#ef4444"
+                          }}>
+                            {item.is_correct ? "Correct" : "Incorrect"}
+                          </span>
+                        </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                           {(item.options && item.options.length > 0) ? item.options.map((opt, i) => {
                             const isCorrectAns = opt === item.correct_answer;
@@ -334,8 +357,9 @@ function AttemptDetail({
                               <div key={i} style={{ padding: "6px 10px", fontSize: 12, borderRadius: 6, background: bg, border: br, color: col, display: "flex", justifyContent: "space-between" }}>
                                 <span>{opt}</span>
                                 <div>
-                                  {isCorrectAns && <span style={{ marginLeft: 8, fontWeight: 700 }}>✓</span>}
-                                  {isUserAns && !isCorrectAns && <span style={{ marginLeft: 8, fontWeight: 700 }}>✗</span>}
+                                  {isCorrectAns && isUserAns && <span style={{ marginLeft: 8, fontWeight: 700 }}>✓ Correct (Selected)</span>}
+                                  {isCorrectAns && !isUserAns && <span style={{ marginLeft: 8, fontWeight: 700 }}>✓ Correct Answer</span>}
+                                  {isUserAns && !isCorrectAns && <span style={{ marginLeft: 8, fontWeight: 700 }}>✗ Selected Answer</span>}
                                 </div>
                               </div>
                             );
@@ -393,7 +417,7 @@ function AttemptDetail({
                   }}
                 />
                 <span style={{ fontSize: 12, color: lockdownEscalated ? C.red : C.cyan, fontFamily: MONO }}>
-                  {lockdownEscalated ? "Escalated" : "Clean Session"}
+                  {lockdownEscalated ? "Escalated" : "Passed"}
                 </span>
               </div>
               <div style={{ fontSize: 12, color: C.text, fontFamily: MONO, fontWeight: 600 }}>
@@ -518,33 +542,81 @@ function AttemptDetail({
                Worker failed. Awaiting retake request...
             </div>
           ) : (
-            <button
-              onClick={() => onIssueCertificate(attempt.id)}
-              disabled={processing}
-              style={{
-                padding: "14px",
-                background: C.violet,
-                border: "none",
-                borderRadius: 8,
-                color: "#fff",
-                fontWeight: 700,
-                fontSize: 13,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                cursor: processing ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                boxShadow: C.shadow,
-                transition: "opacity 0.2s",
-                opacity: processing ? 0.6 : 1,
-                fontFamily: SANS,
-              }}
-            >
-              <iconify-icon icon="lucide:award" style={{ fontSize: 16 }} />
-              {processing ? "Processing..." : "Issue Certificate & Reveal Score"}
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {attempt.has_certificate ? (
+                <div style={{
+                  padding: "14px",
+                  background: "rgba(16, 185, 129, 0.05)",
+                  border: "1px dashed rgba(16, 185, 129, 0.5)",
+                  borderRadius: 8,
+                  color: "var(--emerald)",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  fontFamily: SANS,
+                }}>
+                  <iconify-icon icon="lucide:check-circle" style={{ fontSize: 16 }} />
+                  Certificate Already Issued
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: C.glass, padding: "10px 14px", borderRadius: 8, border: `1px solid ${C.border}` }}>
+                    <span style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>Validity Period</span>
+                    <select
+                      value={validityMonths}
+                      onChange={(e) => setValidityMonths(Number(e.target.value))}
+                      style={{
+                        background: "var(--surface)",
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 6,
+                        padding: "4px 8px",
+                        fontSize: 13,
+                        color: "var(--ink)",
+                        outline: "none",
+                        fontWeight: 500,
+                      }}
+                    >
+                      <option value={6}>6 months</option>
+                      <option value={12}>12 months (1 yr)</option>
+                      <option value={14}>14 months (1 yr 2 months)</option>
+                      <option value={18}>18 months (1 yr 6 months)</option>
+                      <option value={24}>24 months (2 yrs)</option>
+                      <option value={36}>36 months (3 yrs)</option>
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => onIssueCertificate(attempt.id, validityMonths)}
+                    disabled={processing}
+                    style={{
+                      padding: "14px",
+                      background: C.violet,
+                      border: "none",
+                      borderRadius: 8,
+                      color: "#fff",
+                      fontWeight: 700,
+                      fontSize: 13,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                      cursor: processing ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                      boxShadow: C.shadow,
+                      transition: "opacity 0.2s",
+                      opacity: processing ? 0.6 : 1,
+                      fontFamily: SANS,
+                    }}
+                  >
+                    <iconify-icon icon="lucide:award" style={{ fontSize: 16 }} />
+                    {processing ? "Processing..." : `Issue Certificate (${formatValidity(validityMonths)})`}
+                  </button>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -572,11 +644,11 @@ export const AuditLog: React.FC = () => {
     }
   };
 
-  const handleIssueCertificate = async (id: string) => {
+  const handleIssueCertificate = async (id: string, validityMonths: number) => {
     setProcessingId(id);
     try {
-      await issueCertificate(id);
-      setAttempts((prev) => prev.filter((a) => a.id !== id));
+      await issueCertificate(id, validityMonths);
+      // We don't filter it out because the attempt is still completed and should remain in the audit log
       setExpandedId(null);
     } finally {
       setProcessingId(null);
@@ -687,7 +759,7 @@ export const AuditLog: React.FC = () => {
                       <>
                         <div style={{ width: 7, height: 7, borderRadius: "50%", background: lockdownEscalated ? C.red : C.cyan, flexShrink: 0 }} />
                         <span style={{ color: lockdownEscalated ? C.red : C.cyan, fontFamily: MONO }}>
-                          {lockdownEscalated ? "Escalated" : "Clean"}
+                          {lockdownEscalated ? "Escalated" : "Passed"}
                         </span>
                       </>
                     )}

@@ -117,6 +117,33 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
     }
   }, [isOpen]);
 
+  const cleanMarkdown = (text: string) => {
+    let t = text.replace(/\*\*(.*?)\*\*/g, "$1");
+    t = t.replace(/\\underline\{_*\}/g, "_____"); // Fix LaTeX underline
+    return t;
+  };
+  
+  const cleanQuestion = (q: any) => {
+    let cleanedOptions = (q.options || []).map((o: string) => cleanMarkdown(o).trim());
+    
+    // Safely remove A, B, C, D prefixes if all options start with them sequentially
+    const isABCD = cleanedOptions.length >= 4 && 
+                   cleanedOptions[0].match(/^A[\.\)\-\s]/i) &&
+                   cleanedOptions[1].match(/^B[\.\)\-\s]/i) &&
+                   cleanedOptions[2].match(/^C[\.\)\-\s]/i) &&
+                   cleanedOptions[3].match(/^D[\.\)\-\s]/i);
+    
+    if (isABCD) {
+      cleanedOptions = cleanedOptions.map((o: string) => o.replace(/^[A-D][\.\)\-\s]+/i, ""));
+    }
+
+    return {
+      ...q,
+      question_text: cleanMarkdown(q.question_text || ""),
+      options: cleanedOptions
+    };
+  };
+
   const handleAssemble = async () => {
     setLoading(true);
     try {
@@ -125,7 +152,7 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
       if (data.status === "incomplete") {
         setErrorMsg("INSUFFICIENT CONTENT: " + data.reason);
       }
-      setQuestions(data.questions || []);
+      setQuestions((data.questions || []).map(cleanQuestion));
     } catch (err) {
       console.error("Assembly failed", err);
     } finally {
@@ -142,7 +169,8 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
         setErrorMsg(newQ.error);
         return;
       }
-      setQuestions((prev) => prev.map((old) => (old.id === q.id ? newQ : old)));
+      const cleaned = cleanQuestion(newQ);
+      setQuestions((prev) => prev.map((old) => (old.id === q.id ? cleaned : old)));
     } catch (e) {
       console.error(e);
     }
@@ -181,8 +209,9 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <AnimatePresence>
+    <>
       <motion.div
+        key="assign-exam-backdrop"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -290,14 +319,44 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
 
                 <div>
                   <label className="field-label" style={{ display: "block", marginBottom: "8px" }}>Target Question Count</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={targetCount}
-                    onChange={(e) => setTargetCount(Number(e.target.value))}
-                    className="field-input"
-                  />
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {[10, 15, 20, 30].map(val => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setTargetCount(val)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          border: `1px solid ${targetCount === val ? 'var(--accent)' : 'var(--line)'}`,
+                          background: targetCount === val ? 'var(--accent)' : 'var(--surface)',
+                          color: targetCount === val ? '#fff' : 'var(--ink)',
+                          cursor: 'pointer',
+                          fontSize: '13px'
+                        }}
+                      >
+                        {val} Qs
+                      </button>
+                    ))}
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      placeholder="Custom"
+                      value={![10, 15, 20, 30].includes(targetCount) && targetCount > 0 ? targetCount : ''}
+                      onChange={(e) => setTargetCount(e.target.value ? Number(e.target.value) : 0)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        border: `1px solid ${![10, 15, 20, 30].includes(targetCount) && targetCount > 0 ? 'var(--accent)' : 'var(--line)'}`,
+                        background: 'var(--surface)',
+                        width: '90px',
+                        outline: 'none',
+                        color: 'var(--ink)',
+                        fontSize: '13px'
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -344,12 +403,11 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                   questions.map((q, idx) => (
                   <div
                     key={q.id}
-                    className="card glass-panel"
-                    style={{ padding: "16px", position: "relative", boxShadow: "var(--shadow-card)" }}
+                    style={{ padding: "16px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "var(--shadow-sm)", display: "flex", flexDirection: "column" }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", marginBottom: "16px" }}>
                       <div style={{ display: "flex", flex: 1 }}>
-                        <span style={{ color: "var(--text-secondary)", marginRight: "8px", marginTop: "2px" }}>{idx + 1}.</span>
+                        <span style={{ color: "var(--muted)", marginRight: "8px", marginTop: "2px" }}>{idx + 1}.</span>
                         <textarea
                           value={q.question_text}
                           onChange={(e) => {
@@ -357,10 +415,11 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                             setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, question_text: val } : x));
                           }}
                           style={{
-                            margin: "0 0 12px 0",
-                            fontSize: "0.95rem",
+                            margin: 0,
+                            fontSize: "15px",
+                            fontWeight: 600,
                             lineHeight: 1.5,
-                            color: "var(--accent)",
+                            color: "var(--ink)",
                             background: "transparent",
                             border: "none",
                             width: "100%",
@@ -374,10 +433,10 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                         onClick={() => handleSwap(q)}
                         title="Swap/Regenerate Question"
                         style={{
-                          background: "transparent",
-                          border: "1px solid var(--border-muted)",
-                          borderRadius: "4px",
-                          color: "var(--accent)",
+                          background: "var(--base)",
+                          border: "1px solid var(--line)",
+                          borderRadius: "8px",
+                          color: "var(--text)",
                           cursor: "pointer",
                           padding: "6px",
                           display: "flex",
@@ -385,13 +444,13 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                           justifyContent: "center",
                           transition: "all 0.2s",
                         }}
-                        onMouseOver={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-                        onMouseOut={(e) => (e.currentTarget.style.borderColor = "var(--border-muted)")}
+                        onMouseOver={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+                        onMouseOut={(e) => { e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.color = "var(--text)"; }}
                       >
                         <SwapIcon />
                       </button>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                       {q.options.map((opt, i) => (
                         <input
                           key={i}
@@ -408,12 +467,13 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                             }));
                           }}
                           style={{
-                            padding: "8px 12px",
-                            fontSize: "0.85rem",
-                            backgroundColor: q.correct_answer_index === i ? "rgba(0,255,0,0.1)" : "rgba(255,255,255,0.02)",
-                            border: q.correct_answer_index === i ? "1px solid var(--emerald)" : "1px solid var(--border-muted)",
-                            borderRadius: "6px",
-                            color: q.correct_answer_index === i ? "var(--emerald)" : "var(--text-secondary)",
+                            padding: "10px 14px",
+                            fontSize: "13px",
+                            backgroundColor: q.correct_answer_index === i ? "rgba(16, 185, 129, 0.08)" : "var(--base)",
+                            border: q.correct_answer_index === i ? "1px solid var(--emerald)" : "1px solid var(--line)",
+                            borderRadius: "8px",
+                            color: q.correct_answer_index === i ? "var(--emerald)" : "var(--text)",
+                            fontWeight: q.correct_answer_index === i ? 600 : 400,
                             width: "100%",
                             outline: "none",
                             fontFamily: "inherit",
@@ -483,24 +543,48 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                   <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
                     Exam Duration <span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.75rem" }}>(in minutes)</span>
                   </label>
-                  <input
-                    type="number"
-                    value={durationMins}
-                    onChange={(e) => setDurationMins(e.target.value)}
-                    placeholder="e.g. 30 (leave blank for no limit)"
-                    style={{
-                      width: "100%",
-                      padding: "12px 14px",
-                      fontSize: "1.1rem",
-                      fontFamily: "monospace",
-                      background: "rgba(255,255,255,0.04)",
-                      border: "1px solid var(--border-muted)",
-                      borderRadius: 8,
-                      color: "var(--text-primary)",
-                      outline: "none",
-                      boxSizing: "border-box",
-                    }}
-                  />
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {[
+                      { label: '30 mins', val: '30' },
+                      { label: '1 hour', val: '60' },
+                      { label: '1.5 hours', val: '90' },
+                      { label: 'No Limit', val: '' }
+                    ].map(opt => (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() => setDurationMins(opt.val)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          border: `1px solid ${durationMins === opt.val ? 'var(--accent)' : 'var(--line)'}`,
+                          background: durationMins === opt.val ? 'var(--accent)' : 'var(--surface)',
+                          color: durationMins === opt.val ? '#fff' : 'var(--ink)',
+                          cursor: 'pointer',
+                          fontSize: '13px'
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Custom mins"
+                      value={!['30', '60', '90', ''].includes(durationMins) ? durationMins : ''}
+                      onChange={(e) => setDurationMins(e.target.value)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        border: `1px solid ${!['30', '60', '90', ''].includes(durationMins) && durationMins !== '' ? 'var(--accent)' : 'var(--line)'}`,
+                        background: 'var(--surface)',
+                        width: '110px',
+                        outline: 'none',
+                        color: 'var(--ink)',
+                        fontSize: '13px'
+                      }}
+                    />
+                  </div>
                   <p style={{ margin: "8px 0 0", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
                     Setting a duration limit will auto-submit the exam when time runs out.
                   </p>
@@ -563,30 +647,31 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                   <p style={{ color: "var(--text-secondary)", margin: 0 }}>The exam has been locked and assigned to {selectedEmployee?.name}. Below is the final question set for review.</p>
                 </div>
                 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: "16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                   {questions.map((q, idx) => (
-                    <div key={q.id} className="card glass-panel" style={{ padding: "16px", boxShadow: "var(--shadow-card)", display: "flex", flexDirection: "column" }}>
-                      <p style={{ margin: "0 0 12px 0", fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.5 }}>
-                        <span style={{ color: "var(--text-secondary)", marginRight: "8px" }}>{idx + 1}.</span>
+                    <div key={q.id} style={{ padding: "16px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "var(--shadow-sm)", display: "flex", flexDirection: "column" }}>
+                      <p style={{ margin: "0 0 16px 0", fontWeight: 600, color: "var(--ink)", lineHeight: 1.5, fontSize: "15px" }}>
+                        <span style={{ color: "var(--muted)", marginRight: "8px" }}>{idx + 1}.</span>
                         {q.question_text}
                       </p>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1, justifyContent: "flex-end" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                         {q.options.map((opt, i) => {
                           const isCorrect = q.correct_answer_index === i;
                           return (
                             <div key={i} style={{
-                              padding: "8px 12px",
-                              fontSize: "0.85rem",
-                              backgroundColor: isCorrect ? "rgba(0,255,0,0.1)" : "rgba(255,255,255,0.02)",
-                              border: isCorrect ? "1px solid var(--emerald)" : "1px solid var(--border-muted)",
-                              borderRadius: "6px",
-                              color: isCorrect ? "var(--emerald)" : "var(--text-secondary)",
+                              padding: "10px 14px",
+                              fontSize: "13px",
+                              backgroundColor: isCorrect ? "rgba(16, 185, 129, 0.08)" : "var(--base)",
+                              border: isCorrect ? "1px solid var(--emerald)" : "1px solid var(--line)",
+                              borderRadius: "8px",
+                              color: isCorrect ? "var(--emerald)" : "var(--text)",
                               display: "flex",
                               justifyContent: "space-between",
-                              alignItems: "center"
+                              alignItems: "center",
+                              fontWeight: isCorrect ? 600 : 400
                             }}>
                               <span>{opt}</span>
-                              {isCorrect && <span style={{ fontWeight: "bold" }}>✓ Correct</span>}
+                              {isCorrect && <iconify-icon icon="lucide:check" style={{ fontSize: 16 }} />}
                             </div>
                           );
                         })}
@@ -660,6 +745,6 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
           </div>
         </motion.div>
       </motion.div>
-    </AnimatePresence>
+    </>
   );
 };

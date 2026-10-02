@@ -109,6 +109,19 @@ async def update_rule(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found")
     return rule
 
+@router.delete("/rules/{rule_id}")
+async def delete_rule(
+    rule_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Deletes a rule."""
+    service = HierarchyService(db)
+    success = await service.delete_rule(rule_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found")
+    return {"status": "success", "message": "Rule deleted."}
+
 @router.get("/manuals/{manual_id}/filtered-blocks", response_model=list[FilteredBlockResponse])
 async def get_filtered_blocks(
     manual_id: uuid.UUID,

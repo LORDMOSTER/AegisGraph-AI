@@ -114,13 +114,47 @@ async def assemble_exam_for_role(
     selected: list[QuestionVariant] = []
     selected_ids: set[uuid.UUID] = set()
     
-    # We always generate live based on the user's explicit request
-    await _live_generate_backfill(db, selected, selected_ids, section_targets, total_questions)
-    
+    seen_ids = set()
+    if employee_id:
+        seen_ids = await _get_seen_variant_ids(db, employee_id)
+
+    # First pass: try to grab existing approved variants from DB
+    for section_name, needed in section_targets.items():
+        if needed <= 0:
+            continue
+            
+        stmt = (
+            select(QuestionVariant)
+            .join(Rule, QuestionVariant.rule_id == Rule.id)
+            .join(SubCategory, Rule.subcategory_id == SubCategory.id)
+            .join(Section, SubCategory.section_id == Section.id)
+            .where(
+                Section.name == section_name,
+                QuestionVariant.review_status == "approved",
+                ~QuestionVariant.id.in_(seen_ids) if seen_ids else True,
+                ~QuestionVariant.id.in_(selected_ids) if selected_ids else True,
+            )
+            .order_by(func.random())
+            .limit(needed)
+            .options(selectinload(QuestionVariant.rule))
+        )
+        result = await db.execute(stmt)
+        found = result.scalars().all()
+        for q in found:
+            selected.append(q)
+            selected_ids.add(q.id)
+
+    # Calculate shortfall after first pass
     shortfall = total_questions - len(selected)
-    incomplete = shortfall > 0
+
+    # Second pass: If we don't have enough, generate live
+    if shortfall > 0:
+        await _live_generate_backfill(db, selected, selected_ids, section_targets, shortfall)
+    
+    shortfall_after = total_questions - len(selected)
+    incomplete = shortfall_after > 0
     reason = (
-        f"Could not source enough questions: still {shortfall} short after generating."
+        f"Could not source enough questions: still {shortfall_after} short after generating."
         if incomplete
         else None
     )

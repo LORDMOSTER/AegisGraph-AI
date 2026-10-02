@@ -12,10 +12,14 @@ from app.models.user import User
 from app.models.test_attempt import ExamSession, ExamStatus
 from app.models.certificate import CertificateRecord
 from app.models.assessment_session import Assessment
+from app.services.certificate import generate_certificate
 
 router = APIRouter()
 
 # Schemas
+class IssueCertificateRequest(BaseModel):
+    validity_months: int = 12
+
 class AttemptResponse(BaseModel):
     id: uuid.UUID
     employee_id: uuid.UUID
@@ -28,6 +32,7 @@ class AttemptResponse(BaseModel):
     integrity_score: Optional[float]
     lockdown_escalated: bool
     is_retake_requested: bool = False
+    has_certificate: bool = False
     completed_at: Optional[datetime]
     model_config = ConfigDict(from_attributes=True)
 
@@ -66,6 +71,14 @@ async def get_pending_attempts(
     result = await db.execute(stmt)
     sessions = result.scalars().all()
     
+    # Check which sessions already have a certificate issued
+    sessions_with_certs = set()
+    if sessions:
+        from app.models.certificate import CertificateRecord
+        cert_stmt = select(CertificateRecord.session_id).where(CertificateRecord.session_id.in_([s.id for s in sessions]))
+        cert_res = await db.execute(cert_stmt)
+        sessions_with_certs = set(cert_res.scalars().all())
+    
     attempts = []
     for s in sessions:
         attempts.append({
@@ -81,6 +94,7 @@ async def get_pending_attempts(
             "employee_name": s.employee.full_name or s.employee.employee_code,
             "job_title": s.employee.designation or "Employee",
             "assessment_name": s.assessment.name if s.assessment else "Assessment",
+            "has_certificate": s.id in sessions_with_certs,
         })
     return attempts
 
@@ -213,6 +227,7 @@ async def get_attempt_review(
 @router.post("/attempts/{attempt_id}/issue-certificate", response_model=IssueCertificateResponse)
 async def issue_certificate(
     attempt_id: uuid.UUID,
+    request: IssueCertificateRequest,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -220,7 +235,10 @@ async def issue_certificate(
     Manual trigger. Generates the Ed25519-signed ReportLab PDF, 
     updates the DB, and sets reveal_score_to_user = True.
     """
-    stmt = select(ExamSession).options(selectinload(ExamSession.assessment)).where(ExamSession.id == attempt_id)
+    stmt = select(ExamSession).options(
+        selectinload(ExamSession.assessment),
+        selectinload(ExamSession.employee).selectinload(User.company)
+    ).where(ExamSession.id == attempt_id)
     result = await db.execute(stmt)
     attempt = result.scalar_one_or_none()
     
@@ -233,24 +251,58 @@ async def issue_certificate(
     # Update reveal_score_to_user
     attempt.assessment.reveal_score_to_user = True
     
-    # Mock PDF generation & Ed25519 signing for now (as requested by scope limit, or we can use a dummy payload)
-    pdf_path = f"/certs/{attempt.id}.pdf"
-    
-    # Create CertificateRecord
+    # Calculate expiry based on request
     issue_date = datetime.now(timezone.utc)
-    expiry_date = issue_date + timedelta(days=365) # 1 year validity
+    expiry_date = issue_date + timedelta(days=30 * request.validity_months)
     
-    cert = CertificateRecord(
-        user_id=attempt.employee_id,
-        session_id=attempt.id,
-        sci_score=attempt.score,
-        issue_date=issue_date,
-        expiry_date=expiry_date,
+    # Check if a certificate already exists for this employee and this specific assessment name
+    stmt_existing = (
+        select(CertificateRecord)
+        .join(ExamSession, CertificateRecord.session_id == ExamSession.id)
+        .where(
+            CertificateRecord.user_id == attempt.employee_id,
+            ExamSession.assessment_id == attempt.assessment_id
+        )
+    )
+    res = await db.execute(stmt_existing)
+    existing_cert = res.scalar_one_or_none()
+
+    cert_id = existing_cert.id if existing_cert else uuid.uuid4()
+
+    qr_data, signature, pdf_url = generate_certificate(
+        certificate_id=cert_id,
+        employee_id=attempt.employee_id,
+        full_name=attempt.employee.full_name or attempt.employee.employee_code if attempt.employee else "Unknown",
+        score=attempt.score,
+        company_name=attempt.employee.company.name if attempt.employee and attempt.employee.company else "AegisGraph AI",
         is_imported=False,
-        file_path_or_blob=pdf_path
+        assessment_name=attempt.assessment.name if attempt.assessment else "Assessment",
+        logo_url=attempt.employee.company.logo_url if attempt.employee and attempt.employee.company else None,
+        designation=attempt.employee.designation if attempt.employee else None
     )
     
-    db.add(cert)
+    pdf_path = pdf_url
+
+    if existing_cert:
+        existing_cert.session_id = attempt.id
+        existing_cert.sci_score = attempt.score
+        existing_cert.issue_date = issue_date
+        existing_cert.expiry_date = expiry_date
+        existing_cert.file_path_or_blob = pdf_path
+        cert = existing_cert
+    else:
+        cert = CertificateRecord(
+            id=cert_id,
+            user_id=attempt.employee_id,
+            session_id=attempt.id,
+            sci_score=attempt.score,
+            issue_date=issue_date,
+            expiry_date=expiry_date,
+            is_imported=False,
+            file_path_or_blob=pdf_path
+        )
+        db.add(cert)
+    
     await db.commit()
     await db.refresh(cert)
     

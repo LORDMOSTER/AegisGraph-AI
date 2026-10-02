@@ -410,27 +410,24 @@ export default function App() {
                 )}
               </div>
 
-              <SpecularButton
-                size="sm"
-                radius={10}
-                tint="#dc2626"
-                tintOpacity={0.08}
-                lineColor="#ef4444"
-                baseColor="#7f1d1d"
-                textColor="#ef4444"
-                intensity={1.2}
-                shineSize={14}
-                shineFade={50}
-                thickness={1}
-                speed={0.4}
-                followMouse
-                proximity={180}
+              <button
                 onClick={() => setCurrentRoute("login")}
-                className="specular-logout"
+                className="btn"
+                style={{ 
+                  backgroundColor: "var(--red)", 
+                  color: "white", 
+                  borderColor: "var(--red)",
+                  marginTop: "auto", 
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "var(--shadow-btn)"
+                }}
               >
-                <iconify-icon icon="lucide:log-out" style={{ fontSize: 14, marginRight: 6 }} />
+                <iconify-icon icon="lucide:log-out" style={{ fontSize: 18 }} />
                 Log out
-              </SpecularButton>
+              </button>
             </div>
           </motion.aside>
         )}

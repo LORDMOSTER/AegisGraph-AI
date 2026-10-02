@@ -39,9 +39,21 @@ def generate_certificate(certificate_id: uuid.UUID, employee_id: uuid.UUID, full
     
     # 2. QR Code
     import urllib.parse
+    import socket
+    
+    def get_local_ip():
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return "localhost"
+
     # For a fully offline local network app, the phone must be on the same WiFi
-    base_url = "http://localhost:5173" # Update to LAN IP for physical device testing
-    qr_data = f"{base_url}/verify/{certificate_id}?sig={signed_payload_hex}"
+    frontend_url = os.environ.get("FRONTEND_URL", f"http://{get_local_ip()}:5173")
+    qr_data = f"{frontend_url}/verify/{certificate_id}?sig={signed_payload_hex}"
     
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
     qr.add_data(qr_data)
@@ -119,8 +131,9 @@ def generate_certificate(certificate_id: uuid.UUID, employee_id: uuid.UUID, full
         c.setFont("Helvetica", 16)
         c.drawCentredString(width / 2.0, height - 370, f"Authorized by {company_name}")
         
-        c.setFont("Helvetica", 14)
-        c.drawCentredString(width / 2.0, height - 400, f"Safety Compliance Index (SCI): {score:.1f}%")
+        if score is not None:
+            c.setFont("Helvetica", 14)
+            c.drawCentredString(width / 2.0, height - 400, f"Safety Compliance Index (SCI): {score:.1f}%")
     
     # Draw Logo if exists
     if logo_url:

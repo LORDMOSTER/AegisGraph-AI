@@ -9,7 +9,7 @@ export function QuestionBank() {
   
   // Bulk Generation State
   const [showGenerateModal, setShowGenerateModal] = useState(false);
-  const [questionType, setQuestionType] = useState<"multiple_choice" | "fill_in_blank" | "mixed">("mixed");
+  const [questionType, setQuestionType] = useState<"multiple_choice" | "fill_in_blank" | "all">("all");
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState(0);
   const [genMessage, setGenMessage] = useState("");
@@ -274,10 +274,10 @@ export function QuestionBank() {
                     <input 
                       type="radio" 
                       name="qtype" 
-                      checked={questionType === "mixed"} 
-                      onChange={() => setQuestionType("mixed")}
+                      checked={questionType === "all"} 
+                      onChange={() => setQuestionType("all")}
                     />
-                    Mixed (Both)
+                    All Types (MCQ, Fill-in-Blank, True/False, Multi-Select)
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
                     <input 

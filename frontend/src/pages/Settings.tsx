@@ -75,175 +75,193 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
 
   return (
     <div style={{ display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "40px 20px" }}>
-      <div style={{ width: "100%", maxWidth: 600, display: "flex", flexDirection: "column", gap: 32 }}>
+      <div style={{ width: "100%", maxWidth: 800, display: "flex", flexDirection: "column", gap: 24 }}>
         
-        <div style={{ textAlign: "center" }}>
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.02em", marginBottom: 8 }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em", marginBottom: 4 }}>
             Settings
           </h1>
           <p style={{ fontSize: 14, color: "var(--muted)" }}>
-            Manage your company profile and system appearance.
+            Manage your company profile, security, and preferences.
           </p>
         </div>
 
-        {/* Company Profile Section */}
-        <div className="card" style={{ padding: 32, display: "flex", flexDirection: "column", gap: 24 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>Company Profile</h2>
+        <div className="card" style={{ padding: 0, overflow: "hidden", borderRadius: 12 }}>
           
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>Company Name</label>
-            <input 
-              type="text" 
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              className="input-field" 
-              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)" }}
-            />
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>Company Logo</label>
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              {logoUrl ? (
-                <a 
-                  href={`http://localhost:8000${logoUrl}`} 
-                  target="_blank" 
-                  rel="noreferrer"
-                  title="Click to view full image"
-                  style={{ width: 64, height: 64, borderRadius: 8, border: "1px solid var(--line)", overflow: "hidden", background: "#fff", display: "grid", placeItems: "center", cursor: "pointer", textDecoration: "none" }}
-                >
-                  <img src={`http://localhost:8000${logoUrl}`} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
-                </a>
-              ) : (
-                <div style={{ width: 64, height: 64, borderRadius: 8, background: "var(--raised)", border: "1px dashed var(--line)", display: "grid", placeItems: "center", color: "var(--muted)" }}>
-                  <iconify-icon icon="lucide:image" style={{ fontSize: 24 }} />
-                </div>
-              )}
-              
+          {/* Company Profile Section */}
+          <div style={{ padding: "32px", borderBottom: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 24 }}>
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Company Profile</h2>
+              <p style={{ fontSize: 13, color: "var(--muted)" }}>Update your company's name and logo.</p>
+            </div>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <label style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>Company Name</label>
                 <input 
-                  type="file" 
-                  accept="image/*" 
-                  id="logoUpload"
-                  style={{ display: "none" }}
-                  disabled={isUploading}
-                  onChange={async (e) => {
-                    if (!e.target.files?.[0]) return;
-                    if (!companyId) return;
-                    setIsUploading(true);
-                    const formData = new FormData();
-                    formData.append("file", e.target.files[0]);
-                    
-                    try {
-                      const res = await fetch(`http://localhost:8000/api/v1/companies/${companyId}/logo`, {
-                        method: "POST",
-                        body: formData,
-                      });
-                      if (res.ok) {
-                        const data = await res.json();
-                        setLogoUrl(data.logo_url);
-                      }
-                    } finally {
-                      setIsUploading(false);
-                    }
-                  }}
+                  type="text" 
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className="input-field" 
+                  style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--background)", color: "var(--ink)" }}
                 />
-                <button 
-                  disabled={isUploading} 
-                  onClick={() => document.getElementById("logoUpload")?.click()} 
-                  className="btn btn-primary" 
-                  style={{ padding: "8px 16px", fontSize: 13 }}
-                >
-                  {isUploading ? "Uploading..." : logoUrl ? "Change Logo" : "Upload Logo"}
-                </button>
-                {logoUrl && (
-                  <button 
-                    disabled={isUploading}
-                    onClick={async () => {
-                      if (!companyId) return;
-                      setIsUploading(true);
-                      try {
-                        const res = await fetch(`http://localhost:8000/api/v1/companies/${companyId}/logo`, { method: "DELETE" });
-                        if (res.ok) setLogoUrl(null);
-                      } finally {
-                        setIsUploading(false);
-                      }
-                    }} 
-                    className="btn btn-destructive" 
-                    style={{ padding: "6px 16px", fontSize: 13, background: "transparent", color: "var(--red)", border: "none", alignSelf: "flex-start" }}
-                  >
-                    Remove
-                  </button>
-                )}
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <label style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>Company Logo</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  {logoUrl ? (
+                    <a 
+                      href={`http://localhost:8000${logoUrl}`} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      title="Click to view full image"
+                      style={{ width: 48, height: 48, borderRadius: 8, border: "1px solid var(--line)", overflow: "hidden", background: "#fff", display: "grid", placeItems: "center", cursor: "pointer", textDecoration: "none", flexShrink: 0 }}
+                    >
+                      <img src={`http://localhost:8000${logoUrl}`} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                    </a>
+                  ) : (
+                    <div style={{ width: 48, height: 48, borderRadius: 8, background: "var(--raised)", border: "1px dashed var(--line)", display: "grid", placeItems: "center", color: "var(--muted)", flexShrink: 0 }}>
+                      <iconify-icon icon="lucide:image" style={{ fontSize: 20 }} />
+                    </div>
+                  )}
+                  
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      id="logoUpload"
+                      style={{ display: "none" }}
+                      disabled={isUploading}
+                      onChange={async (e) => {
+                        if (!e.target.files?.[0]) return;
+                        if (!companyId) return;
+                        setIsUploading(true);
+                        const formData = new FormData();
+                        formData.append("file", e.target.files[0]);
+                        
+                        try {
+                          const res = await fetch(`http://localhost:8000/api/v1/companies/${companyId}/logo`, {
+                            method: "POST",
+                            body: formData,
+                          });
+                          if (res.ok) {
+                            const data = await res.json();
+                            setLogoUrl(data.logo_url);
+                          }
+                        } finally {
+                          setIsUploading(false);
+                        }
+                      }}
+                    />
+                    <button 
+                      disabled={isUploading} 
+                      onClick={() => document.getElementById("logoUpload")?.click()} 
+                      className="btn btn-outline" 
+                      style={{ padding: "8px 12px", fontSize: 13 }}
+                    >
+                      {isUploading ? "Uploading..." : "Upload Logo"}
+                    </button>
+                    {logoUrl && (
+                      <button 
+                        disabled={isUploading}
+                        onClick={async () => {
+                          if (!companyId) return;
+                          setIsUploading(true);
+                          try {
+                            const res = await fetch(`http://localhost:8000/api/v1/companies/${companyId}/logo`, { method: "DELETE" });
+                            if (res.ok) setLogoUrl(null);
+                          } finally {
+                            setIsUploading(false);
+                          }
+                        }} 
+                        className="btn btn-ghost" 
+                        style={{ padding: "8px 12px", fontSize: 13, color: "var(--red)" }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Admin Credentials Section */}
+          <div style={{ padding: "32px", borderBottom: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 24 }}>
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Security & Authentication</h2>
+              <p style={{ fontSize: 13, color: "var(--muted)" }}>Manage your admin credentials for accessing the platform.</p>
+            </div>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <label style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>Admin Email</label>
+                <input 
+                  type="email" 
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  className="input-field" 
+                  style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--background)", color: "var(--ink)" }}
+                />
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <label style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>New Password</label>
+                <input 
+                  type="password" 
+                  placeholder="Leave blank to keep current"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  className="input-field" 
+                  style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--background)", color: "var(--ink)" }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Data & Storage Section */}
+          <div style={{ padding: "32px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 32 }}>
+            <div style={{ flex: 1 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Data Retention</h2>
+              <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
+                Configure how long anomaly video clips are stored locally in the browser before being automatically deleted.
+              </p>
+            </div>
+            <div style={{ width: 140 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--background)", border: "1px solid var(--line)", borderRadius: 8, padding: "4px 8px" }}>
+                <input 
+                  type="number" 
+                  min="1"
+                  max="365"
+                  value={retentionDays}
+                  onChange={(e) => setRetentionDays(e.target.value)}
+                  style={{ width: "100%", border: "none", background: "transparent", color: "var(--ink)", padding: "6px", outline: "none", fontSize: 14, textAlign: "right" }}
+                />
+                <span style={{ fontSize: 13, color: "var(--muted)", paddingRight: 4 }}>Days</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Appearance Section */}
+          <div style={{ padding: "32px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(0,0,0,0.01)" }}>
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Appearance</h2>
+              <p style={{ fontSize: 13, color: "var(--muted)" }}>Toggle between light and dark themes.</p>
+            </div>
+            <ThemeToggle darkMode={darkMode} onToggleDark={onToggleDark} />
+          </div>
+
         </div>
 
-        {/* Admin Credentials Section */}
-        <div className="card" style={{ padding: 32, display: "flex", flexDirection: "column", gap: 24 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>Admin Credentials</h2>
-          
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>Admin Email</label>
-            <input 
-              type="email" 
-              value={adminEmail}
-              onChange={(e) => setAdminEmail(e.target.value)}
-              className="input-field" 
-              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)" }}
-            />
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>New Password</label>
-            <input 
-              type="password" 
-              placeholder="Leave blank to keep current"
-              value={adminPassword}
-              onChange={(e) => setAdminPassword(e.target.value)}
-              className="input-field" 
-              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)" }}
-            />
-          </div>
-        </div>
-
-        {/* Data & Storage Section */}
-        <div className="card" style={{ padding: 32, display: "flex", flexDirection: "column", gap: 24 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>Data & Storage</h2>
-          
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>Local Video Clip Retention (Days)</label>
-            <input 
-              type="number" 
-              min="1"
-              max="365"
-              value={retentionDays}
-              onChange={(e) => setRetentionDays(e.target.value)}
-              className="input-field" 
-              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--ink)" }}
-            />
-            <p style={{ fontSize: 12, color: "var(--muted)" }}>
-              Anomaly video clips are stored locally in the browser (IndexedDB). They will be automatically deleted after this many days.
-            </p>
-          </div>
-        </div>
-
-        <button 
-          onClick={handleUpdateProfile} 
-          className="btn btn-primary" 
-          style={{ padding: "12px 24px", fontSize: 15, fontWeight: 600, width: "100%", justifyContent: "center", borderRadius: 10 }}
-        >
-          Save Changes
-        </button>
-
-        {/* Appearance Section */}
-        <div className="card" style={{ padding: "20px 32px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)" }}>Appearance</h2>
-            <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>Toggle between light and dark themes.</p>
-          </div>
-          <ThemeToggle darkMode={darkMode} onToggleDark={onToggleDark} />
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button 
+            onClick={handleUpdateProfile} 
+            className="btn btn-primary" 
+            style={{ padding: "10px 24px", fontSize: 14, fontWeight: 600, borderRadius: 8 }}
+          >
+            Save Changes
+          </button>
         </div>
 
       </div>
