@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { BACKEND_ORIGIN } from "../api";
 
 interface SettingsProps {
   darkMode: boolean;
@@ -22,7 +23,7 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
       const token = localStorage.getItem("aegis_token");
       if (token) {
         try {
-          const res = await fetch("http://localhost:8000/api/v1/auth/me", {
+          const res = await fetch(`${BACKEND_ORIGIN}/api/v1/auth/me`, {
             headers: { "Authorization": `Bearer ${token}` }
           });
           if (res.ok) {
@@ -46,7 +47,7 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
     if (!companyId) return;
     try {
       const token = localStorage.getItem("aegis_token");
-      const res = await fetch(`http://localhost:8000/api/v1/companies/${companyId}/profile`, {
+      const res = await fetch(`${BACKEND_ORIGIN}/api/v1/companies/${companyId}/profile`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -112,13 +113,13 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
                 <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                   {logoUrl ? (
                     <a 
-                      href={`http://localhost:8000${logoUrl}`} 
+                      href={`${BACKEND_ORIGIN}${logoUrl}`} 
                       target="_blank" 
                       rel="noreferrer"
                       title="Click to view full image"
                       style={{ width: 48, height: 48, borderRadius: 8, border: "1px solid var(--line)", overflow: "hidden", background: "#fff", display: "grid", placeItems: "center", cursor: "pointer", textDecoration: "none", flexShrink: 0 }}
                     >
-                      <img src={`http://localhost:8000${logoUrl}`} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                      <img src={`${BACKEND_ORIGIN}${logoUrl}`} alt={`${companyName ? companyName + ' official logo' : 'Company brand logo'}`} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
                     </a>
                   ) : (
                     <div style={{ width: 48, height: 48, borderRadius: 8, background: "var(--raised)", border: "1px dashed var(--line)", display: "grid", placeItems: "center", color: "var(--muted)", flexShrink: 0 }}>
@@ -141,7 +142,7 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
                         formData.append("file", e.target.files[0]);
                         
                         try {
-                          const res = await fetch(`http://localhost:8000/api/v1/companies/${companyId}/logo`, {
+                          const res = await fetch(`${BACKEND_ORIGIN}/api/v1/companies/${companyId}/logo`, {
                             method: "POST",
                             body: formData,
                           });
@@ -169,7 +170,7 @@ export function Settings({ darkMode, onToggleDark }: SettingsProps) {
                           if (!companyId) return;
                           setIsUploading(true);
                           try {
-                            const res = await fetch(`http://localhost:8000/api/v1/companies/${companyId}/logo`, { method: "DELETE" });
+                            const res = await fetch(`${BACKEND_ORIGIN}/api/v1/companies/${companyId}/logo`, { method: "DELETE" });
                             if (res.ok) setLogoUrl(null);
                           } finally {
                             setIsUploading(false);

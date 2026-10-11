@@ -3,11 +3,11 @@
    Matches the InspoAI reference designs in /aegisgraph/
    ==================================================================== */
 
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 /* ================================================================== */
 /*  DESIGN TOKENS                                                       */
@@ -22,7 +22,7 @@
 
   /* Text */
   --ink:     #1C1C1A;
-  --muted:   #71716C;
+  --muted:   #52524E;
 
   /* Accent */
   --accent:     #16a34a; /* Changed from blue to match semantic green */
@@ -35,6 +35,7 @@
   --amber:   #d97706;
   --red:     #dc2626;
   --crimson: #dc2626;
+  --error:   #dc2626;
 
   /* Dim variants (for badges/fills) */
   --green-dim:  rgba(22, 163, 74, 0.08);
@@ -104,7 +105,7 @@
   --void-6:         var(--line);
   --text-primary:   var(--ink);
   --text-secondary: var(--muted);
-  --text-tertiary:  #A8A8A2;
+  --text-tertiary:  #5C5C57;
   --text-disabled:  #C4C4BE;
   --indigo-500:     var(--accent);
   --indigo-400:     var(--accent);
@@ -143,7 +144,7 @@
 
   /* Text */
   --ink:     #e8e8f0;
-  --muted:   #7878a0;
+  --muted:   #9CA3AF;
 
   /* Accent — matching green */
   --accent:     #22c55e;
@@ -156,6 +157,7 @@
   --amber:   #f59e0b;
   --red:     #ef4444;
   --crimson: #ef4444;
+  --error:   #ef4444;
 
   /* Dim variants */
   --green-dim:  rgba(34, 197, 94, 0.10);
@@ -173,7 +175,7 @@
   --void-6:         var(--line);
   --text-primary:   var(--ink);
   --text-secondary: var(--muted);
-  --text-tertiary:  #50507a;
+  --text-tertiary:  #8B949E;
   --text-disabled:  #32324a;
   --indigo-500:     var(--accent);
   --indigo-400:     var(--accent);
@@ -1002,13 +1004,10 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 [data-theme="dark"] .auth-split-container {
-  background-image: url('/bg-dark.png');
+  background-image: url('/bg-dark.webp');
 }
 .auth-split-container {
-  background-image: url('/bg-light.png');
-}
-[data-theme="dark"] .auth-split-container {
-  background-image: url('/bg-dark.png');
+  background-image: url('/bg-light.webp');
 }
 
 .auth-split-left {

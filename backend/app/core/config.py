@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     ollama_num_gpu: int = 0
 
     cors_origins: list[str] = ["*"]
+    force_https: bool = False
 
     class Config:
         env_file = (".env", "../.env")

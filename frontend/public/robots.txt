@@ -1,0 +1,20 @@
+# AegisGraph AI - Robots Configuration
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /verify/
+Allow: /privacy
+Allow: /terms
+
+# Disallow authenticated application dashboards and sensitive endpoints from search indexing
+Disallow: /admin
+Disallow: /admin/*
+Disallow: /employee
+Disallow: /employee/*
+Disallow: /exam
+Disallow: /exam/*
+Disallow: /api/
+Disallow: /api/*
+
+# Sitemap definition
+Sitemap: https://aegisgraph.internal.tatatechnologies.com/sitemap.xml

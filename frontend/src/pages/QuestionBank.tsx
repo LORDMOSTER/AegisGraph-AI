@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { getQuestions, updateQuestion, QuestionVariant, bulkGenerateQuestions } from "../api";
 
 export function QuestionBank() {

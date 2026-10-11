@@ -1,31 +1,38 @@
 /**
  * AuditLog.tsx  (Req #7 — Combined Integrity + Lockdown Timeline)
  *
- * Fetches real exam attempt data from the backend and renders:
- *   - Per-attempt rows with SCI score and integrity/lockdown flags
- *   - Expanded panel with the combined timeline (MediaPipe gaze + lockdown events)
- *   - Video thumbnail placeholder for proctoring footage (if available)
- *   - Issue Certificate action
+ * Optimized for ultra-high contrast in both Light & Dark modes,
+ * WCAG 2.1 AA compliance, claymorphic aesthetics, status filters,
+ * and seamless proctoring playback.
  */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getAuditTimeline, AuditTimeline, AuditTimelineEvent, getPendingAttempts, issueCertificate, grantRetake, getAttemptReview, AttemptReviewResponse } from "../api";
+import {
+  getAuditTimeline,
+  AuditTimeline,
+  AuditTimelineEvent,
+  getPendingAttempts,
+  issueCertificate,
+  grantRetake,
+  getAttemptReview,
+  AttemptReviewResponse,
+} from "../api";
 import { getClipsForSession, AnomalyClip } from "../hooks/useAnomalyClipRecorder";
 
-// ─── Colour palette (Void-Industrial) ───────────────────────────────────────
+// ─── Theme-Adaptive Colour Tokens ───────────────────────────────────────────
 const C = {
   void: "var(--base)",
   surface: "var(--surface)",
-  glass: "var(--surface-raised)",
-  border: "var(--border-subtle)",
+  glass: "var(--raised)",
+  border: "var(--line)",
   shadow: "var(--shadow-card)",
   text: "var(--ink)",
   muted: "var(--muted)",
   violet: "var(--accent)",
-  cyan: "var(--emerald)",
+  cyan: "var(--green)",
   amber: "var(--amber)",
   red: "var(--red)",
-  cyanDim: "var(--emerald-dim)",
+  cyanDim: "var(--green-dim)",
   amberDim: "var(--amber-dim)",
   redDim: "var(--red-dim)",
   violetDim: "var(--accent-dim)",
@@ -51,7 +58,17 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 // ─── Timeline event row ───────────────────────────────────────────────────────
-function TimelineEvent({ ev, index, clip, onPlayClip }: { ev: AuditTimelineEvent; index: number; clip?: AnomalyClip; onPlayClip?: (clip: AnomalyClip) => void }) {
+function TimelineEvent({
+  ev,
+  index,
+  clip,
+  onPlayClip,
+}: {
+  ev: AuditTimelineEvent;
+  index: number;
+  clip?: AnomalyClip;
+  onPlayClip?: (clip: AnomalyClip) => void;
+}) {
   const meta = SOURCE_META[ev.source] ?? { label: ev.source, color: C.muted, dim: "transparent", icon: "lucide:activity" };
   const label = TYPE_LABELS[ev.type] ?? ev.type;
   const ts = ev.ts ? new Date(ev.ts).toLocaleTimeString() : "—";
@@ -60,14 +77,14 @@ function TimelineEvent({ ev, index, clip, onPlayClip }: { ev: AuditTimelineEvent
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: -10 }}
+      initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.04 }}
+      transition={{ delay: index * 0.03 }}
       style={{
         display: "flex",
         gap: 14,
         padding: "12px 0",
-        borderBottom: `1px solid ${C.border}`,
+        borderBottom: `1px solid var(--line)`,
         alignItems: "flex-start",
       }}
     >
@@ -76,7 +93,7 @@ function TimelineEvent({ ev, index, clip, onPlayClip }: { ev: AuditTimelineEvent
         style={{
           width: 28,
           height: 28,
-          borderRadius: 6,
+          borderRadius: 8,
           background: meta.dim,
           border: `1px solid ${meta.color}`,
           display: "grid",
@@ -104,14 +121,14 @@ function TimelineEvent({ ev, index, clip, onPlayClip }: { ev: AuditTimelineEvent
           >
             {meta.label}
           </span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{label}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{label}</span>
           {isFailure && ev.detail?.subtype && (
-            <span style={{ fontSize: 11, color: C.red, fontFamily: MONO }}>
+            <span style={{ fontSize: 11, color: "var(--red)", fontFamily: MONO }}>
               [{ev.detail.subtype}] logged server-side
             </span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 16, fontSize: 11, color: C.muted, fontFamily: MONO, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 16, fontSize: 11, color: "var(--muted)", fontFamily: MONO, alignItems: "center" }}>
           <span>⏱ {ts}</span>
           {dur && <span>⏳ {dur} outside lockdown</span>}
           {clip && onPlayClip && (
@@ -119,16 +136,17 @@ function TimelineEvent({ ev, index, clip, onPlayClip }: { ev: AuditTimelineEvent
               onClick={() => onPlayClip(clip)}
               style={{
                 marginLeft: "auto",
-                background: "rgba(255,255,255,0.1)",
-                border: "none",
-                borderRadius: 4,
-                padding: "2px 8px",
-                color: C.cyan,
+                background: "var(--raised)",
+                border: "1px solid var(--line)",
+                borderRadius: 6,
+                padding: "3px 8px",
+                color: "var(--green)",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
-                gap: 4,
-                fontSize: 10,
+                gap: 5,
+                fontSize: 11,
+                fontWeight: 600,
                 textTransform: "uppercase",
               }}
             >
@@ -166,31 +184,33 @@ function AttemptDetail({
     if (months < 12) return `${months} months`;
     const yrs = Math.floor(months / 12);
     const mos = months % 12;
-    return `${yrs} yr${yrs > 1 ? 's' : ''} ${mos > 0 ? mos + ' month' + (mos > 1 ? 's' : '') : ''}`;
+    return `${yrs} yr${yrs > 1 ? "s" : ""} ${mos > 0 ? mos + " month" + (mos > 1 ? "s" : "") : ""}`;
   };
 
   useEffect(() => {
     if (!attempt.id) return;
     setTlLoading(true);
     setReviewLoading(true);
-    
+
     Promise.all([
       getAuditTimeline(attempt.id).catch(() => null),
       getClipsForSession(attempt.id).catch(() => []),
-      getAttemptReview(attempt.id).catch(() => null)
-    ]).then(([tl, loadedClips, rev]) => {
-      if (tl) setTimeline(tl as AuditTimeline);
-      setClips(loadedClips as AnomalyClip[]);
-      if (rev) setReview(rev as AttemptReviewResponse);
-    }).finally(() => {
-      setTlLoading(false);
-      setReviewLoading(false);
-    });
+      getAttemptReview(attempt.id).catch(() => null),
+    ])
+      .then(([tl, loadedClips, rev]) => {
+        if (tl) setTimeline(tl as AuditTimeline);
+        setClips(loadedClips as AnomalyClip[]);
+        if (rev) setReview(rev as AttemptReviewResponse);
+      })
+      .finally(() => {
+        setTlLoading(false);
+        setReviewLoading(false);
+      });
   }, [attempt.id]);
 
   const integrityWarning = (attempt.integrity_score ?? 100) < 80;
 
-  // Build a mock timeline if no real session ID (demo fallback)
+  // Mock timeline fallback for demo sessions
   const mockTimeline: AuditTimelineEvent[] = [
     {
       source: "mediapipe",
@@ -232,27 +252,38 @@ function AttemptDetail({
   const integrityScore = attempt.integrity_score ?? 100;
 
   return (
-    <div style={{ padding: "24px", backgroundColor: C.surface, boxShadow: C.shadow }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 40 }}>
+    <div style={{ padding: "24px 28px", backgroundColor: "var(--surface)", borderTop: "1px solid var(--line)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 36 }}>
 
         {/* ── Left: Combined audit timeline ──────────────────────────────────── */}
         <div>
           <h4
             style={{
               margin: "0 0 16px",
-              color: C.muted,
+              color: "var(--muted)",
               textTransform: "uppercase",
-              fontSize: "0.8rem",
+              fontSize: "0.75rem",
               letterSpacing: "0.06em",
               fontFamily: SANS,
               display: "flex",
               alignItems: "center",
               gap: 8,
+              fontWeight: 700,
             }}
           >
-            <iconify-icon icon="lucide:activity" style={{ fontSize: 14 }} />
+            <iconify-icon icon="lucide:activity" style={{ fontSize: 15, color: "var(--green)" }} />
             Combined Integrity Timeline
-            <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 999, background: C.violetDim, color: C.violet, marginLeft: "auto" }}>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "2px 8px",
+                borderRadius: 999,
+                background: "var(--green-dim)",
+                color: "var(--green)",
+                marginLeft: "auto",
+              }}
+            >
               MediaPipe + Lockdown
             </span>
           </h4>
@@ -261,113 +292,164 @@ function AttemptDetail({
             <div
               style={{
                 padding: "10px 14px",
-                background: C.redDim,
-                border: `1px solid ${C.red}`,
-                borderRadius: 6,
+                background: "var(--red-dim)",
+                border: "1px solid var(--red)",
+                borderRadius: 8,
                 marginBottom: 14,
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
                 fontSize: 12,
-                color: C.red,
+                color: "var(--red)",
                 fontFamily: MONO,
+                fontWeight: 600,
               }}
             >
-              <iconify-icon icon="lucide:shield-alert" style={{ fontSize: 14 }} />
-              Session was auto-escalated to PENDING_SUPERVISOR_REVIEW — threshold exceeded.
+              <iconify-icon icon="lucide:shield-alert" style={{ fontSize: 16 }} />
+              Session was auto-escalated to PENDING_SUPERVISOR_REVIEW — integrity threshold breached.
             </div>
           )}
 
           {tlLoading ? (
-            <div style={{ padding: 24, textAlign: "center", color: C.muted, fontSize: 13 }}>
-              Loading timeline...
+            <div style={{ padding: 24, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
+              Loading timeline telemetry...
             </div>
           ) : events.length === 0 ? (
-            <div style={{ padding: 24, textAlign: "center", color: C.muted, fontSize: 13, fontFamily: MONO }}>
-              [OK] No integrity events recorded — clean session.
+            <div style={{ padding: 24, textAlign: "center", color: "var(--muted)", fontSize: 13, fontFamily: MONO }}>
+              [OK] No integrity anomalies recorded — verified clean session.
             </div>
           ) : (
             <div>
               {events.map((ev, i) => {
                 const tsMs = ev.ts ? new Date(ev.ts).getTime() : 0;
-                // find closest clip of same type within 15 seconds
-                const clip = clips.find(c => c.anomalyType === ev.type && Math.abs(new Date(c.capturedAt).getTime() - tsMs) < 15000);
-                return (
-                  <TimelineEvent key={i} ev={ev} index={i} clip={clip} onPlayClip={setPlayingClip} />
-                );
+                const clip = clips.find((c) => c.anomalyType === ev.type && Math.abs(new Date(c.capturedAt).getTime() - tsMs) < 15000);
+                return <TimelineEvent key={i} ev={ev} index={i} clip={clip} onPlayClip={setPlayingClip} />;
               })}
             </div>
           )}
 
           {/* Q&A Review Section */}
-          <div style={{ marginTop: 24, borderTop: `1px solid ${C.border}`, paddingTop: 24 }}>
-            <h4 style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>
-              <iconify-icon icon="lucide:clipboard-list" style={{ verticalAlign: "middle", marginRight: 6 }} />
-              Question Review
+          <div style={{ marginTop: 28, borderTop: "1px solid var(--line)", paddingTop: 20 }}>
+            <h4
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "var(--muted)",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                marginBottom: 14,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <iconify-icon icon="lucide:clipboard-list" style={{ fontSize: 15 }} />
+              Assessment Question Breakdown
             </h4>
             {reviewLoading ? (
-              <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: 16 }}>Loading review...</div>
+              <div style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 16 }}>Loading question review...</div>
             ) : !review || !review.items || review.items.length === 0 ? (
-              <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: 16 }}>No question data available.</div>
+              <div style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 16 }}>No question telemetry stored.</div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {review.items.map((item, idx) => (
-                  <div key={idx} style={{ padding: 16, background: C.glass, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                      <span style={{ color: C.muted, fontSize: 13 }}>{idx + 1}.</span>
+                  <div
+                    key={idx}
+                    style={{
+                      padding: 14,
+                      background: "var(--raised)",
+                      border: "1px solid var(--line)",
+                      borderRadius: 10,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                      <span style={{ color: "var(--muted)", fontSize: 13, fontWeight: 700 }}>{idx + 1}.</span>
                       <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                          <p style={{ margin: "0", fontSize: 13, color: C.text, lineHeight: 1.5, flex: 1 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                          <p style={{ margin: "0", fontSize: 13, color: "var(--ink)", lineHeight: 1.5, flex: 1, fontWeight: 500 }}>
                             {item.question_text}
                           </p>
-                          <span style={{ 
-                            marginLeft: 12, 
-                            padding: "3px 8px", 
-                            borderRadius: 4, 
-                            fontSize: 11, 
-                            fontWeight: 700,
-                            textTransform: "uppercase",
-                            background: item.is_correct ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)",
-                            color: item.is_correct ? "#10b981" : "#ef4444"
-                          }}>
-                            {item.is_correct ? "Correct" : "Incorrect"}
+                          <span
+                            style={{
+                              marginLeft: 12,
+                              padding: "3px 8px",
+                              borderRadius: 999,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              fontFamily: MONO,
+                              textTransform: "uppercase",
+                              background: item.is_correct ? "var(--green-dim)" : "var(--red-dim)",
+                              color: item.is_correct ? "var(--green)" : "var(--red)",
+                            }}
+                          >
+                            {item.is_correct ? "✓ Correct" : "✗ Incorrect"}
                           </span>
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          {(item.options && item.options.length > 0) ? item.options.map((opt, i) => {
-                            const isCorrectAns = opt === item.correct_answer;
-                            const isUserAns = opt === item.user_answer || (item.user_answer && item.user_answer.includes(opt));
-                            let bg = "transparent";
-                            let br = `1px solid ${C.border}`;
-                            let col = C.muted;
-                            if (isCorrectAns && isUserAns) {
-                              bg = "rgba(16, 185, 129, 0.1)";
-                              br = "1px solid #10b981";
-                              col = "#10b981";
-                            } else if (isCorrectAns) {
-                              bg = "rgba(16, 185, 129, 0.05)";
-                              br = "1px dashed #10b981";
-                              col = "#10b981";
-                            } else if (isUserAns) {
-                              bg = "rgba(239, 68, 68, 0.1)";
-                              br = "1px solid #ef4444";
-                              col = "#ef4444";
-                            }
-                            return (
-                              <div key={i} style={{ padding: "6px 10px", fontSize: 12, borderRadius: 6, background: bg, border: br, color: col, display: "flex", justifyContent: "space-between" }}>
-                                <span>{opt}</span>
-                                <div>
-                                  {isCorrectAns && isUserAns && <span style={{ marginLeft: 8, fontWeight: 700 }}>✓ Correct (Selected)</span>}
-                                  {isCorrectAns && !isUserAns && <span style={{ marginLeft: 8, fontWeight: 700 }}>✓ Correct Answer</span>}
-                                  {isUserAns && !isCorrectAns && <span style={{ marginLeft: 8, fontWeight: 700 }}>✗ Selected Answer</span>}
+                          {item.options && item.options.length > 0 ? (
+                            item.options.map((opt, i) => {
+                              const isCorrectAns = opt === item.correct_answer;
+                              const isUserAns = opt === item.user_answer || (item.user_answer && item.user_answer.includes(opt));
+                              let bg = "transparent";
+                              let br = "1px solid var(--line)";
+                              let col = "var(--muted)";
+                              if (isCorrectAns && isUserAns) {
+                                bg = "var(--green-dim)";
+                                br = "1px solid var(--green)";
+                                col = "var(--green)";
+                              } else if (isCorrectAns) {
+                                bg = "var(--green-dim)";
+                                br = "1px dashed var(--green)";
+                                col = "var(--green)";
+                              } else if (isUserAns) {
+                                bg = "var(--red-dim)";
+                                br = "1px solid var(--red)";
+                                col = "var(--red)";
+                              }
+                              return (
+                                <div
+                                  key={i}
+                                  style={{
+                                    padding: "6px 10px",
+                                    fontSize: 12,
+                                    borderRadius: 6,
+                                    background: bg,
+                                    border: br,
+                                    color: col,
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                  }}
+                                >
+                                  <span>{opt}</span>
+                                  <div>
+                                    {isCorrectAns && isUserAns && <span style={{ marginLeft: 8, fontWeight: 700 }}>✓ Correct (Selected)</span>}
+                                    {isCorrectAns && !isUserAns && <span style={{ marginLeft: 8, fontWeight: 700 }}>✓ Correct Answer</span>}
+                                    {isUserAns && !isCorrectAns && <span style={{ marginLeft: 8, fontWeight: 700 }}>✗ Selected Answer</span>}
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          }) : (
-                            <div style={{ padding: "6px 10px", fontSize: 12, borderRadius: 6, background: item.is_correct ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)", border: `1px solid ${item.is_correct ? "#10b981" : "#ef4444"}`, color: item.is_correct ? "#10b981" : "#ef4444", display: "flex", justifyContent: "space-between" }}>
+                              );
+                            })
+                          ) : (
+                            <div
+                              style={{
+                                padding: "6px 10px",
+                                fontSize: 12,
+                                borderRadius: 6,
+                                background: item.is_correct ? "var(--green-dim)" : "var(--red-dim)",
+                                border: `1px solid ${item.is_correct ? "var(--green)" : "var(--red)"}`,
+                                color: item.is_correct ? "var(--green)" : "var(--red)",
+                                display: "flex",
+                                justifyContent: "space-between",
+                              }}
+                            >
                               <span>User Answer: {item.user_answer || "N/A"}</span>
                               <div>
-                                {item.is_correct ? <span style={{ marginLeft: 8, fontWeight: 700 }}>✓</span> : <span style={{ marginLeft: 8, fontWeight: 700 }}>✗ (Correct: {item.correct_answer})</span>}
+                                {item.is_correct ? (
+                                  <span style={{ marginLeft: 8, fontWeight: 700 }}>✓ Correct</span>
+                                ) : (
+                                  <span style={{ marginLeft: 8, fontWeight: 700 }}>✗ (Correct: {item.correct_answer})</span>
+                                )}
                               </div>
                             </div>
                           )}
@@ -386,41 +468,46 @@ function AttemptDetail({
 
           {/* Score cards */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div style={{ padding: "14px", background: C.glass, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>SCI Score</div>
-              <div className="font-mono text-emerald-600" style={{ fontSize: 20, fontWeight: 700 }}>
+            <div style={{ padding: "14px 16px", background: "var(--raised)", border: "1px solid var(--line)", borderRadius: 10 }}>
+              <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4, fontWeight: 600 }}>
+                SCI Score
+              </div>
+              <div style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: sciScore >= 70 ? "var(--green)" : "var(--red)" }}>
                 {sciScore.toFixed(1)}%
               </div>
             </div>
-            <div style={{ padding: "14px", background: C.glass, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Integrity</div>
-              <div className={`font-mono ${integrityWarning ? 'text-red-600' : 'text-gray-900'}`} style={{ fontSize: 20, fontWeight: 700 }}>
+            <div style={{ padding: "14px 16px", background: "var(--raised)", border: "1px solid var(--line)", borderRadius: 10 }}>
+              <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4, fontWeight: 600 }}>
+                Integrity
+              </div>
+              <div style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: integrityWarning ? "var(--red)" : "var(--ink)" }}>
                 {integrityScore.toFixed(1)}%
               </div>
             </div>
           </div>
 
           {/* Session Details & Lockdown summary */}
-          <div style={{ padding: "14px", background: C.glass, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+          <div style={{ padding: "14px 16px", background: "var(--raised)", border: "1px solid var(--line)", borderRadius: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Lockdown Status</div>
-              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Duration</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>Lockdown Status</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>Duration</div>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div
+                <span
                   style={{
                     width: 8,
                     height: 8,
                     borderRadius: "50%",
-                    background: lockdownEscalated ? C.red : C.cyan,
+                    background: lockdownEscalated ? "var(--red)" : "var(--green)",
+                    boxShadow: `0 0 6px ${lockdownEscalated ? "var(--red)" : "var(--green)"}`,
                   }}
                 />
-                <span style={{ fontSize: 12, color: lockdownEscalated ? C.red : C.cyan, fontFamily: MONO }}>
-                  {lockdownEscalated ? "Escalated" : "Passed"}
+                <span style={{ fontSize: 13, color: lockdownEscalated ? "var(--red)" : "var(--green)", fontFamily: MONO, fontWeight: 600 }}>
+                  {lockdownEscalated ? "Escalated" : "Clean Pass"}
                 </span>
               </div>
-              <div style={{ fontSize: 12, color: C.text, fontFamily: MONO, fontWeight: 600 }}>
+              <div style={{ fontSize: 13, color: "var(--ink)", fontFamily: MONO, fontWeight: 600 }}>
                 {(() => {
                   if (!timeline?.started_at || !timeline?.completed_at) return "N/A";
                   const s = new Date(timeline.started_at).getTime();
@@ -431,24 +518,36 @@ function AttemptDetail({
                 })()}
               </div>
             </div>
-            <div style={{ marginTop: 8, fontSize: 11, color: C.muted, fontFamily: MONO }}>
-              {events.filter(e => e.source === "lockdown").length} lockdown event(s) ·{" "}
-              {events.filter(e => e.source === "mediapipe").length} gaze event(s)
+            <div style={{ marginTop: 8, fontSize: 11, color: "var(--muted)", fontFamily: MONO }}>
+              {events.filter((e) => e.source === "lockdown").length} lockdown event(s) · {events.filter((e) => e.source === "mediapipe").length} gaze event(s)
             </div>
           </div>
 
-          {/* Proctoring video thumbnail (Req #7 — "bring video checking to audit page") */}
+          {/* Proctoring video thumbnail */}
           <div
             style={{
-              background: C.glass,
-              border: `1px solid ${C.border}`,
-              borderRadius: 8,
+              background: "var(--raised)",
+              border: "1px solid var(--line)",
+              borderRadius: 10,
               overflow: "hidden",
             }}
           >
-            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", justifyContent: "space-between" }}>
-              <span>Proctoring Recording</span>
-              {playingClip && <span style={{ color: C.cyan }}>Playing: {TYPE_LABELS[playingClip.anomalyType] || playingClip.anomalyType}</span>}
+            <div
+              style={{
+                padding: "10px 14px",
+                borderBottom: "1px solid var(--line)",
+                fontSize: 11,
+                color: "var(--muted)",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                fontWeight: 600,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <span>Proctoring Footage</span>
+              {playingClip && <span style={{ color: "var(--green)", fontWeight: 700 }}>Clip: {TYPE_LABELS[playingClip.anomalyType] || playingClip.anomalyType}</span>}
             </div>
             {playingClip ? (
               <video
@@ -461,7 +560,7 @@ function AttemptDetail({
               <div
                 style={{
                   aspectRatio: "16/9",
-                  background: "rgba(0,0,0,0.5)",
+                  background: "rgba(0,0,0,0.3)",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
@@ -470,29 +569,24 @@ function AttemptDetail({
                   padding: 16,
                 }}
               >
-                <iconify-icon icon="lucide:video-off" style={{ fontSize: 28, color: C.muted }} />
-                <div style={{ fontSize: 11, color: C.muted, textAlign: "center", lineHeight: 1.5 }}>
+                <iconify-icon icon="lucide:video" style={{ fontSize: 26, color: "var(--muted)" }} />
+                <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", lineHeight: 1.5 }}>
                   {clips.length > 0 ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
-                      <span>Session has {clips.length} recorded clip(s). Click "Play Clip" in the timeline.</span>
-                      {clips.find(c => c.anomalyType === "full_session") && (
+                      <span>Session contains {clips.length} recorded clip(s). Click "Play Clip" in the timeline.</span>
+                      {clips.find((c) => c.anomalyType === "full_session") && (
                         <button
                           onClick={() => {
-                            const clip = clips.find(c => c.anomalyType === "full_session");
+                            const clip = clips.find((c) => c.anomalyType === "full_session");
                             if (clip) setPlayingClip(clip);
                           }}
+                          className="btn btn-secondary"
                           style={{
                             padding: "6px 14px",
-                            background: C.cyan,
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: 6,
-                            cursor: "pointer",
-                            fontFamily: "var(--font-sans)",
-                            fontWeight: 600,
+                            fontSize: 12,
                             display: "flex",
                             alignItems: "center",
-                            gap: 6
+                            gap: 6,
                           }}
                         >
                           <iconify-icon icon="lucide:play-circle" />
@@ -501,88 +595,114 @@ function AttemptDetail({
                       )}
                     </div>
                   ) : (
-                    "Live-only monitoring — no video was stored. Anomaly events are shown in the timeline above."
+                    "Live proctoring — no video stored. Anomaly events logged in timeline above."
                   )}
                 </div>
               </div>
             )}
           </div>
 
+          {/* Actions */}
           {attempt.is_retake_requested ? (
             <button
               onClick={() => onGrantRetake(attempt.id)}
               disabled={processing}
+              className="btn btn-secondary"
               style={{
                 padding: "14px",
-                background: C.amber,
-                border: "none",
-                borderRadius: 8,
-                color: "#fff",
+                background: "var(--amber)",
+                color: "#ffffff",
                 fontWeight: 700,
                 fontSize: 13,
                 textTransform: "uppercase",
                 letterSpacing: "0.06em",
-                cursor: processing ? "not-allowed" : "pointer",
+                borderRadius: 10,
+                border: "none",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 8,
-                boxShadow: C.shadow,
-                transition: "opacity 0.2s",
+                boxShadow: "var(--shadow-btn)",
                 opacity: processing ? 0.6 : 1,
-                fontFamily: SANS,
               }}
             >
               <iconify-icon icon="lucide:refresh-cw" style={{ fontSize: 16 }} />
               {processing ? "Processing..." : "Approve Retake Request"}
             </button>
           ) : attempt.status === "failed" ? (
-            <div style={{ padding: "14px", background: C.glass, border: `1px dashed ${C.border}`, borderRadius: 8, color: C.muted, textAlign: "center", fontSize: 13, fontFamily: SANS }}>
-               <iconify-icon icon="lucide:clock" style={{ verticalAlign: "middle", marginRight: 6 }} />
-               Worker failed. Awaiting retake request...
+            <div
+              style={{
+                padding: "14px",
+                background: "var(--raised)",
+                border: "1px dashed var(--line)",
+                borderRadius: 10,
+                color: "var(--muted)",
+                textAlign: "center",
+                fontSize: 13,
+                fontFamily: SANS,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+            >
+              <iconify-icon icon="lucide:clock" style={{ fontSize: 16 }} />
+              Worker scored below passing threshold. Awaiting retake request.
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {attempt.has_certificate ? (
-                <div style={{
-                  padding: "14px",
-                  background: "rgba(16, 185, 129, 0.05)",
-                  border: "1px dashed rgba(16, 185, 129, 0.5)",
-                  borderRadius: 8,
-                  color: "var(--emerald)",
-                  fontWeight: 600,
-                  fontSize: 13,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                  fontFamily: SANS,
-                }}>
+                <div
+                  style={{
+                    padding: "14px",
+                    background: "var(--green-dim)",
+                    border: "1px dashed var(--green)",
+                    borderRadius: 10,
+                    color: "var(--green)",
+                    fontWeight: 600,
+                    fontSize: 13,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    fontFamily: SANS,
+                  }}
+                >
                   <iconify-icon icon="lucide:check-circle" style={{ fontSize: 16 }} />
                   Certificate Already Issued
                 </div>
               ) : (
                 <>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: C.glass, padding: "10px 14px", borderRadius: 8, border: `1px solid ${C.border}` }}>
-                    <span style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>Validity Period</span>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      background: "var(--raised)",
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      border: "1px solid var(--line)",
+                    }}
+                  >
+                    <span style={{ fontSize: 13, color: "var(--ink)", fontWeight: 500 }}>Validity Period</span>
                     <select
                       value={validityMonths}
                       onChange={(e) => setValidityMonths(Number(e.target.value))}
                       style={{
                         background: "var(--surface)",
-                        border: `1px solid ${C.border}`,
+                        border: "1px solid var(--line)",
                         borderRadius: 6,
-                        padding: "4px 8px",
+                        padding: "4px 10px",
                         fontSize: 13,
                         color: "var(--ink)",
                         outline: "none",
-                        fontWeight: 500,
+                        fontWeight: 600,
                       }}
                     >
                       <option value={6}>6 months</option>
                       <option value={12}>12 months (1 yr)</option>
-                      <option value={14}>14 months (1 yr 2 months)</option>
-                      <option value={18}>18 months (1 yr 6 months)</option>
+                      <option value={14}>14 months (1 yr 2 mos)</option>
+                      <option value={18}>18 months (1 yr 6 mos)</option>
                       <option value={24}>24 months (2 yrs)</option>
                       <option value={36}>36 months (3 yrs)</option>
                     </select>
@@ -590,25 +710,20 @@ function AttemptDetail({
                   <button
                     onClick={() => onIssueCertificate(attempt.id, validityMonths)}
                     disabled={processing}
+                    className="btn btn-primary"
                     style={{
                       padding: "14px",
-                      background: C.violet,
-                      border: "none",
-                      borderRadius: 8,
-                      color: "#fff",
+                      borderRadius: 10,
                       fontWeight: 700,
                       fontSize: 13,
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
-                      cursor: processing ? "not-allowed" : "pointer",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       gap: 8,
-                      boxShadow: C.shadow,
-                      transition: "opacity 0.2s",
+                      boxShadow: "var(--shadow-btn)",
                       opacity: processing ? 0.6 : 1,
-                      fontFamily: SANS,
                     }}
                   >
                     <iconify-icon icon="lucide:award" style={{ fontSize: 16 }} />
@@ -627,20 +742,26 @@ function AttemptDetail({
 // ─── Main AuditLog page ───────────────────────────────────────────────────────
 export const AuditLog: React.FC = () => {
   const [attempts, setAttempts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [toastError, setToastError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "warn" | "passed" | "retake">("all");
 
   useEffect(() => {
     loadAttempts();
   }, []);
 
   const loadAttempts = async () => {
+    setLoading(true);
     try {
       const data = await getPendingAttempts();
       setAttempts(data);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load audit attempts:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -648,8 +769,8 @@ export const AuditLog: React.FC = () => {
     setProcessingId(id);
     try {
       await issueCertificate(id, validityMonths);
-      // We don't filter it out because the attempt is still completed and should remain in the audit log
       setExpandedId(null);
+      loadAttempts();
     } finally {
       setProcessingId(null);
     }
@@ -669,28 +790,224 @@ export const AuditLog: React.FC = () => {
     }
   };
 
+  // Filtered attempts
+  const filteredAttempts = useMemo(() => {
+    return attempts.filter((att) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchQuery =
+        !q ||
+        (att.employee_name && att.employee_name.toLowerCase().includes(q)) ||
+        (att.job_title && att.job_title.toLowerCase().includes(q)) ||
+        (att.assessment_name && att.assessment_name.toLowerCase().includes(q));
+
+      if (!matchQuery) return false;
+
+      const integrityScore = att.integrity_score ?? 100;
+      const lockdownEscalated = att.lockdown_escalated ?? false;
+      const isWarn = integrityScore < 80 || lockdownEscalated;
+      const isRetake = Boolean(att.is_retake_requested);
+      const isPassed = !isWarn && !isRetake && att.status !== "failed";
+
+      if (statusFilter === "warn") return isWarn;
+      if (statusFilter === "retake") return isRetake;
+      if (statusFilter === "passed") return isPassed;
+
+      return true;
+    });
+  }, [attempts, searchQuery, statusFilter]);
+
+  const flaggedCount = attempts.filter((a) => (a.integrity_score ?? 100) < 80 || a.lockdown_escalated).length;
+  const retakeCount = attempts.filter((a) => a.is_retake_requested).length;
+
   return (
-    <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+    <div style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 24, maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+      {/* ── Top Header ──────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)" }}>Audit Log</h1>
-          <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>Review MediaPipe gaze tracking + lockdown integrity events.</p>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.02em", margin: 0 }}>
+            Audit Log
+          </h1>
+          <p style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 4, margin: 0 }}>
+            Review MediaPipe gaze tracking, lockdown integrity flags, and session forensics.
+          </p>
         </div>
-        
-        <div style={{ display: "flex", gap: 12 }}>
-          <div className="bg-white border border-gray-200 text-gray-700 shadow-sm" style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12, display: "flex", alignItems: "center", gap: 6, fontWeight: 500 }}>
-            <iconify-icon icon="lucide:eye" className="text-emerald-600" style={{ fontSize: 14 }} />
-            MediaPipe Active
+
+        {/* Live Integrity Badges */}
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--line)",
+              color: "var(--ink)",
+              padding: "6px 14px",
+              borderRadius: 999,
+              fontSize: 12,
+              fontWeight: 500,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              boxShadow: "var(--shadow-btn)",
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: "var(--green)",
+                boxShadow: "0 0 8px rgba(34, 197, 94, 0.6)",
+              }}
+            />
+            <iconify-icon icon="lucide:eye" style={{ fontSize: 14, color: "var(--green)" }} />
+            <span>MediaPipe Active</span>
           </div>
-          <div className="bg-white border border-gray-200 text-gray-700 shadow-sm" style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12, display: "flex", alignItems: "center", gap: 6, fontWeight: 500 }}>
-            <iconify-icon icon="lucide:shield-alert" className="text-amber-600" style={{ fontSize: 14 }} />
-            Lockdown Active
+
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--line)",
+              color: "var(--ink)",
+              padding: "6px 14px",
+              borderRadius: 999,
+              fontSize: 12,
+              fontWeight: 500,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              boxShadow: "var(--shadow-btn)",
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: "var(--amber)",
+                boxShadow: "0 0 8px rgba(245, 158, 11, 0.6)",
+              }}
+            />
+            <iconify-icon icon="lucide:shield-alert" style={{ fontSize: 14, color: "var(--amber)" }} />
+            <span>Lockdown Active</span>
           </div>
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-        {attempts.map((attempt) => {
+      {/* ── Filter / Search Bar ─────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
+          padding: "12px 16px",
+          background: "var(--surface)",
+          border: "1px solid var(--line)",
+          borderRadius: 14,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+        }}
+      >
+        {/* Search Input */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "1 1 280px", maxWidth: 420 }}>
+          <iconify-icon icon="lucide:search" style={{ fontSize: 16, color: "var(--muted)" }} />
+          <input
+            type="text"
+            placeholder="Search by worker name, role, or certification..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              width: "100%",
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              fontSize: 13,
+              color: "var(--ink)",
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", padding: 2 }}
+            >
+              <iconify-icon icon="lucide:x" style={{ fontSize: 14 }} />
+            </button>
+          )}
+        </div>
+
+        {/* Filter Pills */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            onClick={() => setStatusFilter("all")}
+            style={{
+              padding: "4px 12px",
+              borderRadius: 999,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              border: statusFilter === "all" ? "1px solid var(--ink)" : "1px solid var(--line)",
+              background: statusFilter === "all" ? "var(--ink)" : "transparent",
+              color: statusFilter === "all" ? "var(--base)" : "var(--muted)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            All ({attempts.length})
+          </button>
+          <button
+            onClick={() => setStatusFilter("warn")}
+            style={{
+              padding: "4px 12px",
+              borderRadius: 999,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              border: statusFilter === "warn" ? "1px solid var(--red)" : "1px solid var(--line)",
+              background: statusFilter === "warn" ? "var(--red-dim)" : "transparent",
+              color: statusFilter === "warn" ? "var(--red)" : "var(--muted)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            Flagged ({flaggedCount})
+          </button>
+          {retakeCount > 0 && (
+            <button
+              onClick={() => setStatusFilter("retake")}
+              style={{
+                padding: "4px 12px",
+                borderRadius: 999,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+                border: statusFilter === "retake" ? "1px solid var(--amber)" : "1px solid var(--line)",
+                background: statusFilter === "retake" ? "var(--amber-dim)" : "transparent",
+                color: statusFilter === "retake" ? "var(--amber)" : "var(--muted)",
+                transition: "all 0.15s ease",
+              }}
+            >
+              Retake Req. ({retakeCount})
+            </button>
+          )}
+          <button
+            onClick={() => setStatusFilter("passed")}
+            style={{
+              padding: "4px 12px",
+              borderRadius: 999,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              border: statusFilter === "passed" ? "1px solid var(--green)" : "1px solid var(--line)",
+              background: statusFilter === "passed" ? "var(--green-dim)" : "transparent",
+              color: statusFilter === "passed" ? "var(--green)" : "var(--muted)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            Clean Passed
+          </button>
+        </div>
+      </div>
+
+      {/* ── Attempt Cards List ──────────────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {filteredAttempts.map((attempt) => {
           const isExpanded = expandedId === attempt.id;
           const integrityScore = attempt.integrity_score ?? 100;
           const lockdownEscalated = attempt.lockdown_escalated ?? false;
@@ -699,92 +1016,198 @@ export const AuditLog: React.FC = () => {
           return (
             <div
               key={attempt.id}
-              className="glass-panel shadow-sm hover:shadow-md transition-shadow duration-200"
               style={{
-                border: `1px solid ${warn ? C.red : C.border}`,
-                borderRadius: "var(--card-radius)",
+                border: warn ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid var(--line)",
+                borderRadius: 16,
                 overflow: "hidden",
-                marginBottom: 16,
                 background: "var(--surface)",
+                boxShadow: isExpanded ? "var(--shadow-card)" : "0 2px 8px rgba(0,0,0,0.03)",
+                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
             >
-              {/* Row header */}
+              {/* Row Header */}
               <div
                 onClick={() => setExpandedId(isExpanded ? null : attempt.id)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1fr auto",
-                  padding: "12px 24px",
+                  gridTemplateColumns: "1.6fr 1.3fr 1fr 1fr 1.1fr 36px",
+                  padding: "16px 24px",
                   cursor: "pointer",
-                  backgroundColor: isExpanded ? "var(--surface-raised)" : "transparent",
-                  borderBottom: isExpanded ? `1px solid ${C.border}` : "none",
+                  backgroundColor: isExpanded ? "var(--raised)" : "transparent",
+                  borderBottom: isExpanded ? "1px solid var(--line)" : "none",
                   alignItems: "center",
-                  gap: 12,
+                  gap: 16,
+                  transition: "background-color 0.15s ease",
                 }}
               >
+                {/* 1. Worker Name & Role */}
                 <div>
-                  <div className="text-gray-900 font-medium">{attempt.employee_name}</div>
-                  <div className="text-gray-500 text-sm">{attempt.job_title}</div>
+                  <div style={{ color: "var(--ink)", fontWeight: 600, fontSize: "15px", letterSpacing: "-0.01em" }}>
+                    {attempt.employee_name || "Unknown Operator"}
+                  </div>
+                  <div style={{ color: "var(--muted)", fontSize: "13px", marginTop: "2px" }}>
+                    {attempt.job_title || "Operator"}
+                  </div>
                 </div>
+
+                {/* 2. Assessment Title */}
                 <div>
-                  <div style={{ fontSize: "0.75rem", color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Assessment</div>
-                  <div style={{ fontSize: "0.85rem", marginTop: 2 }}>{attempt.assessment_name}</div>
+                  <div style={{ fontSize: "11px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
+                    Assessment
+                  </div>
+                  <div style={{ fontSize: "13.5px", marginTop: "3px", color: "var(--ink)", fontWeight: 500, lineHeight: 1.35 }}>
+                    {attempt.assessment_name}
+                  </div>
                 </div>
+
+                {/* 3. SCI Score */}
                 <div>
-                  <div style={{ fontSize: "0.75rem", color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>SCI Score</div>
-                  <div className="font-mono text-emerald-600" style={{ fontSize: 16, marginTop: 2 }}>{(attempt.score ?? 0).toFixed(1)}%</div>
+                  <div style={{ fontSize: "11px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
+                    SCI Score
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: MONO,
+                      fontSize: "15.5px",
+                      fontWeight: 700,
+                      marginTop: "3px",
+                      color: (attempt.score ?? 0) >= 70 ? "var(--green)" : "var(--red)",
+                    }}
+                  >
+                    {(attempt.score ?? 0).toFixed(1)}%
+                  </div>
                 </div>
+
+                {/* 4. Integrity Score */}
                 <div>
-                  <div style={{ fontSize: "0.75rem", color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Integrity</div>
-                  <div className={`font-mono ${integrityScore < 80 ? 'text-red-600' : 'text-gray-900'}`} style={{ fontSize: 16, marginTop: 2 }}>
+                  <div style={{ fontSize: "11px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
+                    Integrity
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: MONO,
+                      fontSize: "15.5px",
+                      fontWeight: 700,
+                      marginTop: "3px",
+                      color: integrityScore < 80 ? "var(--red)" : "var(--ink)",
+                    }}
+                  >
                     {integrityScore.toFixed(1)}%
                   </div>
                 </div>
+
+                {/* 5. Status Badge */}
                 <div>
-                  <div style={{ fontSize: "0.75rem", color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Status</div>
-                  <div style={{ fontSize: 12, marginTop: 4, display: "flex", alignItems: "center", gap: 5 }}>
+                  <div style={{ fontSize: "11px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
+                    Status
+                  </div>
+                  <div style={{ marginTop: "4px" }}>
                     {attempt.is_retake_requested ? (
-                      <>
-                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.amber, flexShrink: 0 }} />
-                        <span style={{ color: C.amber, fontFamily: MONO }}>Retake Req.</span>
-                      </>
+                      <span
+                        className="badge badge-amber"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "3px 10px",
+                          borderRadius: 999,
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          fontFamily: MONO,
+                        }}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor" }} />
+                        Retake Req.
+                      </span>
                     ) : attempt.status === "failed" ? (
-                      <>
-                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.red, flexShrink: 0 }} />
-                        <span style={{ color: C.red, fontFamily: MONO }}>Failed</span>
-                      </>
+                      <span
+                        className="badge badge-crimson"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "3px 10px",
+                          borderRadius: 999,
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          fontFamily: MONO,
+                        }}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor" }} />
+                        Failed
+                      </span>
+                    ) : lockdownEscalated ? (
+                      <span
+                        className="badge badge-crimson"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "3px 10px",
+                          borderRadius: 999,
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          fontFamily: MONO,
+                        }}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor" }} />
+                        Escalated
+                      </span>
                     ) : (
-                      <>
-                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: lockdownEscalated ? C.red : C.cyan, flexShrink: 0 }} />
-                        <span style={{ color: lockdownEscalated ? C.red : C.cyan, fontFamily: MONO }}>
-                          {lockdownEscalated ? "Escalated" : "Passed"}
-                        </span>
-                      </>
+                      <span
+                        className="badge badge-emerald"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "3px 10px",
+                          borderRadius: 999,
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          fontFamily: MONO,
+                        }}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor" }} />
+                        Passed
+                      </span>
                     )}
                   </div>
                 </div>
-                <div>
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke={C.muted}
-                    strokeWidth="2"
-                    style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.3s" }}
+
+                {/* 6. Expand Chevron */}
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      display: "grid",
+                      placeItems: "center",
+                      background: isExpanded ? "var(--surface)" : "transparent",
+                      color: isExpanded ? "var(--ink)" : "var(--muted)",
+                      transition: "all 0.2s ease",
+                    }}
                   >
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
+                    <iconify-icon
+                      icon="lucide:chevron-down"
+                      style={{
+                        fontSize: 18,
+                        transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                        transition: "transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Expanded detail */}
+              {/* Expanded Detail Panel */}
               <AnimatePresence>
                 {isExpanded && (
                   <motion.div
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
                     style={{ overflow: "hidden" }}
                   >
                     <AttemptDetail
@@ -800,22 +1223,26 @@ export const AuditLog: React.FC = () => {
           );
         })}
 
-        {attempts.length === 0 && (
+        {filteredAttempts.length === 0 && !loading && (
           <div
             style={{
-              padding: "40px",
+              padding: "48px 24px",
               textAlign: "center",
-              color: C.muted,
-              border: `1px dashed ${C.border}`,
-              fontFamily: MONO,
-              fontSize: 13,
+              color: "var(--muted)",
+              border: "1px dashed var(--line)",
+              borderRadius: 16,
+              background: "var(--surface)",
+              fontFamily: SANS,
+              fontSize: 14,
             }}
           >
-            [OK] No pending attempts to review.
+            <iconify-icon icon="lucide:search-x" style={{ fontSize: 32, color: "var(--muted)", marginBottom: 8, display: "block" }} />
+            No audit records match the selected filter or search criteria.
           </div>
         )}
       </div>
 
+      {/* Toast Notification */}
       <AnimatePresence>
         {toastError && (
           <motion.div
@@ -836,7 +1263,7 @@ export const AuditLog: React.FC = () => {
               alignItems: "center",
               gap: "12px",
               fontWeight: 600,
-              border: "1px solid rgba(255,255,255,0.1)"
+              border: "1px solid rgba(255,255,255,0.1)",
             }}
           >
             <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: "50%", width: 32, height: 32, display: "grid", placeItems: "center" }}>

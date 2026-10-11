@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { BACKEND_ORIGIN } from "../api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,7 @@ export function IngestionTerminal() {
   const fetchManuals = useCallback(async () => {
     try {
       const token = localStorage.getItem("aegis_token");
-      const res = await fetch("http://localhost:8000/api/v1/hierarchy/manuals", {
+      const res = await fetch(`${BACKEND_ORIGIN}/api/v1/hierarchy/manuals`, {
         headers: token ? { "Authorization": `Bearer ${token}` } : undefined
       });
       if (res.ok) {
@@ -108,7 +109,7 @@ export function IngestionTerminal() {
   const handleDeleteManual = async (manualId: string) => {
     try {
       const token = localStorage.getItem("aegis_token");
-      const res = await fetch(`http://localhost:8000/api/v1/hierarchy/manuals/${manualId}`, {
+      const res = await fetch(`${BACKEND_ORIGIN}/api/v1/hierarchy/manuals/${manualId}`, {
         method: "DELETE",
         headers: token ? { "Authorization": `Bearer ${token}` } : undefined
       });
@@ -173,7 +174,7 @@ export function IngestionTerminal() {
 
     try {
       const token = localStorage.getItem("aegis_token");
-      const response = await fetch("http://localhost:8000/api/ingest/pdf", {
+      const response = await fetch(`${BACKEND_ORIGIN}/api/ingest/pdf`, {
         method: "POST",
         body: formData,
         headers: token ? { "Authorization": `Bearer ${token}` } : undefined,
@@ -543,7 +544,7 @@ export function IngestionTerminal() {
                           Delete
                         </button>
                         <a 
-                          href={`http://localhost:8000${m.url}`} 
+                          href={`${BACKEND_ORIGIN}${m.url}`} 
                           target="_blank" 
                           rel="noreferrer"
                           className="btn btn-primary"

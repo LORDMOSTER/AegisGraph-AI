@@ -161,7 +161,7 @@ export function ExamDashboard({ onStartExam, userProfile, onLogout }: Props) {
                 {userProfile?.photo ? (
                   <img 
                     src={userProfile.photo} 
-                    alt="Profile" 
+                    alt={`${userProfile?.full_name || "Operator"} verified profile photo`} 
                     className="w-full h-full object-cover"
                   />
                 ) : (

@@ -582,7 +582,7 @@ export function Employees() {
                   <iconify-icon icon="lucide:x" style={{ fontSize: 20 }} />
                 </button>
               </div>
-              <img src={viewPhotoTarget.photo} alt={viewPhotoTarget.name} style={{ width: "100%", borderRadius: 12, objectFit: "cover" }} />
+              <img src={viewPhotoTarget.photo} alt={`Personnel photograph and facial verification reference for ${viewPhotoTarget.name}`} style={{ width: "100%", borderRadius: 12, objectFit: "cover" }} />
             </motion.div>
           </div>
         )}

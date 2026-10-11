@@ -1,4 +1,25 @@
-<svg viewBox="0 0 100 100" fill="none" stroke="#B4FF39" stroke-width="4" xmlns="http://www.w3.org/2000/svg">
-    <path d="M50 20 L25 80 M50 20 L75 80 M35 60 L65 60" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M75 35 A 30 30 0 1 0 75 75 L75 55 L55 55" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#16a34a"/>
+      <stop offset="100%" stop-color="#0d9488"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#b4ff39"/>
+      <stop offset="100%" stop-color="#16a34a"/>
+    </linearGradient>
+  </defs>
+  <!-- Background Dark Rounded Squircle -->
+  <rect width="64" height="64" rx="16" fill="#0B0F17"/>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="#1E293B" stroke-width="1.5"/>
+  
+  <!-- Aegis Shield Silhouette -->
+  <polygon points="32,10 50,19 50,38 32,54 14,38 14,19" fill="#111827" stroke="url(#shieldGrad)" stroke-width="2"/>
+  
+  <!-- Internal Graph & A Mark -->
+  <polyline points="23,40 32,18 41,40" fill="none" stroke="url(#accentGrad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="26" y1="33" x2="38" y2="33" stroke="url(#accentGrad)" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="32" cy="18" r="3" fill="#B4FF39"/>
+  <circle cx="23" cy="40" r="2.5" fill="#16A34A"/>
+  <circle cx="41" cy="40" r="2.5" fill="#16A34A"/>
 </svg>

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AdminCertificate, getEmployees, Employee } from "../api";
+import { AdminCertificate, getEmployees, Employee, BACKEND_ORIGIN } from "../api";
 
 // --- ICONS ---
 const ImportIcon = () => (
@@ -29,7 +29,7 @@ export const Certificates: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  
+
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("name-asc");
 
@@ -44,9 +44,10 @@ export const Certificates: React.FC = () => {
         const { getAdminCertificates } = await import("../api");
         const certData = await getAdminCertificates();
         setCerts(certData);
-        
+
         const empData = await getEmployees();
         setEmployees(empData);
+
       } catch (err) {
         console.error("Failed to load certificates:", err);
       }
@@ -55,9 +56,7 @@ export const Certificates: React.FC = () => {
   }, []);
 
   // Modal State
-  const [importEmp, setImportEmp] = useState("");
   const [importEmpId, setImportEmpId] = useState("");
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [importExpiry, setImportExpiry] = useState("");
   const [importScore, setImportScore] = useState("");
 
@@ -111,7 +110,7 @@ export const Certificates: React.FC = () => {
   });
 
   const filteredCerts = certs
-    .filter(c => 
+    .filter(c =>
       (c.employeeName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (c.employeeId || "").toLowerCase().includes(searchQuery.toLowerCase())
     )
@@ -147,7 +146,6 @@ export const Certificates: React.FC = () => {
       const data = await getAdminCertificates();
       setCerts(data);
       setIsModalOpen(false);
-      setImportEmp("");
       setImportEmpId("");
       setImportScore("");
       setImportExpiry("");
@@ -192,16 +190,16 @@ export const Certificates: React.FC = () => {
       )}
 
       <div style={{ display: "flex", gap: "16px", marginBottom: "24px" }}>
-        <input 
-          type="text" 
-          placeholder="Search certificates by name or ID..." 
+        <input
+          type="text"
+          placeholder="Search certificates by name or ID..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="field-input"
           style={{ flex: 1, maxWidth: "400px" }}
         />
-        <select 
-          value={sortBy} 
+        <select
+          value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
           className="field-input"
           style={{ width: "200px" }}
@@ -223,92 +221,90 @@ export const Certificates: React.FC = () => {
         ) : (
           filteredCerts.map((cert) => {
             const d = new Date(cert.expiryDate);
-          const expDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
-          return (
-            <div key={cert.id} className="card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px", gap: "16px" }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <h3 style={{ margin: "0 0 4px 0", fontSize: "1.2rem", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cert.employeeName}</h3>
-                  <div className="t-secondary" style={{ fontSize: "0.9rem" }}>EMP-ID: {cert.employeeId}</div>
-                </div>
-                <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-                  {cert.status === "Expired" && (
-                    <div className="badge" style={{ backgroundColor: "rgba(255, 60, 60, 0.1)", color: "var(--error)" }}>
-                      EXPIRED
-                    </div>
-                  )}
-                  {cert.status === "Expiring Soon" && (
-                    <div className="badge badge-amber">
-                      EXPIRING SOON
-                    </div>
-                  )}
-                  {cert.status === "Valid" && (
-                    <div className="badge badge-emerald">
-                      VALID
-                    </div>
-                  )}
-                  {cert.isImported ? (
-                    <div className="badge badge-amber">
-                      IMPORTED
-                    </div>
-                  ) : (
-                    <div className="badge badge-emerald">
-                      <ShieldIcon /> NATIVE
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", borderTop: "1px solid var(--line)", paddingTop: "16px" }}>
-                <div>
-                  <div className="label" style={{ marginBottom: "4px" }}>SCI Score</div>
-                  <div className="mono t-primary" style={{ fontSize: "1.1rem", color: "var(--accent)" }}>
-                    {cert.score !== null && cert.score !== undefined ? `${cert.score.toFixed(1)}%` : "N/A"}
+            const expDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+            return (
+              <div key={cert.id} className="card">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px", gap: "16px" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h3 style={{ margin: "0 0 4px 0", fontSize: "1.2rem", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cert.employeeName}</h3>
+                    <div className="t-secondary" style={{ fontSize: "0.9rem" }}>EMP-ID: {cert.employeeId}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+                    {cert.status === "Expired" && (
+                      <div className="badge badge-crimson">EXPIRED</div>
+                    )}
+                    {cert.status === "Expiring Soon" && (
+                      <div className="badge badge-amber">
+                        EXPIRING SOON
+                      </div>
+                    )}
+                    {cert.status === "Valid" && (
+                      <div className="badge badge-emerald">
+                        VALID
+                      </div>
+                    )}
+                    {cert.isImported ? (
+                      <div className="badge badge-amber">
+                        IMPORTED
+                      </div>
+                    ) : (
+                      <div className="badge badge-emerald">
+                        <ShieldIcon /> NATIVE
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div>
-                  <div className="label" style={{ marginBottom: "4px" }}>Expiry</div>
-                  <div className="mono t-primary" style={{ fontSize: "0.9rem", marginTop: "2px" }}>{expDate}</div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", borderTop: "1px solid var(--line)", paddingTop: "16px" }}>
+                  <div>
+                    <div className="label" style={{ marginBottom: "4px" }}>SCI Score</div>
+                    <div className="mono t-primary" style={{ fontSize: "1.1rem", color: "var(--accent)" }}>
+                      {cert.score !== null && cert.score !== undefined ? `${cert.score.toFixed(1)}%` : "N/A"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="label" style={{ marginBottom: "4px" }}>Expiry</div>
+                    <div className="mono t-primary" style={{ fontSize: "0.9rem", marginTop: "2px" }}>{expDate}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+                  <button
+                    onClick={() => {
+                      if (cert.pdfUrl) {
+                        const urlPath = cert.pdfUrl.startsWith('/') ? cert.pdfUrl : `/${cert.pdfUrl}`;
+                        window.open(`${BACKEND_ORIGIN}${urlPath}`, '_blank');
+                      } else {
+                        showToast("No document available for this certificate.");
+                      }
+                    }}
+                    className="btn"
+                    style={{ flex: 1, padding: "6px" }}
+                  >
+                    View
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditCertId(cert.id);
+                      setEditScore(String(cert.score));
+                      setEditExpiry(cert.expiryDate.split("T")[0]);
+                      setIsEditModalOpen(true);
+                    }}
+                    className="btn"
+                    style={{ flex: 1, padding: "6px" }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => setDeleteCertId(cert.id)}
+                    className="btn btn-destructive"
+                    style={{ flex: 1, padding: "6px" }}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
-                <button 
-                  onClick={() => {
-                    if (cert.pdfUrl) {
-                      const urlPath = cert.pdfUrl.startsWith('/') ? cert.pdfUrl : `/${cert.pdfUrl}`;
-                      window.open(`http://localhost:8000${urlPath}`, '_blank');
-                    } else {
-                      showToast("No document available for this certificate.");
-                    }
-                  }} 
-                  className="btn" 
-                  style={{ flex: 1, padding: "6px" }}
-                >
-                  View
-                </button>
-                <button 
-                  onClick={() => {
-                    setEditCertId(cert.id);
-                    setEditScore(String(cert.score));
-                    setEditExpiry(cert.expiryDate.split("T")[0]);
-                    setIsEditModalOpen(true);
-                  }} 
-                  className="btn" 
-                  style={{ flex: 1, padding: "6px" }}
-                >
-                  Edit
-                </button>
-                <button 
-                  onClick={() => setDeleteCertId(cert.id)} 
-                  className="btn btn-destructive" 
-                  style={{ flex: 1, padding: "6px" }}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          );
-        }))}
+            );
+          }))}
       </div>
 
       <AnimatePresence>
@@ -367,23 +363,23 @@ export const Certificates: React.FC = () => {
               </div>
 
               <form onSubmit={handleImport} style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-                
+
                 {importError && (
-                  <div style={{ padding: "12px", backgroundColor: "rgba(255, 60, 60, 0.1)", border: "1px solid var(--error)", color: "var(--error)", borderRadius: "var(--radius-md)", fontSize: "0.9rem" }}>
+                  <div style={{ padding: "12px", backgroundColor: "rgba(255, 60, 60, 0.1)", border: "1px solid var(--error)", color: "var(--red)", borderRadius: "var(--radius-md)", fontSize: "0.9rem" }}>
                     {importError}
                   </div>
                 )}
-                
+
                 {importWarning && (
                   <div style={{ padding: "12px", backgroundColor: "rgba(255, 170, 0, 0.1)", border: "1px solid var(--amber)", color: "var(--amber)", borderRadius: "var(--radius-md)", fontSize: "0.9rem" }}>
                     {importWarning}
                   </div>
                 )}
-                <div 
+                <div
                   style={{ border: "1px dashed var(--line)", padding: "32px", textAlign: "center", cursor: "pointer", borderRadius: "var(--radius-md)", backgroundColor: "var(--surface)", position: "relative" }}
                 >
-                  <input 
-                    type="file" 
+                  <input
+                    type="file"
                     accept="application/pdf"
                     style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }}
                     disabled={isAnalyzing}
@@ -393,41 +389,38 @@ export const Certificates: React.FC = () => {
                       setIsAnalyzing(true);
                       setImportError(null);
                       setImportWarning(null);
-                      setImportEmp("Analyzing with AI...");
                       setImportScore("");
                       setImportExpiry("");
                       try {
                         const { analyzeCertificate } = await import("../api");
                         const data = await analyzeCertificate(file);
-                        
+
                         const extractedName = data.employee_name || "";
-                        setImportEmp(extractedName);
-                        
+
                         // Attempt exact match
                         const empMatch = employees.find(emp => emp.name.toLowerCase() === (extractedName || "").toLowerCase() || (extractedName || "").toLowerCase().includes(emp.name.toLowerCase()));
                         if (empMatch) {
-                            setImportEmpId(empMatch.id);
+                          setImportEmpId(empMatch.id);
                         } else {
-                            setImportEmpId("");
+                          setImportEmpId("");
                         }
-                        
+
                         setImportScore(data.score ? String(data.score) : "");
                         setImportExpiry(data.expiry_date || "");
-                        
+
                         // Handle grounding validation display
                         let warnings = [];
                         if (data.grounding && !data.grounding.holder_name) {
-                            warnings.push("Name could not be verified in the PDF text.");
+                          warnings.push("Name could not be verified in the PDF text.");
                         }
                         if (data.derived_expiry) {
-                            warnings.push("Expiry date was derived from validity rules.");
+                          warnings.push("Expiry date was derived from validity rules.");
                         }
                         if (warnings.length > 0) {
-                            setImportWarning(warnings.join(" "));
+                          setImportWarning(warnings.join(" "));
                         }
                       } catch (err) {
                         console.error(err);
-                        setImportEmp("");
                         setImportError("AI extraction failed. Please fill manually.");
                       } finally {
                         setIsAnalyzing(false);
@@ -455,17 +448,13 @@ export const Certificates: React.FC = () => {
 
                 <div className="field-group" style={{ position: "relative" }}>
                   <label className="field-label">Employee Name <span style={{ fontSize: "0.7rem", color: "var(--amber)", marginLeft: 8 }}>(Please verify AI match)</span></label>
-                  <select 
-                    required 
-                    value={importEmpId} 
+                  <select
+                    required
+                    value={importEmpId}
                     onChange={(e) => {
                       setImportEmpId(e.target.value);
-                      const emp = employees.find(emp => emp.id === e.target.value);
-                      if (emp) {
-                        setImportEmp(emp.name);
-                      }
-                    }} 
-                    className="field-input" 
+                    }}
+                    className="field-input"
                   >
                     <option value="" disabled>Select an employee...</option>
                     {employees.map(emp => (
@@ -562,7 +551,7 @@ export const Certificates: React.FC = () => {
               className="card"
               style={{ width: "400px", padding: "24px", textAlign: "center" }}
             >
-              <h2 style={{ marginTop: 0, fontSize: "1.2rem", fontWeight: 500, color: "var(--error)" }}>Delete Certificate</h2>
+              <h2 style={{ marginTop: 0, fontSize: "1.2rem", fontWeight: 500, color: "var(--red)" }}>Delete Certificate</h2>
               <p className="t-secondary" style={{ marginBottom: "24px" }}>
                 Are you sure you want to permanently delete this certificate? This action cannot be undone.
               </p>

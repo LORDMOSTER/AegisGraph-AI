@@ -259,7 +259,7 @@ export const QuestionReviewer: React.FC = () => {
     }
   };
 
-  const handleRejectConfirm = async (id: string, notes: string) => {
+  const handleRejectConfirm = async (id: string, _notes?: string) => {
     setRejectTargetId(null);
     setActionInFlight(id);
     try {

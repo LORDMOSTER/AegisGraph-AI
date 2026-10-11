@@ -218,7 +218,7 @@ export function useAnomalyClipRecorder({
       const duration_s = allChunks.length; // rough approximation since 1 chunk ≈ 1s
 
       const clip: AnomalyClip = {
-        id: `${examSessionId}_${anomalyType}_${anomalyTime}`,
+        id: `${prefix}_${examSessionId}_${anomalyType}_${anomalyTime}`,
         examSessionId,
         anomalyType,
         sessionTimestampMs,
@@ -236,7 +236,7 @@ export function useAnomalyClipRecorder({
         isSavingRef.current = false;
       }
     },
-    [examSessionId, examStartTime]
+    [examSessionId, examStartTime, prefix]
   );
 
   return {

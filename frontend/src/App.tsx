@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, lazy, Suspense } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AssessmentResponse, checkHealth, generateAssessment } from "./api";
 import { AnalyticsDashboard } from "./components/AnalyticsDashboard";
@@ -23,10 +23,15 @@ import { QuestionBank } from "./pages/QuestionBank";
 import { Settings } from "./pages/Settings";
 import { AuditLog } from "./pages/AuditLog";
 import { ThemeToggle } from "./components/ThemeToggle";
-import SpecularButton from "./components/SpecularButton";
 import { LogoMark } from "./components/BrandAssets";
 import { AdminExams } from "./pages/AdminExams";
 import { deleteClipsOlderThan } from "./hooks/useAnomalyClipRecorder";
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy").then((m) => ({ default: m.PrivacyPolicy })));
+const TermsAndConditions = lazy(() => import("./pages/TermsAndConditions").then((m) => ({ default: m.TermsAndConditions })));
+import { CookieConsent, openCookieSettings } from "./components/CookieConsent";
+import { updateMetaTags } from "./hooks/useMetaTags";
+import { NotFound } from "./pages/NotFound";
+import { analytics } from "./utils/analytics";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & helpers
@@ -73,14 +78,69 @@ const pageVariants = {
 // App
 // ─────────────────────────────────────────────────────────────────────────────
 
+export type AppRoute = "login" | "register" | "app" | "verify" | "privacy" | "terms" | "not-found";
+
 export default function App() {
-  const [currentRoute, setCurrentRoute] = useState<"login" | "register" | "app" | "verify">(() => {
-    if (window.location.pathname.startsWith("/verify/")) {
-      return "verify";
-    }
-    return "login";
+  const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    if (path.startsWith("/verify/")) return "verify";
+    if (path === "/privacy" || hash === "#privacy") return "privacy";
+    if (path === "/terms" || hash === "#terms") return "terms";
+    if (path === "/register" || hash === "#register") return "register";
+    if (path === "/" || path === "/login" || path === "") return "login";
+    return "not-found";
   });
-  
+
+  const [returnRoute, setReturnRoute] = useState<AppRoute>("login");
+
+  const navigateTo = (route: AppRoute) => {
+    setCurrentRoute(route);
+    if (route === "privacy") window.history.pushState({}, "", "#privacy");
+    else if (route === "terms") window.history.pushState({}, "", "#terms");
+    else if (route === "register") window.history.pushState({}, "", "#register");
+    else if (route === "login") window.history.pushState({}, "", "/");
+  };
+
+  const openPolicy = (route: "privacy" | "terms") => {
+    if (currentRoute !== "privacy" && currentRoute !== "terms") {
+      setReturnRoute(currentRoute);
+    }
+    navigateTo(route);
+  };
+
+  // Track route pageview in analytics
+  useEffect(() => {
+    analytics.trackPageView(`AegisGraph AI - ${currentRoute}`, window.location.pathname);
+  }, [currentRoute]);
+
+  // URL PopState / HashChange listener for back/forward browser buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (path.startsWith("/verify/")) {
+        setCurrentRoute("verify");
+      } else if (path === "/privacy" || hash === "#privacy") {
+        setCurrentRoute("privacy");
+      } else if (path === "/terms" || hash === "#terms") {
+        setCurrentRoute("terms");
+      } else if (path === "/register" || hash === "#register") {
+        setCurrentRoute("register");
+      } else if (path === "/" || path === "/login" || (!hash && path === "")) {
+        setCurrentRoute("login");
+      } else {
+        setCurrentRoute("not-found");
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("hashchange", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("hashchange", handlePopState);
+    };
+  }, []);
+
   const [verifyCertId, _setVerifyCertId] = useState<string | null>(() => {
     if (window.location.pathname.startsWith("/verify/")) {
       return window.location.pathname.split("/verify/")[1];
@@ -90,6 +150,55 @@ export default function App() {
 
   const [userRole, setUserRole] = useState<"admin" | "employee">("admin");
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
+
+  // Dynamic document title and meta description updates
+  useEffect(() => {
+    if (currentRoute === "privacy") {
+      updateMetaTags({
+        title: "Privacy Policy",
+        description: "AegisGraph AI Privacy Policy — Workplace biometric standards, proctoring telemetry retention, and offline GraphRAG data protection.",
+      });
+    } else if (currentRoute === "terms") {
+      updateMetaTags({
+        title: "Terms and Conditions",
+        description: "AegisGraph AI Terms and Conditions — Operational rules, proctoring integrity requirements, and certification licensing.",
+      });
+    } else if (currentRoute === "login") {
+      updateMetaTags({
+        title: "Sign In",
+        description: "AegisGraph AI Sign In — Secure dual-factor administrative and worker kiosk authentication.",
+      });
+    } else if (currentRoute === "register") {
+      updateMetaTags({
+        title: "Register Organization",
+        description: "Register your company or industrial plant with AegisGraph AI for GraphRAG safety certification.",
+      });
+    } else if (currentRoute === "verify") {
+      updateMetaTags({
+        title: "Verify Certificate",
+        description: "Cryptographic validation of industrial safety certificates issued by AegisGraph AI.",
+      });
+    } else if (currentRoute === "app") {
+      const tabTitleMap: Record<string, string> = {
+        dashboard: "Admin Dashboard",
+        manuals: "Manual Ingestion",
+        rules: "Safety Rules Engine",
+        "question-bank": "Question Bank",
+        departments: "Departments Management",
+        employees: "Employee Directory",
+        exams: "Exam Management",
+        certificates: "Certification Registry",
+        audit: "Audit & Forensics",
+        settings: "Platform Settings",
+        results: "Assessment Results",
+      };
+      const title = tabTitleMap[activeTab] || "Safety Platform";
+      updateMetaTags({
+        title,
+        description: "AegisGraph AI — Mission-critical, offline-first GraphRAG assessment platform for industrial safety.",
+      });
+    }
+  }, [currentRoute, activeTab]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -325,9 +434,35 @@ export default function App() {
       flexWrap: "wrap",
       gap: 12,
     }}>
-      <p style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-display)", fontWeight: 500 }}>
-        AegisGraph AI · Industrial Safety Certification Platform
-      </p>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <p style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-display)", fontWeight: 500 }}>
+          AegisGraph AI · Industrial Safety Certification Platform
+        </p>
+        <span style={{ fontSize: 12, color: "var(--line)" }}>•</span>
+        <button
+          type="button"
+          onClick={() => openPolicy("privacy")}
+          style={{ background: "none", border: "none", padding: 0, fontSize: 12, color: "var(--muted)", cursor: "pointer", textDecoration: "underline" }}
+        >
+          Privacy Policy
+        </button>
+        <span style={{ fontSize: 12, color: "var(--line)" }}>•</span>
+        <button
+          type="button"
+          onClick={() => openPolicy("terms")}
+          style={{ background: "none", border: "none", padding: 0, fontSize: 12, color: "var(--muted)", cursor: "pointer", textDecoration: "underline" }}
+        >
+          Terms &amp; Conditions
+        </button>
+        <span style={{ fontSize: 12, color: "var(--line)" }}>•</span>
+        <button
+          type="button"
+          onClick={openCookieSettings}
+          style={{ background: "none", border: "none", padding: 0, fontSize: 12, color: "var(--muted)", cursor: "pointer", textDecoration: "underline" }}
+        >
+          Cookie Settings
+        </button>
+      </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent2)", display: "inline-block" }} />
         <p style={{ fontSize: 12, color: "var(--muted)" }}>
@@ -458,27 +593,79 @@ export default function App() {
     </div>
   );
 
+  if (currentRoute === "privacy") {
+    return (
+      <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: "var(--muted)" }}>Loading Privacy Policy...</div>}>
+        <PrivacyPolicy
+          onBack={() => navigateTo(returnRoute)}
+          darkMode={darkMode}
+          onToggleDark={() => setDarkMode((d) => !d)}
+        />
+        <CookieConsent onNavigatePolicy={openPolicy} />
+      </Suspense>
+    );
+  }
+
+  if (currentRoute === "terms") {
+    return (
+      <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: "var(--muted)" }}>Loading Terms & Conditions...</div>}>
+        <TermsAndConditions
+          onBack={() => navigateTo(returnRoute)}
+          darkMode={darkMode}
+          onToggleDark={() => setDarkMode((d) => !d)}
+        />
+        <CookieConsent onNavigatePolicy={openPolicy} />
+      </Suspense>
+    );
+  }
+
   if (currentRoute === "verify" && verifyCertId) {
-    return <VerifyCertificate certId={verifyCertId} />;
+    return (
+      <>
+        <VerifyCertificate certId={verifyCertId} />
+        <CookieConsent onNavigatePolicy={openPolicy} />
+      </>
+    );
+  }
+
+  if (currentRoute === "not-found") {
+    return (
+      <>
+        <NotFound
+          onNavigate={(r) => navigateTo(r as AppRoute)}
+          darkMode={darkMode}
+          onToggleDark={() => setDarkMode((d) => !d)}
+        />
+        <CookieConsent onNavigatePolicy={openPolicy} />
+      </>
+    );
   }
 
   if (currentRoute === "login" || currentRoute === "register") {
     return (
-      <AuthLayout darkMode={darkMode} onToggleDark={() => setDarkMode(d => !d)}>
-        {currentRoute === "login" ? (
-          <Login
-            onNavigate={setCurrentRoute}
-            onLoginSuccess={(role) => {
-              setUserRole(role);
-              setCurrentRoute("app");
-            }}
-          />
-        ) : (
-          <RegisterCompany onNavigate={setCurrentRoute} />
-        )}
-      </AuthLayout>
+      <>
+        <AuthLayout darkMode={darkMode} onToggleDark={() => setDarkMode(d => !d)}>
+          {currentRoute === "login" ? (
+            <Login
+              onNavigate={navigateTo}
+              onLoginSuccess={(role) => {
+                setUserRole(role);
+                navigateTo("app");
+              }}
+            />
+          ) : (
+            <RegisterCompany onNavigate={navigateTo} />
+          )}
+        </AuthLayout>
+        <CookieConsent onNavigatePolicy={openPolicy} />
+      </>
     );
   }
 
-  return userRole === "admin" ? renderAdminShell() : <EmployeeShell onLogout={() => setCurrentRoute("login")} />;
+  return (
+    <>
+      {userRole === "admin" ? renderAdminShell() : <EmployeeShell onLogout={() => navigateTo("login")} />}
+      <CookieConsent onNavigatePolicy={openPolicy} />
+    </>
+  );
 }

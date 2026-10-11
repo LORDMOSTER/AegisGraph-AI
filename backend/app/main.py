@@ -39,6 +39,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def security_headers_and_https_middleware(request, call_next):
+    # Enforce HTTPS redirect if force_https is enabled and request is insecure
+    if settings.force_https and request.url.scheme == "http" and request.url.hostname not in ("localhost", "127.0.0.1"):
+        from starlette.responses import RedirectResponse
+        https_url = str(request.url).replace("http://", "https://", 1)
+        return RedirectResponse(url=https_url, status_code=301)
+    response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
 app.include_router(assessment.router, prefix="/api/assessment", tags=["Assessment"])
 app.include_router(ingest.router,     prefix="/api/ingest",     tags=["Ingestion"])
 app.include_router(analytics.router,  prefix="/api/analytics",  tags=["Analytics"])

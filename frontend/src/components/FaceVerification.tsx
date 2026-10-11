@@ -33,7 +33,7 @@ interface FaceVerificationProps {
 
 type VerifyState = "consent" | "loading_models" | "ready" | "verifying" | "match" | "no_match" | "no_face" | "no_enrollment" | "supervisor";
 
-export function FaceVerification({ employeeCode, enrolledEmbedding, onVerified, onSkip, onSupervisorOverride }: FaceVerificationProps) {
+export function FaceVerification({ enrolledEmbedding, onVerified, onSkip, onSupervisorOverride }: FaceVerificationProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -44,7 +44,6 @@ export function FaceVerification({ employeeCode, enrolledEmbedding, onVerified, 
   const [attemptsLeft, setAttemptsLeft] = useState(MAX_RETRIES);
   const [message, setMessage] = useState("");
   const [distance, setDistance] = useState<number | null>(null);
-  const [modelsLoaded, setModelsLoaded] = useState(false);
   const [supervisorPin, setSupervisorPin] = useState("");
   const [supervisorError, setSupervisorError] = useState("");
 
@@ -81,7 +80,6 @@ export function FaceVerification({ employeeCode, enrolledEmbedding, onVerified, 
           videoRef.current.srcObject = stream;
           videoRef.current.onloadeddata = () => {
             if (mounted) {
-              setModelsLoaded(true);
               setVerifyState("ready");
               setMessage("Position your face in the camera and click Verify.");
             }

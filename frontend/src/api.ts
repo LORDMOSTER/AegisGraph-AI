@@ -2,8 +2,13 @@
 // AegisGraph AI — Typed API Client
 // ─────────────────────────────────────────────────────────────────────────────
 
+const envApiUrl = typeof import.meta !== 'undefined' ? (import.meta as any).env?.VITE_API_URL : undefined;
+const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
 const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-const BASE = `http://${host}:8000/api`;
+export const BACKEND_ORIGIN = envApiUrl 
+  ? new URL(envApiUrl, typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8000').origin 
+  : `${protocol}//${host}:8000`;
+export const BASE = envApiUrl || `${BACKEND_ORIGIN}/api`;
 
 // ---------------------------------------------------------------------------
 // Shared Types
@@ -127,6 +132,9 @@ async function fetchWithRetry<T>(
         } catch {}
         
         // 4xx = don't retry
+        if (res.status === 401) {
+          try { localStorage.removeItem("aegis_token"); } catch {}
+        }
         if (res.status >= 400 && res.status < 500) {
           throw new ApiError(message, res.status);
         }
@@ -413,7 +421,7 @@ export async function fetchAnalytics(): Promise<AnalyticsSummary> {
 
 /** GET /health */
 export async function checkHealth(): Promise<{ status: string; engine: string }> {
-  const res = await fetch("http://localhost:8000/health");
+  const res = await fetch(`${BACKEND_ORIGIN}/health`);
   if (!res.ok) throw new ApiError("Backend unreachable", res.status);
   return res.json();
 }

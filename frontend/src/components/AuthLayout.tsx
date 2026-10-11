@@ -1,7 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { ThemeToggle } from "./ThemeToggle";
-import { LogoLockup, CornerMotif } from "./BrandAssets";
 
 // ── Layout ───────────────────────────────────────────────────────────────────
 export function AuthLayout({ children, darkMode, onToggleDark }: { children: React.ReactNode, darkMode?: boolean, onToggleDark?: () => void }) {
