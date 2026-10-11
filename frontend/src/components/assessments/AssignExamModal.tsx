@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { assembleExam, Employee, swapQuestion } from "../../api";
 
 // --- STYLING CONSTANTS (Void-Glass-Clay) ---
@@ -122,17 +122,17 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
     t = t.replace(/\\underline\{_*\}/g, "_____"); // Fix LaTeX underline
     return t;
   };
-  
+
   const cleanQuestion = (q: any) => {
     let cleanedOptions = (q.options || []).map((o: string) => cleanMarkdown(o).trim());
-    
+
     // Safely remove A, B, C, D prefixes if all options start with them sequentially
-    const isABCD = cleanedOptions.length >= 4 && 
-                   cleanedOptions[0].match(/^A[\.\)\-\s]/i) &&
-                   cleanedOptions[1].match(/^B[\.\)\-\s]/i) &&
-                   cleanedOptions[2].match(/^C[\.\)\-\s]/i) &&
-                   cleanedOptions[3].match(/^D[\.\)\-\s]/i);
-    
+    const isABCD = cleanedOptions.length >= 4 &&
+      cleanedOptions[0].match(/^A[\.\)\-\s]/i) &&
+      cleanedOptions[1].match(/^B[\.\)\-\s]/i) &&
+      cleanedOptions[2].match(/^C[\.\)\-\s]/i) &&
+      cleanedOptions[3].match(/^D[\.\)\-\s]/i);
+
     if (isABCD) {
       cleanedOptions = cleanedOptions.map((o: string) => o.replace(/^[A-D][\.\)\-\s]+/i, ""));
     }
@@ -181,7 +181,7 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
     try {
       if (!selectedEmployeeId) return;
       console.log(`Assigning exam to employee: ${selectedEmployeeId}`);
-      
+
       const manifest = questions.map(q => ({
         rule_id: q.rule_id || "00000000-0000-0000-0000-000000000000",
         question_variant_id: q.id,
@@ -197,7 +197,7 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
       if (saveRes && saveRes.assessment_id) {
         await assignExam(saveRes.assessment_id, [selectedEmployeeId], examKey || undefined, revealScore);
       }
-      
+
       setStep(4);
     } catch (err) {
       console.error("Finalization failed", err);
@@ -264,7 +264,7 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
               <CloseIcon />
             </button>
           </div>
-          
+
           {errorMsg && (
             <div
               style={{
@@ -401,89 +401,89 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                   </div>
                 ) : (
                   questions.map((q, idx) => (
-                  <div
-                    key={q.id}
-                    style={{ padding: "16px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "var(--shadow-sm)", display: "flex", flexDirection: "column" }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", marginBottom: "16px" }}>
-                      <div style={{ display: "flex", flex: 1 }}>
-                        <span style={{ color: "var(--muted)", marginRight: "8px", marginTop: "2px" }}>{idx + 1}.</span>
-                        <textarea
-                          value={q.question_text}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, question_text: val } : x));
-                          }}
+                    <div
+                      key={q.id}
+                      style={{ padding: "16px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "var(--shadow-sm)", display: "flex", flexDirection: "column" }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", marginBottom: "16px" }}>
+                        <div style={{ display: "flex", flex: 1 }}>
+                          <span style={{ color: "var(--muted)", marginRight: "8px", marginTop: "2px" }}>{idx + 1}.</span>
+                          <textarea
+                            value={q.question_text}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, question_text: val } : x));
+                            }}
+                            style={{
+                              margin: 0,
+                              fontSize: "15px",
+                              fontWeight: 600,
+                              lineHeight: 1.5,
+                              color: "var(--ink)",
+                              background: "transparent",
+                              border: "none",
+                              width: "100%",
+                              resize: "vertical",
+                              outline: "none",
+                              fontFamily: "inherit"
+                            }}
+                          />
+                        </div>
+                        <button
+                          onClick={() => handleSwap(q)}
+                          title="Swap/Regenerate Question"
                           style={{
-                            margin: 0,
-                            fontSize: "15px",
-                            fontWeight: 600,
-                            lineHeight: 1.5,
-                            color: "var(--ink)",
-                            background: "transparent",
-                            border: "none",
-                            width: "100%",
-                            resize: "vertical",
-                            outline: "none",
-                            fontFamily: "inherit"
-                          }}
-                        />
-                      </div>
-                      <button
-                        onClick={() => handleSwap(q)}
-                        title="Swap/Regenerate Question"
-                        style={{
-                          background: "var(--base)",
-                          border: "1px solid var(--line)",
-                          borderRadius: "8px",
-                          color: "var(--text)",
-                          cursor: "pointer",
-                          padding: "6px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          transition: "all 0.2s",
-                        }}
-                        onMouseOver={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-                        onMouseOut={(e) => { e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.color = "var(--text)"; }}
-                      >
-                        <SwapIcon />
-                      </button>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                      {q.options.map((opt, i) => (
-                        <input
-                          key={i}
-                          value={opt}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setQuestions(prev => prev.map(x => {
-                              if (x.id === q.id) {
-                                const newOpts = [...x.options];
-                                newOpts[i] = val;
-                                return { ...x, options: newOpts };
-                              }
-                              return x;
-                            }));
-                          }}
-                          style={{
-                            padding: "10px 14px",
-                            fontSize: "13px",
-                            backgroundColor: q.correct_answer_index === i ? "rgba(16, 185, 129, 0.08)" : "var(--base)",
-                            border: q.correct_answer_index === i ? "1px solid var(--emerald)" : "1px solid var(--line)",
+                            background: "var(--base)",
+                            border: "1px solid var(--line)",
                             borderRadius: "8px",
-                            color: q.correct_answer_index === i ? "var(--emerald)" : "var(--text)",
-                            fontWeight: q.correct_answer_index === i ? 600 : 400,
-                            width: "100%",
-                            outline: "none",
-                            fontFamily: "inherit",
-                            boxSizing: "border-box"
+                            color: "var(--text)",
+                            cursor: "pointer",
+                            padding: "6px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            transition: "all 0.2s",
                           }}
-                        />
-                      ))}
+                          onMouseOver={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+                          onMouseOut={(e) => { e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.color = "var(--text)"; }}
+                        >
+                          <SwapIcon />
+                        </button>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                        {q.options.map((opt, i) => (
+                          <input
+                            key={i}
+                            value={opt}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setQuestions(prev => prev.map(x => {
+                                if (x.id === q.id) {
+                                  const newOpts = [...x.options];
+                                  newOpts[i] = val;
+                                  return { ...x, options: newOpts };
+                                }
+                                return x;
+                              }));
+                            }}
+                            style={{
+                              padding: "10px 14px",
+                              fontSize: "13px",
+                              backgroundColor: q.correct_answer_index === i ? "rgba(16, 185, 129, 0.08)" : "var(--base)",
+                              border: q.correct_answer_index === i ? "1px solid var(--emerald)" : "1px solid var(--line)",
+                              borderRadius: "8px",
+                              color: q.correct_answer_index === i ? "var(--emerald)" : "var(--text)",
+                              fontWeight: q.correct_answer_index === i ? 600 : 400,
+                              width: "100%",
+                              outline: "none",
+                              fontFamily: "inherit",
+                              boxSizing: "border-box"
+                            }}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )))}
+                  )))}
               </div>
             )}
 
@@ -492,10 +492,10 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                 <h3 style={{ fontSize: "1.5rem", fontWeight: 400, color: "var(--accent)", margin: 0, textAlign: "center" }}>
                   Ready to Assign
                 </h3>
-                
+
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-muted)", borderRadius: "12px", padding: "24px", display: "flex", flexDirection: "column", gap: "12px", alignItems: "center", minWidth: "300px" }}>
                   <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "var(--raised)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.5rem", color: "var(--text-primary)" }}>
-                     {selectedEmployee?.name.charAt(0) || "U"}
+                    {selectedEmployee?.name.charAt(0) || "U"}
                   </div>
                   <div style={{ textAlign: "center" }}>
                     <h4 style={{ margin: "0 0 4px 0", fontSize: "1.2rem", color: "var(--text-primary)" }}>{selectedEmployee?.name}</h4>
@@ -618,7 +618,7 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                         border: "1px solid var(--border-muted)",
                         transition: ".4s",
                         borderRadius: "24px",
-                        
+
                       }}
                     >
                       <span
@@ -646,7 +646,7 @@ export const AssignExamModal: React.FC<AssignExamModalProps> = ({
                   <h3 style={{ fontSize: "1.2rem", color: "var(--emerald)", margin: "0 0 8px 0" }}>Exam Successfully Assigned!</h3>
                   <p style={{ color: "var(--text-secondary)", margin: 0 }}>The exam has been locked and assigned to {selectedEmployee?.name}. Below is the final question set for review.</p>
                 </div>
-                
+
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                   {questions.map((q, idx) => (
                     <div key={q.id} style={{ padding: "16px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "var(--shadow-sm)", display: "flex", flexDirection: "column" }}>

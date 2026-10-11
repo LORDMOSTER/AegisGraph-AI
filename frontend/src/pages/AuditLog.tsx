@@ -388,13 +388,13 @@ function AttemptDetail({
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div style={{ padding: "14px", background: C.glass, border: `1px solid ${C.border}`, borderRadius: 8 }}>
               <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>SCI Score</div>
-              <div style={{ fontFamily: MONO, fontSize: 20, color: C.cyan, fontWeight: 700 }}>
+              <div className="font-mono text-emerald-600" style={{ fontSize: 20, fontWeight: 700 }}>
                 {sciScore.toFixed(1)}%
               </div>
             </div>
             <div style={{ padding: "14px", background: C.glass, border: `1px solid ${C.border}`, borderRadius: 8 }}>
               <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Integrity</div>
-              <div style={{ fontFamily: MONO, fontSize: 20, color: integrityWarning ? C.red : C.text, fontWeight: 700 }}>
+              <div className={`font-mono ${integrityWarning ? 'text-red-600' : 'text-gray-900'}`} style={{ fontSize: 20, fontWeight: 700 }}>
                 {integrityScore.toFixed(1)}%
               </div>
             </div>
@@ -678,12 +678,12 @@ export const AuditLog: React.FC = () => {
         </div>
         
         <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ padding: "8px 14px", background: C.cyanDim, border: `1px solid ${C.cyan}`, borderRadius: 6, fontSize: 12, color: C.cyan, display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}>
-            <iconify-icon icon="lucide:eye" style={{ fontSize: 14 }} />
+          <div className="bg-white border border-gray-200 text-gray-700 shadow-sm" style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12, display: "flex", alignItems: "center", gap: 6, fontWeight: 500 }}>
+            <iconify-icon icon="lucide:eye" className="text-emerald-600" style={{ fontSize: 14 }} />
             MediaPipe Active
           </div>
-          <div style={{ padding: "8px 14px", background: C.amberDim, border: `1px solid ${C.amber}`, borderRadius: 6, fontSize: 12, color: C.amber, display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}>
-            <iconify-icon icon="lucide:shield-alert" style={{ fontSize: 14 }} />
+          <div className="bg-white border border-gray-200 text-gray-700 shadow-sm" style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12, display: "flex", alignItems: "center", gap: 6, fontWeight: 500 }}>
+            <iconify-icon icon="lucide:shield-alert" className="text-amber-600" style={{ fontSize: 14 }} />
             Lockdown Active
           </div>
         </div>
@@ -699,15 +699,13 @@ export const AuditLog: React.FC = () => {
           return (
             <div
               key={attempt.id}
-              className="glass-panel"
+              className="glass-panel shadow-sm hover:shadow-md transition-shadow duration-200"
               style={{
                 border: `1px solid ${warn ? C.red : C.border}`,
                 borderRadius: "var(--card-radius)",
                 overflow: "hidden",
-                transition: "all 0.3s",
                 marginBottom: 16,
                 background: "var(--surface)",
-                boxShadow: "var(--shadow-card)",
               }}
             >
               {/* Row header */}
@@ -716,7 +714,7 @@ export const AuditLog: React.FC = () => {
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1fr auto",
-                  padding: "20px 24px",
+                  padding: "12px 24px",
                   cursor: "pointer",
                   backgroundColor: isExpanded ? "var(--surface-raised)" : "transparent",
                   borderBottom: isExpanded ? `1px solid ${C.border}` : "none",
@@ -725,8 +723,8 @@ export const AuditLog: React.FC = () => {
                 }}
               >
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{attempt.employee_name}</div>
-                  <div style={{ fontSize: "0.8rem", color: C.muted }}>{attempt.job_title}</div>
+                  <div className="text-gray-900 font-medium">{attempt.employee_name}</div>
+                  <div className="text-gray-500 text-sm">{attempt.job_title}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: "0.75rem", color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Assessment</div>
@@ -734,11 +732,11 @@ export const AuditLog: React.FC = () => {
                 </div>
                 <div>
                   <div style={{ fontSize: "0.75rem", color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>SCI Score</div>
-                  <div style={{ fontFamily: MONO, color: C.cyan, fontSize: 16, marginTop: 2 }}>{(attempt.score ?? 0).toFixed(1)}%</div>
+                  <div className="font-mono text-emerald-600" style={{ fontSize: 16, marginTop: 2 }}>{(attempt.score ?? 0).toFixed(1)}%</div>
                 </div>
                 <div>
                   <div style={{ fontSize: "0.75rem", color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Integrity</div>
-                  <div style={{ fontFamily: MONO, color: integrityScore < 80 ? C.red : C.text, fontSize: 16, marginTop: 2 }}>
+                  <div className={`font-mono ${integrityScore < 80 ? 'text-red-600' : 'text-gray-900'}`} style={{ fontSize: 16, marginTop: 2 }}>
                     {integrityScore.toFixed(1)}%
                   </div>
                 </div>

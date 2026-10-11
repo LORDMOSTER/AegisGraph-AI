@@ -30,7 +30,7 @@ interface StatCardProps {
 
 function StatCard({ label, value, icon, iconColor, iconBg }: StatCardProps) {
   return (
-    <motion.div variants={cardVariants} style={{ background: "var(--surface)", borderRadius: "var(--card-radius)", padding: 20, boxShadow: "var(--shadow-card)" }}>
+    <motion.div variants={cardVariants} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--card-radius)", padding: 16, boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
         <p style={{ fontSize: 13, fontWeight: 500, color: "var(--muted)", letterSpacing: "0.02em" }}>{label}</p>
         <div style={{ width: 32, height: 32, borderRadius: 8, background: iconBg, border: "1px solid var(--line)", display: "grid", placeItems: "center" }}>
@@ -97,7 +97,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
         <motion.div 
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          style={{ width: "100%", maxWidth: 540, background: "var(--surface)", borderRadius: "var(--card-radius)", padding: 40, boxShadow: "var(--shadow-card)" }}
+          style={{ width: "100%", maxWidth: 540, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--card-radius)", padding: 40, boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)" }}
         >
           <div style={{ textAlign: "center", marginBottom: 32 }}>
             <div style={{ width: 56, height: 56, borderRadius: 12, background: "var(--raised)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
@@ -113,7 +113,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <button 
-              style={{ display: "flex", alignItems: "center", gap: 16, width: "100%", background: "var(--surface)", border: "none", borderRadius: 12, padding: 16, textAlign: "left", cursor: "pointer", transition: "all 0.2s", boxShadow: "var(--shadow-card)" }}
+              style={{ display: "flex", alignItems: "center", gap: 16, width: "100%", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: 16, textAlign: "left", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)" }}
               onMouseOver={e => e.currentTarget.style.borderColor = "var(--accent)"}
               onMouseOut={e => e.currentTarget.style.borderColor = "var(--line)"}
               onClick={() => setActiveTab("manuals")}
@@ -128,7 +128,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
             </button>
 
             <button 
-              style={{ display: "flex", alignItems: "center", gap: 16, width: "100%", background: "var(--surface)", border: "none", borderRadius: 12, padding: 16, textAlign: "left", cursor: "pointer", transition: "all 0.2s", boxShadow: "var(--shadow-card)" }}
+              style={{ display: "flex", alignItems: "center", gap: 16, width: "100%", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: 16, textAlign: "left", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)" }}
               onMouseOver={e => e.currentTarget.style.borderColor = "var(--accent)"}
               onMouseOut={e => e.currentTarget.style.borderColor = "var(--line)"}
               onClick={() => setActiveTab("employees")}
@@ -143,7 +143,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
             </button>
 
             <button 
-              style={{ display: "flex", alignItems: "center", gap: 16, width: "100%", background: "var(--surface)", border: "none", borderRadius: 12, padding: 16, textAlign: "left", cursor: "pointer", transition: "all 0.2s", boxShadow: "var(--shadow-card)" }}
+              style={{ display: "flex", alignItems: "center", gap: 16, width: "100%", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: 16, textAlign: "left", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)" }}
               onMouseOver={e => e.currentTarget.style.borderColor = "var(--accent)"}
               onMouseOut={e => e.currentTarget.style.borderColor = "var(--line)"}
               onClick={() => setActiveTab("assessments")}
@@ -162,10 +162,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
     );
   }
 
-  const maxCount = data ? Math.max(...data.section_metrics.map((s) => s.rule_count), 1) : 1;
-  const avgRisk = data && data.section_metrics.length > 0
-    ? data.section_metrics.reduce((acc, s) => acc + s.avg_risk_score, 0) / data.section_metrics.length
-    : 0;
+
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", width: "100%" }}>
@@ -200,7 +197,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
         animate="show"
         style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, marginBottom: 24 }}
       >
-        <motion.div variants={cardVariants} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--card-radius)", padding: 20, boxShadow: "var(--shadow-card)", display: "flex", alignItems: "center", gap: 16 }}>
+        <motion.div variants={cardVariants} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--card-radius)", padding: 16, boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)", display: "flex", alignItems: "center", gap: 16 }}>
           <div style={{ width: 48, height: 48, borderRadius: 12, background: "var(--raised)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <iconify-icon icon="lucide:building-2" style={{ fontSize: 24, color: "var(--ink)" }} />
           </div>
@@ -238,14 +235,14 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
       {/* Middle Row: Charts */}
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 24 }}>
         {/* Bar chart */}
-        <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--card-radius)", padding: 24, boxShadow: "var(--shadow-card)" }}>
+        <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--card-radius)", padding: 24, boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)" }}>
           <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 600, color: "var(--ink)", marginBottom: 24 }}>Knowledge Base Overview</h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, height: "calc(100% - 48px)" }}>
             <div style={{ background: "var(--background)", borderRadius: 12, padding: "20px 12px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "1px solid var(--line)", transition: "all 0.2s" }}>
               <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(37,99,235,0.1)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
                 <iconify-icon icon="lucide:book-open" style={{ fontSize: 20, color: "#2563eb" }} />
               </div>
-              <div style={{ fontSize: 28, fontFamily: "var(--font-display)", fontWeight: 700, color: "var(--ink)", lineHeight: 1, marginBottom: 4 }}>
+              <div style={{ fontSize: 28, fontFamily: "var(--font-display)", fontWeight: 600, color: "var(--ink)", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.025em" }}>
                 {data?.total_manuals ?? 0}
               </div>
               <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>
@@ -257,7 +254,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
               <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(13,148,136,0.1)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
                 <iconify-icon icon="lucide:clipboard-list" style={{ fontSize: 20, color: "#0d9488" }} />
               </div>
-              <div style={{ fontSize: 28, fontFamily: "var(--font-display)", fontWeight: 700, color: "var(--ink)", lineHeight: 1, marginBottom: 4 }}>
+              <div style={{ fontSize: 28, fontFamily: "var(--font-display)", fontWeight: 600, color: "var(--ink)", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.025em" }}>
                 {data?.total_rules ?? 0}
               </div>
               <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>
@@ -269,7 +266,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
               <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(217,119,6,0.1)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
                 <iconify-icon icon="lucide:brain-circuit" style={{ fontSize: 20, color: "#d97706" }} />
               </div>
-              <div style={{ fontSize: 28, fontFamily: "var(--font-display)", fontWeight: 700, color: "var(--ink)", lineHeight: 1, marginBottom: 4 }}>
+              <div style={{ fontSize: 28, fontFamily: "var(--font-display)", fontWeight: 600, color: "var(--ink)", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.025em" }}>
                 {data ? Object.values(data.question_bank_counts).reduce((a, b) => a + b, 0) : 0}
               </div>
               <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>
@@ -280,7 +277,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
         </div>
 
         {/* System Health Indicator */}
-        <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--card-radius)", padding: 24, boxShadow: "var(--shadow-card)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--card-radius)", padding: 24, boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)", display: "flex", flexDirection: "column", alignItems: "center" }}>
           <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 600, color: "var(--ink)", marginBottom: 32, alignSelf: "flex-start" }}>System Health</h3>
           
           <div style={{ position: "relative", width: 140, height: 140, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -298,7 +295,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
               />
             </svg>
             <div style={{ textAlign: "center", zIndex: 1 }}>
-              <span style={{ fontFamily: "var(--font-display)", fontSize: 32, fontWeight: 700, color: "var(--ink)", lineHeight: 1 }}>
+              <span style={{ fontFamily: "var(--font-display)", fontSize: 32, fontWeight: 600, color: "var(--ink)", lineHeight: 1, letterSpacing: "-0.025em" }}>
                 100%
               </span>
               <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 4 }}>
@@ -314,7 +311,7 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
       </div>
 
       {/* Bottom Row: Recent Activity */}
-      <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--card-radius)", padding: 24, boxShadow: "var(--shadow-card)" }}>
+      <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--card-radius)", padding: 24, boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)", display: "flex", flexDirection: "column", minHeight: 300 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 600, color: "var(--ink)", margin: 0 }}>Recent activity</h3>
           <button 
@@ -328,9 +325,9 @@ export function AnalyticsDashboard({ backendOnline, setActiveTab }: Props) {
             {viewAllActivity ? "Show Less" : "View All"}
           </button>
         </div>
-        <div style={{ display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", flexDirection: "column", flexGrow: 1, backgroundImage: activity.length === 0 ? "radial-gradient(circle, var(--line) 1px, transparent 1px)" : "none", backgroundSize: "24px 24px", borderRadius: 8 }}>
           {activity.length === 0 ? (
-            <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
+            <div style={{ flexGrow: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: 14 }}>
               No recent activity.
             </div>
           ) : (

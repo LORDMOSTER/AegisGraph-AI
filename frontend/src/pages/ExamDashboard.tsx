@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getMyExams, getMyCertificates, requestRetake } from "../api";
+import { getMyExams, getAdminCertificates, requestRetake } from "../api";
 
 export interface AssignedExam {
   id: string;
@@ -17,24 +17,51 @@ export interface Certificate {
   id: string;
   title: string;
   issueDate: string;
+  pdfUrl?: string;
 }
 interface Props {
   onStartExam: (examId: string) => void;
   userProfile?: any;
+  onLogout?: () => void;
 }
 
 const EXAM_ICONS: string[] = ["shield-alert", "lock", "hard-hat", "flame", "zap"];
 
-export function ExamDashboard({ onStartExam, userProfile }: Props) {
+export function ExamDashboard({ onStartExam, userProfile, onLogout }: Props) {
   const [exams, setExams] = useState<AssignedExam[]>([]);
   const [certs, setCerts] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNotification, setShowNotification] = useState(false);
   const [toastError, setToastError] = useState<string | null>(null);
+  const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
+
+  const handleViewPDF = async (url: string, certId: string) => {
+    setDownloadingPdfId(certId);
+    try {
+      const token = localStorage.getItem("aegis_token");
+      const host = window.location.hostname;
+      const baseUrl = `http://${host}:8000`;
+      const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+      const res = await fetch(fullUrl, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed to load PDF");
+      const blob = await res.blob();
+      const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+      const objectUrl = URL.createObjectURL(pdfBlob);
+      window.open(objectUrl, "_blank");
+    } catch (e) {
+      console.error(e);
+      setToastError("Failed to fetch certificate PDF.");
+      setTimeout(() => setToastError(null), 4000);
+    } finally {
+      setDownloadingPdfId(null);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
-    const [e, c] = await Promise.all([getMyExams(), getMyCertificates()]);
+    const [e, adminCerts] = await Promise.all([getMyExams(), getAdminCertificates().catch(() => [])]);
     
     const parsedExams = e.map(exam => ({
       id: exam.exam_session_id,
@@ -48,11 +75,17 @@ export function ExamDashboard({ onStartExam, userProfile }: Props) {
     })).sort((a, b) => new Date(a.assignedAt).getTime() - new Date(b.assignedAt).getTime());
 
     setExams(parsedExams);
-    setCerts(c.map(cert => ({
+
+    // FIX FOR CREDENTIALS LOGIC: Map the admin certs for this specific user.
+    // userProfile.id is used to match employeeId.
+    const userCerts = adminCerts.filter(cert => cert.employeeId === userProfile?.id || cert.employeeId === userProfile?.employee_code);
+    setCerts(userCerts.map(cert => ({
       id: cert.id,
-      title: cert.assessment_name + " Certificate",
-      issueDate: cert.issued_at
+      title: "Safety Certificate",
+      issueDate: cert.issueDate,
+      pdfUrl: cert.pdfUrl
     })));
+    
     setLoading(false);
     
     if (parsedExams.some(ex => ex.status === "assigned" || ex.status === "in_progress")) {
@@ -63,18 +96,17 @@ export function ExamDashboard({ onStartExam, userProfile }: Props) {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [userProfile?.id, userProfile?.employee_code]);
 
   if (loading) {
     return (
-      <div style={{ padding: 60, textAlign: "center", minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-        <div className="spinner" style={{ margin: "0 auto 16px", width: 32, height: 32, borderTopColor: "var(--accent)" }} />
-        <p style={{ color: "var(--muted)", fontSize: 15, fontWeight: 500 }}>Initializing your workspace...</p>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+        <div className="spinner border-t-gray-900 w-8 h-8 mx-auto mb-4" />
+        <p className="text-gray-500 font-medium text-sm tracking-wide">INITIALIZING TERMINAL...</p>
       </div>
     );
   }
 
-  // Group exams by title to determine attempt count
   const groupedExams: Record<string, AssignedExam[]> = {};
   exams.forEach(ex => {
     if (!groupedExams[ex.title]) groupedExams[ex.title] = [];
@@ -84,326 +116,286 @@ export function ExamDashboard({ onStartExam, userProfile }: Props) {
   const pendingCount = exams.filter(e => e.status === "assigned" || e.status === "in_progress").length;
 
   return (
-    <div style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 32px", position: "relative", minHeight: "100vh" }}>
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-12">
+      
+      {/* TOP NAVBAR / HEADER */}
+      <div className="bg-white border-b border-gray-200 p-6 lg:px-10 lg:py-8 shadow-sm">
+        <div className="max-w-6xl mx-auto flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-3">
+              <span className="inline-flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-full px-3 py-1 text-xs text-blue-700 font-bold uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+                Terminal Mode
+              </span>
+              <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+                AegisGraph Secure Network
+              </span>
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">
+              {userProfile?.full_name || "Operator"}
+            </h1>
+            <p className="text-sm text-gray-500 font-mono tracking-tight">SYSTEM ACCESS GRANTED. AWAITING COMPLIANCE CHECKS.</p>
+          </div>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="bg-[#d93025] hover:bg-[#b0261d] text-white transition-colors rounded-full px-5 py-2 text-sm font-bold flex items-center gap-2 border border-[#941b12] shadow-[inset_0_2px_4px_rgba(255,255,255,0.4),inset_0_-3px_4px_rgba(0,0,0,0.2),0_3px_6px_rgba(0,0,0,0.15)]"
+            >
+              <iconify-icon icon="lucide:log-out" />
+              Log out
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* MAIN CONTENT AREA */}
+      <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-8 mt-8 px-6">
+        
+        {/* LEFT COLUMN: THE SMART BADGE */}
+        <div className="w-full md:w-80 shrink-0">
+          <div className="bg-white border border-gray-200 shadow-sm rounded-2xl overflow-hidden flex flex-col">
+            
+            {/* Top Section - Photo & Header */}
+            <div className="p-8 flex flex-col items-center bg-gray-50/50">
+              <div className="w-32 h-32 rounded-2xl overflow-hidden shadow-sm border border-gray-200 bg-white mb-5 relative">
+                {userProfile?.photo ? (
+                  <img 
+                    src={userProfile.photo} 
+                    alt="Profile" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-300">
+                    <iconify-icon icon="lucide:user" className="text-5xl" />
+                  </div>
+                )}
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 text-center tracking-tight">
+                {userProfile?.full_name || "Operator"}
+              </h2>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1 text-center">
+                {userProfile?.designation || "OPERATOR"}
+              </p>
+            </div>
+
+            {/* Bottom Section - Secure Readout */}
+            <div className="bg-gray-900 text-white p-6 flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Worker ID</span>
+                <span className="font-mono text-lg text-cyan-400 tracking-wider">
+                  {userProfile?.employee_code || "OP-KIOSK-AGX"}
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-3 bg-emerald-400/10 rounded-xl p-3 border border-emerald-400/20">
+                <iconify-icon icon="lucide:shield-check" className="text-emerald-400 text-xl" />
+                <div className="flex flex-col">
+                  <span className="text-xs text-emerald-400 font-bold uppercase tracking-wider">Verified Secure</span>
+                  <span className="text-[10px] text-gray-400 font-mono">ACTIVE CREDENTIALS</span>
+                </div>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Dash Content */}
+        <div className="flex-1 flex flex-col gap-8">
+          
+          {/* Assessments Section */}
+          <div className="flex flex-col gap-4">
+            <div className="flex items-end justify-between">
+              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Safety Assessments</h2>
+              {pendingCount > 0 && (
+                <span className="bg-red-50 text-red-700 border border-red-200 rounded px-3 py-1.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                  <iconify-icon icon="lucide:alert-circle" /> {pendingCount} Pending
+                </span>
+              )}
+            </div>
+            
+            {Object.keys(groupedExams).length === 0 ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-10 flex flex-col items-center justify-center text-center shadow-sm">
+                <iconify-icon icon="lucide:check-circle" className="w-14 h-14 text-emerald-500 mb-4" style={{ fontSize: '56px' }} />
+                <h3 className="text-xl font-bold text-gray-900">System Compliant</h3>
+                <p className="text-gray-500 mt-2 font-medium">No pending assessments detected.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {Object.entries(groupedExams).map(([title, sessions], i) => {
+                  const attemptNumber = sessions.length;
+                  const latestSession = sessions[sessions.length - 1];
+                  const isPending = latestSession.status === "assigned" || latestSession.status === "in_progress";
+                  const isPassed = latestSession.status === "completed";
+                  const isFailed = latestSession.status === "failed";
+                  const isRetakeRequested = latestSession.status === "retake_requested";
+
+                  return (
+                    <motion.div
+                      key={title}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                      className={`flex flex-col border ${isPending ? 'border-blue-300 bg-blue-50/30' : 'border-gray-200 bg-white'} rounded-xl p-5 relative shadow-sm`}
+                    >
+                      {isPending && <div className="absolute top-0 left-0 right-0 h-1 bg-blue-600 rounded-t-xl" />}
+                      
+                      <div className="flex items-start justify-between mb-4">
+                        <div className={`w-10 h-10 border ${isPending ? 'border-blue-200 bg-white text-blue-600' : 'border-gray-200 bg-gray-50 text-gray-700'} rounded-lg flex items-center justify-center`}>
+                          <iconify-icon icon={`lucide:${EXAM_ICONS[i % EXAM_ICONS.length]}`} className="text-lg" />
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                            isPassed ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                            isFailed ? "bg-red-50 text-red-700 border-red-200" :
+                            "bg-blue-50 text-blue-700 border-blue-200"
+                          }`}>
+                            {latestSession.status.replace("_", " ")}
+                          </span>
+                          {(latestSession.score !== null && latestSession.revealScoreToUser) && (
+                            <span className={`text-[10px] font-mono font-bold ${isPassed ? 'text-emerald-700' : 'text-red-700'}`}>
+                              SCORE: {latestSession.score.toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <h3 className="font-bold text-gray-900 leading-tight mb-3 pr-4">{title}</h3>
+                      
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        <span className="bg-gray-100 border border-gray-200 text-gray-600 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
+                          {latestSession.topics[0] || "General Safety"}
+                        </span>
+                        <span className="bg-gray-100 border border-gray-200 text-gray-600 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
+                          AI MONITORED
+                        </span>
+                      </div>
+
+                      <div className="border border-gray-200 bg-gray-50 rounded-lg p-3 mb-5 mt-auto">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Attempt</span>
+                          <span className="text-xs font-mono font-bold text-gray-900">{attemptNumber}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Questions</span>
+                          <span className="text-xs font-mono font-bold text-gray-900">{latestSession.totalQuestions}</span>
+                        </div>
+                      </div>
+
+                      {isPending ? (
+                        <button
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                          onClick={() => onStartExam(latestSession.id)}
+                        >
+                          <iconify-icon icon="lucide:play" className="text-sm" />
+                          Begin Attempt {attemptNumber}
+                        </button>
+                      ) : (!isPending && (isFailed || isPassed) && !isRetakeRequested) ? (
+                        <button
+                          className="w-full bg-white hover:bg-amber-50 border border-amber-300 text-amber-700 font-bold text-xs uppercase tracking-wider py-3 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-sm"
+                          onClick={async () => {
+                            try {
+                              await requestRetake(latestSession.id);
+                              load();
+                            } catch (e) {
+                              setToastError("Failed to request a new attempt");
+                              setTimeout(() => setToastError(null), 4000);
+                            }
+                          }}
+                        >
+                          <iconify-icon icon="lucide:rotate-cw" className="text-sm" />
+                          Request Retake
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          className="w-full bg-gray-100 border border-gray-200 text-gray-400 font-bold text-xs uppercase tracking-wider py-3 rounded-lg flex items-center justify-center gap-2 cursor-not-allowed"
+                        >
+                          <iconify-icon icon={isRetakeRequested ? "lucide:clock" : "lucide:lock"} className="text-sm" />
+                          {isRetakeRequested ? "Retake Requested" : "Locked"}
+                        </button>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Credentials Section */}
+          <div className="flex flex-col gap-4">
+            <h2 className="text-2xl font-bold text-gray-900 tracking-tight">My Credentials</h2>
+            
+            {certs.length === 0 ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-10 flex flex-col items-center justify-center text-center shadow-sm">
+                <iconify-icon icon="lucide:award" className="w-14 h-14 text-gray-400 mb-4" style={{ fontSize: '56px' }} />
+                <h3 className="text-xl font-bold text-gray-900">No Credentials Found</h3>
+                <p className="text-gray-500 mt-2 font-medium">Complete an assessment to earn certification.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {certs.map((cert) => (
+                  <div key={cert.id} className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm hover:shadow-md transition-all">
+                    <div className="flex items-center gap-5">
+                      <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                        <iconify-icon icon="lucide:award" className="w-7 h-7 text-emerald-600" style={{ fontSize: '28px' }} />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-bold text-gray-900">{cert.title}</h4>
+                        <p className="text-sm text-gray-500 font-medium">
+                          Issued {new Date(cert.issueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                      </div>
+                    </div>
+                    {cert.pdfUrl ? (
+                      <button 
+                        onClick={() => handleViewPDF(cert.pdfUrl!, cert.id)}
+                        disabled={downloadingPdfId === cert.id}
+                        className="mt-4 sm:mt-0 px-5 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-semibold hover:bg-gray-800 transition-colors border border-gray-700 shadow-sm flex items-center justify-center text-center disabled:opacity-50 disabled:cursor-wait"
+                      >
+                        {downloadingPdfId === cert.id ? "Loading..." : "View PDF"}
+                      </button>
+                    ) : (
+                      <button disabled className="mt-4 sm:mt-0 px-5 py-2.5 bg-gray-300 text-gray-500 rounded-lg text-sm font-semibold cursor-not-allowed">
+                        No PDF
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
+      </div>
+
       <AnimatePresence>
         {showNotification && (
           <motion.div
             initial={{ opacity: 0, y: 50, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.95 }}
-            style={{
-              position: "fixed",
-              bottom: 32,
-              right: 32,
-              background: "var(--ink)",
-              color: "var(--surface)",
-              padding: "16px 24px",
-              borderRadius: 12,
-              boxShadow: "var(--shadow-card)",
-              zIndex: 1000,
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              fontWeight: 600,
-            }}
+            className="fixed bottom-8 right-8 bg-gray-900 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-4 z-50 border border-gray-800"
           >
-            <div style={{ background: "var(--surface)", color: "var(--ink)", borderRadius: "50%", width: 32, height: 32, display: "grid", placeItems: "center" }}>
-              <iconify-icon icon="lucide:bell-ring" style={{ fontSize: 18 }} />
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+              <iconify-icon icon="lucide:bell-ring" className="text-lg" />
             </div>
-            You have {pendingCount} pending task{pendingCount !== 1 ? 's' : ''} to complete!
+            <span className="font-bold text-sm tracking-wide">
+              {pendingCount} PENDING TASK{pendingCount !== 1 ? 'S' : ''} DETECTED
+            </span>
           </motion.div>
         )}
-      </AnimatePresence>
 
-      {/* Header */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 24, marginBottom: 48 }}
-      >
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(37,99,235,0.1)", border: "1px solid rgba(37,99,235,0.2)", borderRadius: 999, padding: "4px 10px", fontSize: 12, color: "#3b82f6", fontWeight: 600 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3b82f6", display: "inline-block", boxShadow: "0 0 8px #3b82f6" }} />
-              Kiosk mode
-            </span>
-            <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>Employee Portal</span>
-          </div>
-          <h1 style={{ fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 700, color: "var(--ink)", marginBottom: 8, letterSpacing: "-0.01em" }}>
-            Welcome back, {userProfile?.full_name || "Operator"}
-          </h1>
-          <p style={{ fontSize: 15, color: "var(--muted)" }}>Complete your assigned safety certifications to maintain compliance.</p>
-        </div>
-
-        {/* User Badge */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 16, padding: "16px 24px", boxShadow: "var(--shadow-card)" }}>
-          <div style={{ width: 48, height: 48, borderRadius: 12, background: "var(--raised)", border: "1px solid var(--line)", display: "grid", placeItems: "center", fontSize: 24, flexShrink: 0, overflow: "hidden" }}>
-            {userProfile?.photo ? (
-              <img src={userProfile.photo} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            ) : (
-              <iconify-icon icon="lucide:user" style={{ color: "var(--ink)" }} />
-            )}
-          </div>
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", marginBottom: 4 }}>{userProfile?.designation || "Operator"} ID</p>
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em" }}>{userProfile?.employee_code || "OP-KIOSK-AGX"}</p>
-            <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
-              <iconify-icon icon="lucide:shield-check" style={{ color: "#16a34a", fontSize: 14 }} />
-              <p style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>Verified · 100% Offline</p>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 40 }}>
-        
-        {/* Assigned Exams */}
-        <section>
-          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 20 }}>
-            <div>
-              <h2 style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 600, color: "var(--ink)" }}>Safety Assessments</h2>
-              <p style={{ fontSize: 14, color: "var(--muted)", marginTop: 4 }}>
-                {Object.keys(groupedExams).length} assessment track{Object.keys(groupedExams).length !== 1 ? "s" : ""} on your record.
-              </p>
-            </div>
-            {pendingCount > 0 && (
-              <span style={{ background: "rgba(239, 68, 68, 0.1)", color: "#ef4444", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                <iconify-icon icon="lucide:alert-circle" /> {pendingCount} Action Required
-              </span>
-            )}
-          </div>
-
-          {Object.keys(groupedExams).length === 0 ? (
-            <div style={{ background: "var(--surface)", borderRadius: 16, padding: 60, textAlign: "center", border: "1px dashed var(--line)", boxShadow: "var(--shadow-card)" }}>
-              <div style={{ width: 64, height: 64, background: "rgba(22, 163, 74, 0.1)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-                <iconify-icon icon="lucide:check-circle" style={{ fontSize: 32, color: "#16a34a" }} />
-              </div>
-              <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>All caught up!</h3>
-              <p style={{ color: "var(--muted)" }}>You have no pending exams. Great work maintaining safety compliance.</p>
-            </div>
-          ) : (
-            <div style={{ display: "grid", gap: 24, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
-              {Object.entries(groupedExams).map(([title, sessions], i) => {
-                const attemptNumber = sessions.length;
-                const latestSession = sessions[sessions.length - 1];
-                
-                const isPending = latestSession.status === "assigned" || latestSession.status === "in_progress";
-                const isPassed = latestSession.status === "completed";
-                const isFailed = latestSession.status === "failed";
-                const isRetakeRequested = latestSession.status === "retake_requested";
-                
-                return (
-                  <motion.div
-                    key={title}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.1, type: "spring", stiffness: 100 }}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      background: "var(--surface)",
-                      borderRadius: "var(--card-radius)",
-                      padding: 24,
-                      position: "relative",
-                      overflow: "hidden",
-                      border: isPending ? "1px solid #3b82f6" : "1px solid var(--line)",
-                      boxShadow: isPending ? "0 8px 32px rgba(59, 130, 246, 0.15)" : "var(--shadow-card)",
-                    }}
-                  >
-                    {isPending && (
-                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, background: "#3b82f6" }} />
-                    )}
-                    
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
-                      <div style={{ width: 44, height: 44, borderRadius: 10, background: isPending ? "rgba(59,130,246,0.1)" : "var(--raised)", border: "1px solid var(--line)", display: "grid", placeItems: "center" }}>
-                        <iconify-icon icon={`lucide:${EXAM_ICONS[i % EXAM_ICONS.length]}`} style={{ fontSize: 20, color: isPending ? "#3b82f6" : "var(--ink)" }} />
-                      </div>
-                      
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                        <span style={{ 
-                          background: isPassed ? "rgba(22, 163, 74, 0.1)" : isFailed ? "rgba(239, 68, 68, 0.1)" : "rgba(59, 130, 246, 0.1)", 
-                          color: isPassed ? "#16a34a" : isFailed ? "#ef4444" : "#3b82f6", 
-                          borderRadius: 999, padding: "4px 10px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" 
-                        }}>
-                          {latestSession.status.replace("_", " ")}
-                        </span>
-                        {(latestSession.score !== null && latestSession.revealScoreToUser) && (
-                          <span style={{ fontSize: 12, fontWeight: 600, color: isPassed ? "#16a34a" : "#ef4444" }}>
-                            Score: {latestSession.score.toFixed(0)}%
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <h3 style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 600, color: "var(--ink)", marginBottom: 8, lineHeight: 1.3 }}>{title}</h3>
-                    
-                    <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-                      <span style={{ background: "var(--background)", color: "var(--muted)", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 600, border: "1px solid var(--line)" }}>
-                        {latestSession.topics[0]}
-                      </span>
-                      <span style={{ background: "var(--background)", color: "var(--muted)", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 600, border: "1px solid var(--line)" }}>
-                        AI Monitored
-                      </span>
-                    </div>
-
-                    <div style={{ background: "var(--raised)", borderRadius: 8, padding: "12px 16px", marginBottom: 24, border: "1px solid var(--line)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
-                        <span style={{ color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}><iconify-icon icon="lucide:hash" /> Attempt Number</span>
-                        <span style={{ fontWeight: 600, color: "var(--ink)" }}>{attemptNumber}</span>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                        <span style={{ color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}><iconify-icon icon="lucide:help-circle" /> Questions</span>
-                        <span style={{ fontWeight: 600, color: "var(--ink)" }}>{latestSession.totalQuestions}</span>
-                      </div>
-                    </div>
-
-                    {isPending ? (
-                      <button
-                        className="btn btn-primary"
-                        style={{
-                          width: "100%",
-                          fontSize: 14,
-                          fontWeight: 600,
-                          marginTop: "auto",
-                          padding: "12px",
-                          borderRadius: 8,
-                          justifyContent: "center"
-                        }}
-                        onClick={() => onStartExam(latestSession.id)}
-                      >
-                        <iconify-icon icon="lucide:play-circle" style={{ fontSize: 18 }} />
-                        Begin Attempt {attemptNumber}
-                      </button>
-                    ) : (!isPending && (isFailed || isPassed) && !isRetakeRequested) ? (
-                      <button
-                        className="btn btn-outline"
-                        style={{
-                          width: "100%",
-                          fontSize: 14,
-                          fontWeight: 600,
-                          marginTop: "auto",
-                          padding: "12px",
-                          borderRadius: 8,
-                          justifyContent: "center",
-                          color: "#d97706",
-                          borderColor: "#d97706"
-                        }}
-                        onClick={async () => {
-                          try {
-                            await requestRetake(latestSession.id);
-                            load();
-                          } catch (e) {
-                            setToastError("Failed to request a new attempt");
-                            setTimeout(() => setToastError(null), 4000);
-                          }
-                        }}
-                      >
-                        <iconify-icon icon="lucide:rotate-cw" style={{ fontSize: 18 }} />
-                        Request Retake
-                      </button>
-                    ) : (
-                      <button
-                        disabled
-                        className="btn btn-ghost"
-                        style={{
-                          width: "100%",
-                          fontSize: 14,
-                          fontWeight: 600,
-                          marginTop: "auto",
-                          padding: "12px",
-                          borderRadius: 8,
-                          justifyContent: "center",
-                          cursor: "not-allowed",
-                          background: "var(--raised)"
-                        }}
-                      >
-                        <iconify-icon icon={isRetakeRequested ? "lucide:clock" : "lucide:lock"} style={{ fontSize: 18 }} />
-                        {isRetakeRequested ? "Retake Requested" : "No Pending Assessment"}
-                      </button>
-                    )}
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* My Certificates */}
-        <section>
-          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 20 }}>
-            <div>
-              <h2 style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 600, color: "var(--ink)" }}>My Credentials</h2>
-              <p style={{ fontSize: 14, color: "var(--muted)", marginTop: 4 }}>{certs.length} qualification{certs.length !== 1 ? "s" : ""} on file.</p>
-            </div>
-            <button className="btn btn-ghost" style={{ padding: "8px 16px", fontSize: 13, borderRadius: 999 }}>
-              View all <iconify-icon icon="lucide:arrow-right" style={{ fontSize: 16 }} />
-            </button>
-          </div>
-
-          <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
-            {certs.length === 0 ? (
-              <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "24px", color: "var(--muted)", fontSize: 14, display: "flex", alignItems: "center", gap: 12 }}>
-                <iconify-icon icon="lucide:info" style={{ fontSize: 20 }} />
-                No credentials earned yet. Complete an assessment to earn your first certificate.
-              </div>
-            ) : (
-              certs.map((cert, i) => (
-                <motion.div 
-                  key={cert.id} 
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  style={{ background: "var(--surface)", borderRadius: 12, padding: 20, border: "1px solid rgba(22, 163, 74, 0.2)", position: "relative", overflow: "hidden", boxShadow: "var(--shadow-card)" }}
-                >
-                  <div style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: 120, background: "linear-gradient(90deg, transparent, rgba(22, 163, 74, 0.05))", pointerEvents: "none" }} />
-                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(22, 163, 74, 0.1)", border: "1px solid rgba(22, 163, 74, 0.2)", display: "grid", placeItems: "center" }}>
-                      <iconify-icon icon="lucide:award" style={{ fontSize: 20, color: "#16a34a" }} />
-                    </div>
-                    <span style={{ background: "rgba(22, 163, 74, 0.1)", color: "#16a34a", borderRadius: 999, padding: "4px 10px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Verified</span>
-                  </div>
-                  <h3 style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 600, color: "var(--ink)", marginBottom: 16, lineHeight: 1.4 }}>{cert.title}</h3>
-                  <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, alignItems: "center" }}>
-                      <span style={{ color: "var(--muted)", fontWeight: 500 }}>Issue Date</span>
-                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--ink)", fontWeight: 600, background: "var(--background)", padding: "4px 8px", borderRadius: 6, border: "1px solid var(--line)" }}>
-                        {new Date(cert.issueDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-                      </span>
-                    </div>
-                  </div>
-                </motion.div>
-              ))
-            )}
-          </div>
-        </section>
-      </div>
-
-      <AnimatePresence>
         {toastError && (
           <motion.div
             initial={{ opacity: 0, y: 50, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.95 }}
-            style={{
-              position: "fixed",
-              bottom: 32,
-              right: 32,
-              background: "#ef4444",
-              color: "white",
-              padding: "16px 24px",
-              borderRadius: "12px",
-              boxShadow: "0 12px 24px rgba(239, 68, 68, 0.25)",
-              zIndex: 1001,
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              fontWeight: 600,
-            }}
+            className="fixed bottom-8 right-8 bg-red-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-4 z-50"
           >
-            <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: "50%", width: 32, height: 32, display: "grid", placeItems: "center" }}>
-              <iconify-icon icon="lucide:alert-circle" style={{ fontSize: 18 }} />
+            <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center text-white">
+              <iconify-icon icon="lucide:alert-circle" className="text-lg" />
             </div>
-            {toastError}
+            <span className="font-bold text-sm tracking-wide">{toastError}</span>
           </motion.div>
         )}
       </AnimatePresence>

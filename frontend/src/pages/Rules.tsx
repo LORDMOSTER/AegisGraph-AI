@@ -169,14 +169,14 @@ export function Rules() {
               ) : (
                 displayedRules.map(rule => (
                   <tr key={rule.id}>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      <span className="mono" style={{ fontSize: 12, color: "var(--cyan)" }}>
+                    <td className="py-2.5 px-3" style={{ whiteSpace: 'nowrap' }}>
+                      <span className="font-mono text-sm bg-gray-100 px-2 py-0.5 rounded text-gray-800">
                         {rule.rule_code}
                       </span>
                     </td>
-                    <td>{rule.manualTitle}</td>
-                    <td>{rule.sectionName} <br/><span style={{fontSize: 11, color: "var(--text-tertiary)"}}>{rule.subcategoryName}</span></td>
-                    <td style={{ maxWidth: 400 }}>
+                    <td className="py-2.5 px-3">{rule.manualTitle}</td>
+                    <td className="py-2.5 px-3">{rule.sectionName} <br/><span style={{fontSize: 11, color: "var(--text-tertiary)"}}>{rule.subcategoryName}</span></td>
+                    <td className="py-2.5 px-3" style={{ maxWidth: 400 }}>
                       <div style={{ overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", fontSize: 13, lineHeight: 1.4 }}>
                         {rule.text}
                       </div>
@@ -186,16 +186,16 @@ export function Rules() {
                         </div>
                       )}
                     </td>
-                    <td>
-                      <span className={`badge ${rule.confidence >= 0.8 && rule.review_status === 'approved' ? 'badge-emerald' : 'badge-amber'}`}>
+                    <td className="py-2.5 px-3">
+                      <span className={rule.confidence >= 0.8 && rule.review_status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium text-xs px-2.5 py-0.5 rounded-full inline-block' : 'bg-amber-50 text-amber-700 border border-amber-200 font-medium text-xs px-2.5 py-0.5 rounded-full inline-block'}>
                         {rule.confidence >= 0.8 && rule.review_status === 'approved' ? 'Verified' : 'Review Needed'}
                       </span>
                     </td>
-                    <td>
+                    <td className="py-2.5 px-3">
                       <div style={{ display: 'flex', gap: 8, whiteSpace: 'nowrap' }}>
                         <button 
                           onClick={() => setEditingRule(rule)}
-                          style={{ padding: '6px 12px', fontSize: 12, borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          className="px-3 py-1.5 text-xs rounded border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer whitespace-nowrap"
                         >
                           View / Edit
                         </button>
@@ -219,7 +219,7 @@ export function Rules() {
                               console.error(err);
                             }
                           }}
-                          style={{ padding: '6px 12px', fontSize: 12, borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--red)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          className="px-3 py-1.5 text-xs rounded border border-gray-200 bg-white text-red-600 hover:bg-red-50 transition-colors cursor-pointer whitespace-nowrap"
                         >
                           Delete
                         </button>
@@ -250,22 +250,22 @@ export function Rules() {
               ) : (
                 filteredBlocks.map(block => (
                   <tr key={block.id}>
-                    <td>{block.page_number || '-'}</td>
-                    <td style={{ maxWidth: 400 }}>
+                    <td className="py-2.5 px-3">{block.page_number || '-'}</td>
+                    <td className="py-2.5 px-3" style={{ maxWidth: 400 }}>
                       <div style={{ overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", fontSize: 13, lineHeight: 1.4 }}>
                         {block.source_text}
                       </div>
                     </td>
-                    <td>
-                      <span className="badge badge-crimson">{block.reason}</span>
+                    <td className="py-2.5 px-3">
+                      <span className="bg-red-50 text-red-700 border border-red-200 font-medium text-xs px-2.5 py-0.5 rounded-full inline-block">{block.reason}</span>
                     </td>
-                    <td>
+                    <td className="py-2.5 px-3">
                       {block.promoted_to_rule_id ? (
                         <span style={{ fontSize: 12, color: "var(--emerald)" }}>Promoted</span>
                       ) : (
                         <button 
                           onClick={() => handlePromote(block.id)}
-                          style={{ padding: '6px 12px', fontSize: 12, borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer' }}
+                          className="px-3 py-1.5 text-xs rounded border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer whitespace-nowrap"
                         >
                           Promote to Rule
                         </button>
