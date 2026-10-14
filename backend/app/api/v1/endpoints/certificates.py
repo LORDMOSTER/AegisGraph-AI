@@ -18,7 +18,8 @@ async def get_certificates(db: AsyncSession = Depends(get_db_session)):
     stmt = (
         select(CertificateRecord)
         .options(
-            selectinload(CertificateRecord.user).selectinload(User.company)
+            selectinload(CertificateRecord.user).selectinload(User.company),
+            selectinload(CertificateRecord.session).selectinload(ExamSession.assessment)
         )
         .order_by(CertificateRecord.created_at.desc())
     )
@@ -27,16 +28,32 @@ async def get_certificates(db: AsyncSession = Depends(get_db_session)):
     
     response = []
     for rec in records:
+        assess_title = (
+            rec.session.assessment.name
+            if (rec.session and rec.session.assessment and rec.session.assessment.name)
+            else (rec.user.designation or "Safety Competency Certification")
+        )
+        pdf_path = rec.file_path_or_blob
+        if not pdf_path and rec.session_id:
+            c_stmt = select(Certificate.pdf_url).where(Certificate.exam_session_id == rec.session_id)
+            c_res = await db.execute(c_stmt)
+            pdf_path = c_res.scalar_one_or_none()
+
         response.append({
             "id": str(rec.id),
             "employeeName": rec.user.full_name or "Unknown",
             "employeeId": rec.user.employee_code or "Unknown",
+            "userId": str(rec.user_id),
             "company": rec.user.company.name if getattr(rec.user, 'company', None) else "Unknown",
             "score": rec.sci_score,
             "issueDate": rec.issue_date.isoformat(),
             "expiryDate": rec.expiry_date.isoformat(),
             "status": "Valid",
-            "isImported": rec.is_imported
+            "isImported": rec.is_imported,
+            "assessmentName": assess_title,
+            "jobTitle": rec.user.designation,
+            "title": assess_title,
+            "pdfUrl": pdf_path,
         })
         
     return response

@@ -25,6 +25,7 @@ class QuestionType(str, Enum):
     MCQ = "MCQ"
     FILL_IN_BLANK = "FILL_IN_BLANK"
     TRUE_FALSE = "TRUE_FALSE"
+    MULTI_SELECT = "MULTI_SELECT"
 
 
 class DifficultyLevel(str, Enum):
@@ -57,18 +58,27 @@ def derive_difficulty(cognitive_level: str, risk_score: int) -> DifficultyLevel:
 class QuestionVariant(BaseModel):
     stem: str = Field(..., description="The question text / sentence with blank.")
     question_type: QuestionType = Field(
-        ..., description="MCQ, TRUE_FALSE, or FILL_IN_BLANK."
+        ..., description="MCQ, TRUE_FALSE, FILL_IN_BLANK, or MULTI_SELECT."
     )
     options: Optional[List[str]] = Field(
         None,
         description=(
             "For MCQ: exactly 4 items. "
             "For TRUE_FALSE: ['True', 'False']. "
-            "For FILL_IN_BLANK: null or omitted."
+            "For FILL_IN_BLANK: null or omitted. "
+            "For MULTI_SELECT: 4 to 6 items."
         ),
     )
-    correct_answer: str = Field(
-        ...,
+    correct_option_index: Optional[int] = Field(
+        None,
+        description="Index of correct option for MCQ / TRUE_FALSE.",
+    )
+    correct_option_indices: Optional[List[int]] = Field(
+        None,
+        description="List of correct option indices for MULTI_SELECT.",
+    )
+    correct_answer: Optional[str] = Field(
+        None,
         description=(
             "Exact correct option string for MCQ/TRUE_FALSE, "
             "or the primary correct phrase for FILL_IN_BLANK."
@@ -82,6 +92,10 @@ class QuestionVariant(BaseModel):
             "correct_answer is always included implicitly."
         ),
     )
+    statement_true: Optional[str] = None
+    statement_false: Optional[str] = None
+    edit_kind: Optional[str] = None
+    changed_fragment: Optional[str] = None
     bloom_level: str = Field(
         ..., description="Remember, Understand, Apply, Analyze, or Evaluate."
     )

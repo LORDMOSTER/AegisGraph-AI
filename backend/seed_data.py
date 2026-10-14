@@ -9,6 +9,7 @@ import re
 
 from app.db.base_class import Base
 from app.db.session import engine
+import app.models  # noqa: F401 - ensure all tables are registered before create_all
 
 def generate_company_code(name: str) -> str:
     words = name.upper().split()
@@ -79,10 +80,15 @@ async def seed_data():
         }
     ]
 
+    from sqlalchemy import select
+
     async with async_session_factory() as db:
         for c_data in data:
             c = c_data["company"]
-            code = generate_company_code(c["name"])
+            if "Meridian" in c["name"]:
+                code = "MAPL-289e"
+            else:
+                code = generate_company_code(c["name"])
             print(f"Seeding Company: {c['name']} ({code})")
             
             new_company = Company(
@@ -111,7 +117,12 @@ async def seed_data():
                     designation=emp["designation"]
                 )
                 res = await create_employee(emp_in=e_in, db=db, current_user=admin_user)
-                print(f"    -> Generated ID: {res.id}, Code: {res.departmentCode}")
+                emp_user_res = await db.execute(select(User).where(User.employee_code == res.id))
+                emp_user = emp_user_res.scalar_one_or_none()
+                if emp_user:
+                    emp_user.password_hash = hash_password("123456")
+                    await db.commit()
+                print(f"    -> Generated ID: {res.id}, Code: {res.departmentCode}, PIN: 123456")
             print("---")
 
 if __name__ == "__main__":

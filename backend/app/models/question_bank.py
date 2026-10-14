@@ -3,6 +3,8 @@ question_bank.py  (model)
 Extended to carry:
   - difficulty field (easy / medium / hard)
   - blank_answer_variants JSONB column for FILL_IN_BLANK questions
+  - correct_option_indices JSONB column for MULTI_SELECT questions
+  - statement_true / statement_false / edit_kind / changed_fragment for TRUE_FALSE
 """
 import enum
 import uuid
@@ -47,15 +49,22 @@ class QuestionVariant(Base, TimestampMixin, UUIDMixin):
     correct_option_indices: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
 
     # Shared correct-answer string (MCQ uses options[correct_option_index];
-    # FILL_IN_BLANK stores the primary correct phrase here)
+    # FILL_IN_BLANK stores the primary correct phrase here;
+    # TRUE_FALSE stores "True" or "False" here)
     correct_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # FILL_IN_BLANK only: acceptable alternative phrasings, e.g. ["500V","500 volts"]
     blank_answer_variants: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
 
+    # TRUE_FALSE: both statement variants + edit metadata
+    statement_true: Mapped[str | None] = mapped_column(Text, nullable=True)
+    statement_false: Mapped[str | None] = mapped_column(Text, nullable=True)
+    edit_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    changed_fragment: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     bloom_level: Mapped[str] = mapped_column(String(32), nullable=False)
 
-    # Req #6 – difficulty derived from cognitive_level + risk_score at generation time
+    # Difficulty derived from cognitive_level + risk_score at generation time
     difficulty: Mapped[str] = mapped_column(
         String(16), nullable=False, default=DifficultyLevel.MEDIUM.value
     )

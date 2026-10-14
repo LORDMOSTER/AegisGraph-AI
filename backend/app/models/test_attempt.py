@@ -35,8 +35,9 @@ class ExamSession(Base, TimestampMixin, UUIDMixin):
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     responses: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
-    # Lockdown flow (Req #1) — supervisor Exam Key stored hashed
+    # Lockdown flow (Req #1) — supervisor Exam Key stored hashed and plain for admin reference
     exam_key_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    exam_key_plaintext: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     # Lockdown anomaly log (Req #5) — appended each time an anomaly fires
     lockdown_anomalies: Mapped[list] = mapped_column(JSONB, default=list, nullable=False, server_default="[]")

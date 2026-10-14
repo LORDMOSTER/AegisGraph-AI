@@ -1,7 +1,8 @@
 import logging
 import uuid
 import random
-from typing import List, Optional
+from datetime import datetime, timezone, timedelta
+from typing import List, Optional, Any, Union
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,9 +14,14 @@ from app.models.hierarchy import Rule, SubCategory, Section
 from app.models.question_bank import QuestionVariant
 from app.models.assessment_session import Assessment
 from app.models.user import User
+from app.models.company import Company
+from app.models.certificate import Certificate, CertificateRecord
+from app.models.test_attempt import ExamSession, ExamStatus
 from app.models.question_usage_history import QuestionUsageHistory
 from app.api.deps import get_current_active_user
 from app.services.llm.generator import grade_fill_in_blank, grade_multi_select
+from app.services.certificate import generate_certificate
+from app.services.exam_builder.grading import grade_response
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -169,7 +175,8 @@ import hashlib, secrets
 class AssembleRequest(BaseModel):
     job_title: str
     target_count: int
-    employee_id: Optional[uuid.UUID] = None  # for no-repeat filtering (Req #8)
+    employee_id: Optional[Any] = None  # accepts either UUID or employee_code string
+    question_types: Optional[List[str]] = None
 
 @router.post("/assemble", summary="Assemble exam questions for a role")
 async def assemble_exam(
@@ -179,8 +186,24 @@ async def assemble_exam(
 ):
     from app.services.assessment_assembler import assemble_exam_for_role
 
-    eid = request.employee_id or current_user.id
-    result = await assemble_exam_for_role(db, request.job_title, request.target_count, employee_id=eid)
+    eid = None
+    if request.employee_id:
+        try:
+            eid = uuid.UUID(str(request.employee_id))
+        except (ValueError, TypeError):
+            u_stmt = select(User.id).where(User.employee_code == str(request.employee_id))
+            u_res = await db.execute(u_stmt)
+            eid = u_res.scalar_one_or_none()
+    if not eid:
+        eid = current_user.id
+
+    result = await assemble_exam_for_role(
+        db,
+        request.job_title,
+        request.target_count,
+        employee_id=eid,
+        allowed_types=request.question_types,
+    )
 
     questions = result["questions"]
     repeat_ids = result["repeat_variant_ids"]
@@ -197,6 +220,7 @@ async def assemble_exam(
             "question_type": q.question_type,
             "options": q.options or [],
             "blank_answer_variants": q.blank_answer_variants,
+            "correct_option_indices": q.correct_option_indices,
             "correct_answer_index": q.correct_option_index,
             "difficulty": q.difficulty,
             "rule_id": str(q.rule_id),
@@ -214,70 +238,112 @@ async def assemble_exam(
 class SwapRequest(BaseModel):
     rule_id: uuid.UUID
     current_variant_id: uuid.UUID
+    question_type: Optional[str] = None
+    current_stem: Optional[str] = None
+    rule_mode: Optional[str] = "same"  # "same" or "different"
+    exclude_stems: Optional[list[str]] = None
 
-@router.post("/swap", summary="Swap a question variant for the same rule")
+@router.post("/swap", summary="Swap a question variant for the same or different rule")
 async def swap_question(
     request: SwapRequest,
     db: AsyncSession = Depends(get_db_session)
 ):
-    from sqlalchemy import select
+    from sqlalchemy import select, func
+    from sqlalchemy.orm import selectinload
     from app.models.question_bank import QuestionVariant
-    
-    # Get all approved variants for this rule
-    stmt = select(QuestionVariant).where(
-        QuestionVariant.rule_id == request.rule_id,
-        QuestionVariant.review_status == "approved"
-    )
-    result = await db.execute(stmt)
-    variants = result.scalars().all()
-    
-    # Filter out the current one if possible, and pick a new one
-    other_variants = [v for v in variants if v.id != request.current_variant_id]
-    
-    if not other_variants:
-        # Fallback to generating a new question dynamically
-        from app.models.hierarchy import Rule
-        from app.services.llm.generator import generate_question_variants
-        import uuid
-        
-        rule = await db.scalar(select(Rule).where(Rule.id == request.rule_id))
-        if not rule:
-            return {"error": "No alternative questions available and rule not found"}
-            
-        try:
-            variants_data = await generate_question_variants(
-                rule.text,
-                risk_score=rule.risk_score,
-                cognitive_level=rule.cognitive_level,
-                count=1,
-                question_type="multiple_choice",
-                previously_generated_stems=[],
-            )
-            if variants_data and len(variants_data) > 0:
-                vd = variants_data[0]
-                return {
-                    "id": str(uuid.uuid4()),
-                    "question_text": vd.get("question_text", ""),
-                    "options": vd.get("options", []),
-                    "correct_answer_index": vd.get("correct_option_index", 0),
-                    "rule_id": str(rule.id)
-                }
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Swap AI generation failed: {e}")
-            
-        return {"error": "No alternative questions available and AI generation failed"}
-        
+    from app.models.hierarchy import Rule
+    from app.services.assessment_assembler import _make_heuristic_variant
     import random
-    q = random.choice(other_variants)
+    import uuid
     
-    return {
-        "id": str(q.id),
-        "question_text": q.question_text,
-        "options": q.options or [],
-        "correct_answer_index": q.correct_option_index,
-        "rule_id": str(q.rule_id)
-    }
+    current_stem = request.current_stem or ""
+    detected_type = (request.question_type or "MCQ").upper()
+    exclude = set(s.strip().lower() for s in (request.exclude_stems or []))
+    if current_stem:
+        exclude.add(current_stem.strip().lower())
+
+    target_rule = None
+    if request.rule_mode == "different":
+        diff_rule_stmt = (
+            select(Rule)
+            .where(Rule.review_status == "approved", Rule.id != request.rule_id)
+            .order_by(func.random())
+            .limit(1)
+            .options(selectinload(Rule.subcategory))
+        )
+        target_rule = await db.scalar(diff_rule_stmt)
+    
+    if not target_rule:
+        target_rule = await db.scalar(
+            select(Rule)
+            .where(Rule.id == request.rule_id)
+            .options(selectinload(Rule.subcategory))
+        )
+    if not target_rule:
+        # Fallback to any approved rule
+        target_rule = await db.scalar(
+            select(Rule)
+            .where(Rule.review_status == "approved")
+            .order_by(func.random())
+            .limit(1)
+            .options(selectinload(Rule.subcategory))
+        )
+
+    # Check question bank first for existing approved variant
+    variants = []
+    if target_rule:
+        stmt = (
+            select(QuestionVariant)
+            .where(
+                QuestionVariant.rule_id == target_rule.id,
+                QuestionVariant.review_status == "approved",
+                QuestionVariant.question_type == detected_type,
+            )
+            .options(selectinload(QuestionVariant.rule))
+        )
+        res = await db.execute(stmt)
+        variants = res.scalars().all()
+
+    # Filter out excluded or current stems
+    candidate_variants = [
+        v for v in variants 
+        if v.id != request.current_variant_id and v.question_text.strip().lower() not in exclude
+    ]
+
+    if candidate_variants:
+        q = random.choice(candidate_variants)
+        return {
+            "id": str(q.id),
+            "question_text": q.question_text,
+            "question_type": q.question_type,
+            "options": q.options or [],
+            "correct_answer_index": q.correct_option_index,
+            "correct_option_indices": q.correct_option_indices,
+            "correct_answer": q.correct_answer,
+            "blank_answer_variants": q.blank_answer_variants,
+            "statement_true": q.statement_true,
+            "statement_false": q.statement_false,
+            "rule_id": str(q.rule_id)
+        }
+
+    # Otherwise synthesize a fresh operational variant
+    if target_rule:
+        vd = _make_heuristic_variant(target_rule, detected_type)
+        return {
+            "id": str(uuid.uuid4()),
+            "question_text": vd.get("question_text", ""),
+            "question_type": detected_type,
+            "options": vd.get("options", []),
+            "correct_answer_index": vd.get("correct_option_index", 0),
+            "correct_option_indices": vd.get("correct_option_indices"),
+            "correct_answer": vd.get("correct_answer"),
+            "blank_answer_variants": vd.get("blank_answer_variants"),
+            "statement_true": vd.get("statement_true"),
+            "statement_false": vd.get("statement_false"),
+            "rule_id": str(target_rule.id)
+        }
+
+    return {"error": "Unable to assemble question variant."}
 
 class AssignRequest(BaseModel):
     assessment_id: uuid.UUID
@@ -334,8 +400,9 @@ async def assign_exam(
             employee_id=u.id,
             status=ExamStatus.ASSIGNED,
             assigned_at=datetime.now(timezone.utc),
-            responses={},
+            responses={"_admin_exam_key": request.exam_key} if request.exam_key else {},
             exam_key_hash=key_hash,
+            exam_key_plaintext=request.exam_key,
             lockdown_anomalies=[],
             lockdown_escalated=False,
         )
@@ -621,7 +688,8 @@ async def get_all_assigned_exams(
         "status": e.status,
         "assigned_at": e.assigned_at,
         "score": e.score,
-        "total_questions": e.assessment.total_question_count
+        "total_questions": e.assessment.total_question_count,
+        "exam_key": getattr(e, "exam_key_plaintext", None) or (e.responses.get("_admin_exam_key") if isinstance(e.responses, dict) else None),
     } for e in exams]
 
 @router.delete("/exam/{exam_id}", summary="Delete an assigned exam")
@@ -657,30 +725,158 @@ async def get_exam(
         exam.started_at = datetime.now(timezone.utc)
         await db.commit()
 
-    questions = []
-    for item in exam.assessment.manifest:
+    assessment = exam.assessment
+    section_breakdown = assessment.section_breakdown or {}
+
+    # 1. Build ordered sections list
+    sections_list = []
+    if section_breakdown:
+        for s_id, s_info in sorted(section_breakdown.items(), key=lambda x: x[1].get("order_index", 0)):
+            sections_list.append({
+                "id": str(s_id),
+                "title": s_info.get("title", f"Section {s_id}"),
+                "instructions": s_info.get("instructions", ""),
+                "min_pass_percent": s_info.get("min_pass_percent"),
+                "order_index": s_info.get("order_index", 0),
+            })
+    if not sections_list:
+        sections_list = [{
+            "id": "section-a",
+            "title": "Section A",
+            "instructions": "Read each question carefully and select or enter your response.",
+            "min_pass_percent": assessment.pass_mark_pct,
+            "order_index": 0,
+        }]
+
+    # 2. Extract raw questions from manifest / question_bank
+    raw_questions = []
+    for item in assessment.manifest:
+        q_id = str(item.get("id") or item.get("question_variant_id"))
+        sec_id = str(item.get("section_id") or "section-a")
+        sec_title = item.get("section_title") or (section_breakdown.get(sec_id, {}).get("title") if section_breakdown else "Section A")
+        
+        if "question_text" in item or "stem" in item:
+            q_type = item.get("question_type", "MCQ")
+            opts = item.get("options")
+            payload = item.get("payload") or {}
+            if opts is None and "options" in payload:
+                opts = payload.get("options")
+            raw_questions.append({
+                "id": q_id,
+                "rule_id": str(item.get("rule_id", "")) if item.get("rule_id") else None,
+                "question_text": item.get("question_text") or item.get("stem"),
+                "question_type": q_type,
+                "options": list(opts) if opts else [],
+                "difficulty": item.get("difficulty", "medium"),
+                "marks": float(item.get("marks", 1.0)),
+                "section_id": sec_id,
+                "section_title": sec_title,
+                "order_index": item.get("order_index", 0),
+            })
+            continue
+
         var_id = uuid.UUID(item['question_variant_id'])
         v_stmt = select(QuestionVariant).where(QuestionVariant.id == var_id)
         v_res = await db.execute(v_stmt)
         variant = v_res.scalar_one_or_none()
         if variant:
-            questions.append({
+            raw_questions.append({
                 "id": str(variant.id),
                 "rule_id": str(variant.rule_id),
                 "question_text": variant.question_text,
-                "question_type": variant.question_type,          # expose type (Req #5)
-                "options": variant.options,
+                "question_type": variant.question_type,
+                "options": list(variant.options) if variant.options else [],
                 "difficulty": variant.difficulty,
-                "correct_option_indices": variant.correct_option_indices,  # for MULTI_SELECT
-                # Intentionally omitting correct_option_index / correct_answer
+                "marks": float(item.get("marks", 1.0)),
+                "section_id": sec_id,
+                "section_title": sec_title,
+                "order_index": item.get("order_index", 0),
             })
+
+    # 3. Handle question and option shuffling per attempt
+    exam_responses = dict(exam.responses or {})
+    shuffle_map = exam_responses.get("_shuffle_map")
+    
+    # If no shuffle map is stored, initialize and persist it
+    if not shuffle_map or not isinstance(shuffle_map, dict):
+        shuffle_map = {"question_order": [], "option_maps": {}}
+        
+        # Group question items by section
+        by_sec: dict[str, list] = {}
+        for q in raw_questions:
+            by_sec.setdefault(q["section_id"], []).append(q)
+            
+        for s_info in sections_list:
+            s_id = s_info["id"]
+            sec_qs = by_sec.get(s_id, [])
+            s_cfg = section_breakdown.get(s_id, {})
+            should_shuffle_q = bool(s_cfg.get("shuffle_questions", False))
+            should_shuffle_opt = bool(s_cfg.get("shuffle_options", False))
+            
+            sec_q_ids = [q["id"] for q in sec_qs]
+            if should_shuffle_q and len(sec_q_ids) > 1:
+                random.shuffle(sec_q_ids)
+            shuffle_map["question_order"].extend(sec_q_ids)
+            
+            for q in sec_qs:
+                q_id = q["id"]
+                opts = q["options"]
+                if should_shuffle_opt and opts and len(opts) > 1 and q["question_type"] in ("MCQ", "MULTI_SELECT"):
+                    perm = list(range(len(opts)))
+                    random.shuffle(perm)
+                    shuffle_map["option_maps"][q_id] = perm
+                else:
+                    shuffle_map["option_maps"][q_id] = list(range(len(opts))) if opts else []
+
+        # Catch any question ids not captured in sections_list
+        for q in raw_questions:
+            if q["id"] not in shuffle_map["question_order"]:
+                shuffle_map["question_order"].append(q["id"])
+            if q["id"] not in shuffle_map["option_maps"]:
+                shuffle_map["option_maps"][q["id"]] = list(range(len(q["options"]))) if q["options"] else []
+
+        exam_responses["_shuffle_map"] = shuffle_map
+        exam.responses = exam_responses
+        await db.commit()
+
+    # 4. Construct final served question list ordered and permuted by shuffle_map
+    q_by_id = {q["id"]: q for q in raw_questions}
+    final_questions = []
+    
+    order = shuffle_map.get("question_order") or [q["id"] for q in raw_questions]
+    for q_id in order:
+        q = q_by_id.get(q_id)
+        if not q:
+            continue
+        opts = q["options"]
+        opt_perm = (shuffle_map.get("option_maps") or {}).get(q_id)
+        if opt_perm and opts and len(opt_perm) == len(opts):
+            shuffled_opts = [opts[i] for i in opt_perm if 0 <= i < len(opts)]
+        else:
+            shuffled_opts = list(opts)
+
+        final_questions.append({
+            "id": q["id"],
+            "rule_id": q["rule_id"],
+            "question_text": q["question_text"],
+            "question_type": q["question_type"],
+            "options": shuffled_opts,
+            "difficulty": q["difficulty"],
+            "marks": q["marks"],
+            "section_id": q["section_id"],
+            "section_title": q["section_title"],
+        })
+
+    # Sanitize responses returned to client (exclude internal metadata keys)
+    client_responses = {k: v for k, v in (exam.responses or {}).items() if not k.startswith("_")}
 
     return {
         "exam_session_id": exam.id,
         "assessment_name": exam.assessment.name,
         "status": exam.status,
-        "responses": exam.responses,
-        "questions": questions,
+        "responses": client_responses,
+        "questions": final_questions,
+        "sections": sections_list,
         "pass_mark_pct": exam.assessment.pass_mark_pct,
         "use_weighted_marks": exam.assessment.use_weighted_marks,
         "reveal_score_to_user": exam.assessment.reveal_score_to_user,
@@ -744,74 +940,208 @@ async def submit_exam(
     total_score = 0.0
     total_possible = 0.0
     usage_history_entries: list[QuestionUsageHistory] = []
+    section_scores: dict[str, dict] = {}
+    graded_responses: dict[str, dict] = {}
+
+    from app.services.exam_builder.grading import grade_response
+
+    # Retrieve shuffle map if present for de-mapping permuted option choices
+    shuffle_map = (exam.responses or {}).get("_shuffle_map") or {}
+    opt_maps = shuffle_map.get("option_maps") or {}
 
     for item in assessment.manifest:
-        var_id = uuid.UUID(item['question_variant_id'])
-        rule_id = uuid.UUID(item['rule_id'])
+        var_id_str = str(item.get('id') or item.get('question_variant_id'))
+        try:
+            var_id = uuid.UUID(var_id_str)
+        except Exception:
+            var_id = uuid.uuid4()
 
-        v_stmt = select(QuestionVariant).where(QuestionVariant.id == var_id)
-        v_res = await db.execute(v_stmt)
-        variant = v_res.scalar_one()
+        rule_id_str = item.get('rule_id')
+        rule_risk = 1
+        if rule_id_str:
+            try:
+                r_stmt = select(Rule.risk_score).where(Rule.id == uuid.UUID(rule_id_str))
+                r_res = await db.execute(r_stmt)
+                risk_val = r_res.scalar_one_or_none()
+                if risk_val:
+                    rule_risk = risk_val
+            except Exception:
+                pass
 
-        r_stmt = select(Rule).where(Rule.id == rule_id)
-        r_res = await db.execute(r_stmt)
-        rule = r_res.scalar_one()
+        # Mark weight (Req #10 / Exam Builder)
+        if use_weighted:
+            weight = float(rule_risk)
+        elif item.get('marks') is not None:
+            weight = float(item['marks'])
+        else:
+            weight = float(marks_per_q)
 
-        # Mark weight (Req #10)
-        weight = rule.risk_score if use_weighted else marks_per_q
         total_possible += weight
 
-        # Retrieve saved response (supports both old int and new dict formats)
-        raw_resp = exam.responses.get(str(var_id))
-        if isinstance(raw_resp, dict):
-            selected_idx = raw_resp.get("selected_option_index")
-            text_answer = raw_resp.get("text_answer")
-        else:
-            selected_idx = raw_resp
-            text_answer = None
+        # Section accumulator
+        sec_id = str(item.get('section_id') or 'section-a')
+        sec_cfg = (assessment.section_breakdown or {}).get(sec_id, {})
+        sec_title = item.get('section_title') or sec_cfg.get("title") or "Section A"
+        if sec_id not in section_scores:
+            section_scores[sec_id] = {
+                "title": sec_title,
+                "score": 0.0,
+                "total_possible": 0.0,
+                "min_pass_percent": sec_cfg.get("min_pass_percent") if sec_cfg else item.get("min_pass_percent"),
+            }
+        section_scores[sec_id]["total_possible"] += weight
 
-        # Grade depending on question type
-        q_type = variant.question_type
-        correct = False
-        if q_type == "FILL_IN_BLANK":
-            if text_answer is not None:
-                correct = grade_fill_in_blank(
-                    text_answer,
-                    variant.correct_answer or "",
-                    variant.blank_answer_variants,
-                )
-        elif q_type == "MULTI_SELECT":
-            # Retrieve selected_indices from response
+        # Retrieve saved response
+        raw_resp = exam.responses.get(var_id_str)
+        if raw_resp is None and item.get('question_variant_id'):
+            raw_resp = exam.responses.get(str(item['question_variant_id']))
+
+        # De-map shuffled option indices back to original indices
+        opt_perm = opt_maps.get(var_id_str)
+        if opt_perm and raw_resp is not None:
             if isinstance(raw_resp, dict):
-                selected_indices = raw_resp.get("selected_option_indices", [])
+                mapped_resp = dict(raw_resp)
+                sel_idx = raw_resp.get("selected_option_index")
+                if sel_idx is not None and isinstance(sel_idx, int) and 0 <= sel_idx < len(opt_perm):
+                    mapped_resp["selected_option_index"] = opt_perm[sel_idx]
+                sel_indices = raw_resp.get("selected_option_indices")
+                if sel_indices is not None and isinstance(sel_indices, list):
+                    mapped_resp["selected_option_indices"] = [opt_perm[i] for i in sel_indices if 0 <= i < len(opt_perm)]
+                resp_to_grade = mapped_resp
+            elif isinstance(raw_resp, int) and 0 <= raw_resp < len(opt_perm):
+                resp_to_grade = opt_perm[raw_resp]
+            elif isinstance(raw_resp, list):
+                resp_to_grade = [opt_perm[i] for i in raw_resp if 0 <= i < len(opt_perm)]
             else:
-                selected_indices = []
-            correct_indices = variant.correct_option_indices or []
-            correct = grade_multi_select(selected_indices, correct_indices)
+                resp_to_grade = raw_resp
         else:
-            correct = (selected_idx == variant.correct_option_index)
+            resp_to_grade = raw_resp
+
+        # Determine payload and question type from snapshot or DB variant
+        q_type = item.get("question_type")
+        payload = item.get("payload") or {}
+
+        if not payload:
+            c_idx = item.get("correct_option_index")
+            if c_idx is None:
+                c_idx = item.get("correct_answer_index")
+            payload = {
+                "options": item.get("options") or [],
+                "correct_option_index": c_idx,
+                "correct_option_indices": item.get("correct_option_indices"),
+                "correct_answer": item.get("correct_answer"),
+                "blank_answer_variants": item.get("blank_answer_variants"),
+            }
+
+        # If not present in snapshot, fetch from QuestionVariant
+        has_answers = (
+            payload.get("correct_option_index") is not None
+            or bool(payload.get("correct_option_indices"))
+            or bool(payload.get("correct_answer"))
+            or bool(payload.get("blank_answer_variants"))
+        )
+        if not q_type or not has_answers:
+            if item.get('question_variant_id'):
+                try:
+                    v_stmt = select(QuestionVariant).where(QuestionVariant.id == uuid.UUID(str(item['question_variant_id'])))
+                    v_res = await db.execute(v_stmt)
+                    variant = v_res.scalar_one_or_none()
+                    if variant:
+                        if not q_type:
+                            q_type = variant.question_type
+                        payload = {
+                            "options": variant.options,
+                            "correct_option_index": variant.correct_option_index,
+                            "correct_option_indices": variant.correct_option_indices,
+                            "correct_answer": variant.correct_answer,
+                            "blank_answer_variants": variant.blank_answer_variants,
+                        }
+                except Exception:
+                    pass
+
+        correct = grade_response(q_type or "MCQ", payload, resp_to_grade)
+        awarded = weight if correct else 0.0
 
         if correct:
             total_score += weight
+            section_scores[sec_id]["score"] += weight
 
-        # Record usage history (Req #8)
-        usage_history_entries.append(QuestionUsageHistory(
-            employee_id=current_user.id,
-            question_variant_id=var_id,
-            exam_session_id=exam.id,
-        ))
+        graded_responses[var_id_str] = {
+            "response": raw_resp,
+            "is_correct": correct,
+            "awarded_marks": awarded,
+            "max_marks": weight,
+        }
+
+        # Record usage history if this was a valid variant in question_bank
+        source_id = item.get('source_variant_id') or item.get('question_variant_id')
+        if source_id:
+            try:
+                candidate_id = uuid.UUID(str(source_id))
+                exists_stmt = select(QuestionVariant.id).where(QuestionVariant.id == candidate_id)
+                exists_res = await db.execute(exists_stmt)
+                if exists_res.scalar_one_or_none():
+                    usage_history_entries.append(QuestionUsageHistory(
+                        employee_id=current_user.id,
+                        question_variant_id=candidate_id,
+                        exam_session_id=exam.id,
+                    ))
+            except Exception:
+                pass
 
     # Compute SCI score as percentage
     sci_score = (total_score / total_possible * 100) if total_possible > 0 else 0.0
 
-    # Determine pass/fail threshold (Req #10)
+    # Determine per-section pass compliance and identify failed must-pass sections
+    all_sections_passed = True
+    failed_must_pass_sections: list[str] = []
+    for s_id, s_data in section_scores.items():
+        pos = s_data["total_possible"]
+        pct = (s_data["score"] / pos * 100.0) if pos > 0 else 0.0
+        s_data["percentage"] = round(pct, 2)
+        min_pass = s_data.get("min_pass_percent")
+        if min_pass is not None and pos > 0:
+            if pct < float(min_pass):
+                all_sections_passed = False
+                s_data["passed"] = False
+                failed_must_pass_sections.append(s_data.get("title", s_id))
+            else:
+                s_data["passed"] = True
+        else:
+            s_data["passed"] = True
+
+    # Determine pass/fail threshold: overall % AND all must-pass sections
     if pass_abs is not None:
-        passed = total_score >= pass_abs
+        passed = (total_score >= pass_abs) and all_sections_passed
     else:
-        passed = sci_score >= pass_pct
+        passed = (sci_score >= pass_pct) and all_sections_passed
+
+    # Update responses with awarded marks, section scores, and failed sections
+    exam.responses = {
+        **exam.responses,
+        "_graded": graded_responses,
+        "_section_scores": section_scores,
+        "_failed_sections": failed_must_pass_sections,
+    }
 
     exam.score = sci_score
-    exam.integrity_score = request.integrity_score
+    
+    # Calculate composite integrity score from all recorded anomalies
+    anomalies = list(exam.lockdown_anomalies or [])
+    total_anomaly_penalty = 0.0
+    for anom in anomalies:
+        a_type = anom.get("type", "")
+        if a_type == "unlock_failure":
+            total_anomaly_penalty += 15.0
+        elif a_type in ("fullscreen_exit", "tab_hidden", "focus_blur", "screenshare_stopped", "camera_stopped"):
+            dur = float(anom.get("duration_s", 0) or 0)
+            total_anomaly_penalty += 12.0 + min(dur * 0.5, 20.0)
+        else:
+            total_anomaly_penalty += 10.0
+
+    server_calc_integrity = max(0.0, 100.0 - total_anomaly_penalty)
+    final_integrity = min(request.integrity_score, server_calc_integrity) if anomalies else request.integrity_score
+    exam.integrity_score = round(final_integrity, 1)
     exam.completed_at = datetime.now(timezone.utc)
 
     # Save usage history
@@ -822,7 +1152,7 @@ async def submit_exam(
     c_res = await db.execute(c_stmt)
     company = c_res.scalar_one()
 
-    if request.integrity_score < 70.0:
+    if exam.integrity_score < 70.0:
         exam.status = ExamStatus.PENDING_REVIEW
     elif passed:
         exam.status = ExamStatus.COMPLETED
@@ -835,28 +1165,48 @@ async def submit_exam(
             company_name=company.name,
             assessment_name=assessment.name if assessment else "Safety Assessment",
             logo_url=company.logo_url,
-            designation=current_user.designation
+            designation=current_user.designation,
+            exam_id=exam.id,
+            version="1.0",
+            section_breakdown=section_scores,
+            include_section_breakdown=False,
         )
+        now_utc = datetime.now(timezone.utc)
         cert = Certificate(
             id=cert_id,
             exam_session_id=exam.id,
             employee_id=current_user.id,
-            issued_at=datetime.utcnow(),
+            issued_at=now_utc,
             qr_code_data=qr,
             signed_payload=sig,
             pdf_url=pdf_url
         )
         db.add(cert)
+
+        cert_record = CertificateRecord(
+            id=cert_id,
+            user_id=current_user.id,
+            session_id=exam.id,
+            sci_score=sci_score,
+            issue_date=now_utc,
+            expiry_date=now_utc + timedelta(days=365),
+            is_imported=False,
+            file_path_or_blob=pdf_url,
+        )
+        db.add(cert_record)
     else:
         exam.status = ExamStatus.FAILED
 
     await db.commit()
     return {
         "status": exam.status,
-        "score": sci_score,
+        "score": round(sci_score, 2),
         "passed": passed,
         "reveal_score_to_user": exam.assessment.reveal_score_to_user,
         "pass_mark_pct": pass_pct,
+        "all_sections_passed": all_sections_passed,
+        "failed_sections": failed_must_pass_sections,
+        "section_scores": section_scores,
     }
 
 @router.post("/all-assigned-exams/{session_id}/reset", summary="Reset an assigned exam (Admin)")

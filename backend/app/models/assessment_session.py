@@ -23,8 +23,8 @@ class Assessment(Base, TimestampMixin, UUIDMixin):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     manifest: Mapped[list] = mapped_column(JSONB, nullable=False)
-    total_question_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    section_breakdown: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    total_question_count: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
+    section_breakdown: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Req #10 – per-exam configurable marking
     marks_per_question: Mapped[int] = mapped_column(Integer, default=1, nullable=False)

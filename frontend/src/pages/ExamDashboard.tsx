@@ -25,8 +25,6 @@ interface Props {
   onLogout?: () => void;
 }
 
-const EXAM_ICONS: string[] = ["shield-alert", "lock", "hard-hat", "flame", "zap"];
-
 export function ExamDashboard({ onStartExam, userProfile, onLogout }: Props) {
   const [exams, setExams] = useState<AssignedExam[]>([]);
   const [certs, setCerts] = useState<Certificate[]>([]);
@@ -76,12 +74,18 @@ export function ExamDashboard({ onStartExam, userProfile, onLogout }: Props) {
 
     setExams(parsedExams);
 
-    // FIX FOR CREDENTIALS LOGIC: Map the admin certs for this specific user.
-    // userProfile.id is used to match employeeId.
-    const userCerts = adminCerts.filter(cert => cert.employeeId === userProfile?.id || cert.employeeId === userProfile?.employee_code);
+    // FIX FOR CREDENTIALS LOGIC: Map all admin certs for this specific user.
+    const uid = String(userProfile?.id || "").toLowerCase();
+    const ucode = String(userProfile?.employee_code || "").toLowerCase();
+    const userCerts = adminCerts.filter(cert => {
+      const cid = String(cert.employeeId || "").toLowerCase();
+      const cUid = String((cert as any).userId || "").toLowerCase();
+      return (cid && (cid === uid || cid === ucode)) || (cUid && cUid === uid);
+    });
+
     setCerts(userCerts.map(cert => ({
       id: cert.id,
-      title: "Safety Certificate",
+      title: (cert as any).assessmentName || (cert as any).title || "Safety Competency Certification",
       issueDate: cert.issueDate,
       pdfUrl: cert.pdfUrl
     })));
@@ -107,13 +111,9 @@ export function ExamDashboard({ onStartExam, userProfile, onLogout }: Props) {
     );
   }
 
-  const groupedExams: Record<string, AssignedExam[]> = {};
-  exams.forEach(ex => {
-    if (!groupedExams[ex.title]) groupedExams[ex.title] = [];
-    groupedExams[ex.title].push(ex);
-  });
-
-  const pendingCount = exams.filter(e => e.status === "assigned" || e.status === "in_progress").length;
+  const pendingExams = exams.filter(e => e.status === "assigned" || e.status === "in_progress");
+  const completedExams = exams.filter(e => e.status !== "assigned" && e.status !== "in_progress");
+  const pendingCount = pendingExams.length;
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-12">
@@ -202,99 +202,120 @@ export function ExamDashboard({ onStartExam, userProfile, onLogout }: Props) {
         {/* RIGHT COLUMN: Dash Content */}
         <div className="flex-1 flex flex-col gap-8">
           
-          {/* Assessments Section */}
+          {/* Active Assessment (Stands ALONE if assigned) */}
           <div className="flex flex-col gap-4">
             <div className="flex items-end justify-between">
-              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Safety Assessments</h2>
-              {pendingCount > 0 && (
-                <span className="bg-red-50 text-red-700 border border-red-200 rounded px-3 py-1.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                  <iconify-icon icon="lucide:alert-circle" /> {pendingCount} Pending
+              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Active Safety Assessment</h2>
+              {pendingCount > 0 ? (
+                <span className="bg-blue-50 text-blue-700 border border-blue-200 rounded px-3 py-1.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" /> Ready For Attempt
+                </span>
+              ) : (
+                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-3 py-1.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                  <iconify-icon icon="lucide:check-circle" /> Up to Date
                 </span>
               )}
             </div>
             
-            {Object.keys(groupedExams).length === 0 ? (
+            {pendingExams.length > 0 ? (
+              // STAND ALONE ACTIVE EXAM CARD
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="border-2 border-blue-500 bg-gradient-to-br from-blue-50/40 via-white to-blue-50/20 rounded-2xl p-6 relative shadow-md"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-blue-600 text-white rounded-xl flex items-center justify-center shadow-sm">
+                      <iconify-icon icon="lucide:shield-alert" className="text-2xl" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-100/70 border border-blue-200 px-2.5 py-0.5 rounded-full inline-block mb-1">
+                        Assigned Examination
+                      </span>
+                      <h3 className="text-2xl font-bold text-gray-900 leading-tight">{pendingExams[0].title}</h3>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-amber-100 border border-amber-300 text-amber-800 rounded px-2.5 py-1 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                      <iconify-icon icon="lucide:video" /> AI Proctoring Enforced
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 my-5">
+                  <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-xs">
+                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Question Count</span>
+                    <span className="text-base font-bold text-gray-900 font-mono">{pendingExams[0].totalQuestions} Questions</span>
+                  </div>
+                  <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-xs">
+                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Monitoring Requirements</span>
+                    <span className="text-xs font-semibold text-emerald-700">Camera + Screen Share</span>
+                  </div>
+                  <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-xs col-span-2 sm:col-span-1">
+                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Assigned Date</span>
+                    <span className="text-xs font-medium text-gray-700">{new Date(pendingExams[0].assignedAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+
+                <button
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm uppercase tracking-wider py-4 rounded-xl flex items-center justify-center gap-3 transition-colors shadow-lg shadow-blue-500/25"
+                  onClick={() => onStartExam(pendingExams[0].id)}
+                >
+                  <iconify-icon icon="lucide:play-circle" className="text-xl" />
+                  Begin Proctored Examination
+                </button>
+              </motion.div>
+            ) : (
               <div className="bg-gray-50 border border-gray-200 rounded-2xl p-10 flex flex-col items-center justify-center text-center shadow-sm">
                 <iconify-icon icon="lucide:check-circle" className="w-14 h-14 text-emerald-500 mb-4" style={{ fontSize: '56px' }} />
                 <h3 className="text-xl font-bold text-gray-900">System Compliant</h3>
-                <p className="text-gray-500 mt-2 font-medium">No pending assessments detected.</p>
+                <p className="text-gray-500 mt-2 font-medium">No pending assessments awaiting completion.</p>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {Object.entries(groupedExams).map(([title, sessions], i) => {
-                  const attemptNumber = sessions.length;
-                  const latestSession = sessions[sessions.length - 1];
-                  const isPending = latestSession.status === "assigned" || latestSession.status === "in_progress";
-                  const isPassed = latestSession.status === "completed";
-                  const isFailed = latestSession.status === "failed";
-                  const isRetakeRequested = latestSession.status === "retake_requested";
+            )}
+          </div>
+
+          {/* Previous Exam History (if any) */}
+          {completedExams.length > 0 && (
+            <div className="flex flex-col gap-4">
+              <h3 className="text-lg font-bold text-gray-900 tracking-tight flex items-center gap-2">
+                <iconify-icon icon="lucide:history" className="text-gray-400" />
+                Examination Records & History
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {completedExams.map((ex) => {
+                  const isPassed = ex.status === "completed";
+                  const isFailed = ex.status === "failed";
+                  const isRetakeRequested = ex.status === "retake_requested";
 
                   return (
-                    <motion.div
-                      key={title}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                      className={`flex flex-col border ${isPending ? 'border-blue-300 bg-blue-50/30' : 'border-gray-200 bg-white'} rounded-xl p-5 relative shadow-sm`}
-                    >
-                      {isPending && <div className="absolute top-0 left-0 right-0 h-1 bg-blue-600 rounded-t-xl" />}
-                      
-                      <div className="flex items-start justify-between mb-4">
-                        <div className={`w-10 h-10 border ${isPending ? 'border-blue-200 bg-white text-blue-600' : 'border-gray-200 bg-gray-50 text-gray-700'} rounded-lg flex items-center justify-center`}>
-                          <iconify-icon icon={`lucide:${EXAM_ICONS[i % EXAM_ICONS.length]}`} className="text-lg" />
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
-                            isPassed ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                            isFailed ? "bg-red-50 text-red-700 border-red-200" :
-                            "bg-blue-50 text-blue-700 border-blue-200"
-                          }`}>
-                            {latestSession.status.replace("_", " ")}
+                    <div key={ex.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+                      <div className="flex items-start justify-between mb-2">
+                        <h4 className="font-bold text-gray-900 text-sm leading-tight pr-2">{ex.title}</h4>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border shrink-0 ${
+                          isPassed ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                          isFailed ? "bg-red-50 text-red-700 border-red-200" :
+                          "bg-gray-50 text-gray-700 border-gray-200"
+                        }`}>
+                          {ex.status.replace("_", " ")}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-gray-500 my-2">
+                        <span>{ex.totalQuestions} Questions</span>
+                        {ex.score !== null && ex.revealScoreToUser && (
+                          <span className={`font-mono font-bold ${isPassed ? "text-emerald-700" : "text-red-700"}`}>
+                            Score: {ex.score.toFixed(0)}%
                           </span>
-                          {(latestSession.score !== null && latestSession.revealScoreToUser) && (
-                            <span className={`text-[10px] font-mono font-bold ${isPassed ? 'text-emerald-700' : 'text-red-700'}`}>
-                              SCORE: {latestSession.score.toFixed(0)}%
-                            </span>
-                          )}
-                        </div>
+                        )}
                       </div>
 
-                      <h3 className="font-bold text-gray-900 leading-tight mb-3 pr-4">{title}</h3>
-                      
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        <span className="bg-gray-100 border border-gray-200 text-gray-600 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
-                          {latestSession.topics[0] || "General Safety"}
-                        </span>
-                        <span className="bg-gray-100 border border-gray-200 text-gray-600 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
-                          AI MONITORED
-                        </span>
-                      </div>
-
-                      <div className="border border-gray-200 bg-gray-50 rounded-lg p-3 mb-5 mt-auto">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Attempt</span>
-                          <span className="text-xs font-mono font-bold text-gray-900">{attemptNumber}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Questions</span>
-                          <span className="text-xs font-mono font-bold text-gray-900">{latestSession.totalQuestions}</span>
-                        </div>
-                      </div>
-
-                      {isPending ? (
+                      {(!isPassed && isFailed && !isRetakeRequested) && (
                         <button
-                          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
-                          onClick={() => onStartExam(latestSession.id)}
-                        >
-                          <iconify-icon icon="lucide:play" className="text-sm" />
-                          Begin Attempt {attemptNumber}
-                        </button>
-                      ) : (!isPending && (isFailed || isPassed) && !isRetakeRequested) ? (
-                        <button
-                          className="w-full bg-white hover:bg-amber-50 border border-amber-300 text-amber-700 font-bold text-xs uppercase tracking-wider py-3 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-sm"
+                          className="mt-2 w-full bg-white hover:bg-amber-50 border border-amber-300 text-amber-700 font-bold text-[11px] uppercase tracking-wider py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
                           onClick={async () => {
                             try {
-                              await requestRetake(latestSession.id);
+                              await requestRetake(ex.id);
                               load();
                             } catch (e) {
                               setToastError("Failed to request a new attempt");
@@ -302,28 +323,26 @@ export function ExamDashboard({ onStartExam, userProfile, onLogout }: Props) {
                             }
                           }}
                         >
-                          <iconify-icon icon="lucide:rotate-cw" className="text-sm" />
-                          Request Retake
-                        </button>
-                      ) : (
-                        <button
-                          disabled
-                          className="w-full bg-gray-100 border border-gray-200 text-gray-400 font-bold text-xs uppercase tracking-wider py-3 rounded-lg flex items-center justify-center gap-2 cursor-not-allowed"
-                        >
-                          <iconify-icon icon={isRetakeRequested ? "lucide:clock" : "lucide:lock"} className="text-sm" />
-                          {isRetakeRequested ? "Retake Requested" : "Locked"}
+                          <iconify-icon icon="lucide:rotate-cw" /> Request Retake
                         </button>
                       )}
-                    </motion.div>
+                    </div>
                   );
                 })}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Credentials Section */}
+          {/* Credentials Section — Shows ALL earned certificates */}
           <div className="flex flex-col gap-4">
-            <h2 className="text-2xl font-bold text-gray-900 tracking-tight">My Credentials</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">My Credentials & Certificates</h2>
+              {certs.length > 0 && (
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                  {certs.length} Active Certificate{certs.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
             
             {certs.length === 0 ? (
               <div className="bg-gray-50 border border-gray-200 rounded-2xl p-10 flex flex-col items-center justify-center text-center shadow-sm">
@@ -332,30 +351,37 @@ export function ExamDashboard({ onStartExam, userProfile, onLogout }: Props) {
                 <p className="text-gray-500 mt-2 font-medium">Complete an assessment to earn certification.</p>
               </div>
             ) : (
-              <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 {certs.map((cert) => (
-                  <div key={cert.id} className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm hover:shadow-md transition-all">
-                    <div className="flex items-center gap-5">
-                      <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                  <div key={cert.id} className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm hover:shadow-md transition-all gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 shrink-0">
                         <iconify-icon icon="lucide:award" className="w-7 h-7 text-emerald-600" style={{ fontSize: '28px' }} />
                       </div>
                       <div>
-                        <h4 className="text-lg font-bold text-gray-900">{cert.title}</h4>
-                        <p className="text-sm text-gray-500 font-medium">
-                          Issued {new Date(cert.issueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
+                        <h4 className="text-base font-bold text-gray-900">{cert.title}</h4>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                          <span>
+                            Issued {new Date(cert.issueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                          <span className="w-1 h-1 rounded-full bg-gray-300" />
+                          <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                            <iconify-icon icon="lucide:check-circle" className="text-xs" /> Cryptographically Verified
+                          </span>
+                        </div>
                       </div>
                     </div>
                     {cert.pdfUrl ? (
                       <button 
                         onClick={() => handleViewPDF(cert.pdfUrl!, cert.id)}
                         disabled={downloadingPdfId === cert.id}
-                        className="mt-4 sm:mt-0 px-5 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-semibold hover:bg-gray-800 transition-colors border border-gray-700 shadow-sm flex items-center justify-center text-center disabled:opacity-50 disabled:cursor-wait"
+                        className="w-full sm:w-auto px-5 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-semibold hover:bg-gray-800 transition-colors border border-gray-700 shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-wait shrink-0"
                       >
-                        {downloadingPdfId === cert.id ? "Loading..." : "View PDF"}
+                        <iconify-icon icon="lucide:file-text" />
+                        {downloadingPdfId === cert.id ? "Loading..." : "View / Download PDF"}
                       </button>
                     ) : (
-                      <button disabled className="mt-4 sm:mt-0 px-5 py-2.5 bg-gray-300 text-gray-500 rounded-lg text-sm font-semibold cursor-not-allowed">
+                      <button disabled className="w-full sm:w-auto px-5 py-2.5 bg-gray-300 text-gray-500 rounded-lg text-sm font-semibold cursor-not-allowed shrink-0">
                         No PDF
                       </button>
                     )}

@@ -13,9 +13,7 @@ from app.core.security import hash_password
 from app.db.session import async_session_factory
 
 # Import all models so they are registered with Base.metadata
-from app.models import (
-    assessment_session, audit_log, company, hierarchy, question_bank, schemas, test_attempt, user
-)
+import app.models
 
 async def reset_db():
     print("Dropping all tables...")

@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App";
+import { IngestionProvider } from "./context/IngestionContext";
 
 // Force HTTPS in production (preserves localhost/127.0.0.1 for local development)
 if (
@@ -16,6 +17,8 @@ if (
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <IngestionProvider>
+      <App />
+    </IngestionProvider>
   </React.StrictMode>
 );

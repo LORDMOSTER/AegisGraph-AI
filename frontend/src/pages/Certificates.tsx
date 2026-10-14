@@ -267,7 +267,23 @@ export const Certificates: React.FC = () => {
                     <div className="mono t-primary" style={{ fontSize: "0.9rem", marginTop: "2px" }}>{expDate}</div>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+                <div style={{ display: "flex", gap: "8px", marginTop: "16px", flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem("aegis_active_draft_id");
+                      window.history.pushState(
+                        {},
+                        "",
+                        `/admin/exams/new?employee_id=${cert.employeeId}&mode=recertify`
+                      );
+                      window.dispatchEvent(new PopStateEvent("popstate"));
+                    }}
+                    className="btn btn-secondary"
+                    style={{ flex: 1, padding: "6px", fontSize: "11px" }}
+                    title="Launch Exam Builder for recertification"
+                  >
+                    Recertify
+                  </button>
                   <button
                     onClick={() => {
                       if (cert.pdfUrl) {
@@ -278,7 +294,7 @@ export const Certificates: React.FC = () => {
                       }
                     }}
                     className="btn"
-                    style={{ flex: 1, padding: "6px" }}
+                    style={{ flex: 1, padding: "6px", fontSize: "11px" }}
                   >
                     View
                   </button>
@@ -290,14 +306,14 @@ export const Certificates: React.FC = () => {
                       setIsEditModalOpen(true);
                     }}
                     className="btn"
-                    style={{ flex: 1, padding: "6px" }}
+                    style={{ flex: 1, padding: "6px", fontSize: "11px" }}
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => setDeleteCertId(cert.id)}
                     className="btn btn-destructive"
-                    style={{ flex: 1, padding: "6px" }}
+                    style={{ flex: 1, padding: "6px", fontSize: "11px" }}
                   >
                     Delete
                   </button>

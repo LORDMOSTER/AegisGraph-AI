@@ -8,6 +8,17 @@ from app.models.audit_log import ComplianceAuditLog
 from app.models.hierarchy import Manual, Section, SubCategory, Rule
 from app.models.question_bank import QuestionVariant
 from app.models.question_usage_history import QuestionUsageHistory
+from app.models.exam_builder import (
+    ExamDraft,
+    ExamDraftStatus,
+    ScoringMode,
+    QuestionOrigin,
+    GenerationJobStatus,
+    ExamSection,
+    ExamQuestion,
+    ExamQuestionRevision,
+    GenerationJob,
+)
 
 # Export Base and all models to ensure Alembic can discover them
 __all__ = [
@@ -26,4 +37,14 @@ __all__ = [
     "Rule",
     "QuestionVariant",
     "QuestionUsageHistory",
+    "ExamDraft",
+    "ExamDraftStatus",
+    "ScoringMode",
+    "QuestionOrigin",
+    "GenerationJobStatus",
+    "ExamSection",
+    "ExamQuestion",
+    "ExamQuestionRevision",
+    "GenerationJob",
 ]
+

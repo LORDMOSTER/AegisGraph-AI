@@ -24,6 +24,7 @@ async_session_factory = async_sessionmaker(
     autocommit=False,
     autoflush=False,
 )
+async_session_maker = async_session_factory
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """

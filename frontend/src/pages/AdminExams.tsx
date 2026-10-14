@@ -94,6 +94,9 @@ export function AdminExams() {
       return 0;
     });
 
+  const [revealedKeys, setRevealedKeys] = useState<Record<string, boolean>>({});
+  const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
+
   const renderSortableHeader = (label: string, key: string) => (
     <th onClick={() => handleSort(key)} style={{ cursor: "pointer", userSelect: "none" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -125,6 +128,16 @@ export function AdminExams() {
               style={{ padding: "8px 12px 8px 36px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontSize: 13, width: 220 }}
             />
           </div>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              localStorage.removeItem("aegis_active_draft_id");
+              window.history.pushState({}, "", "/admin/exams/new");
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }}
+          >
+            + Build New Exam
+          </button>
         </div>
       </div>
 
@@ -138,6 +151,7 @@ export function AdminExams() {
                 {renderSortableHeader("Employee ID", "employee_id")}
                 {renderSortableHeader("Employee Name", "employee_name")}
                 {renderSortableHeader("Assessment Name", "assessment_name")}
+                <th>Exam Key</th>
                 {renderSortableHeader("Score", "score")}
                 {renderSortableHeader("Status", "status")}
                 {renderSortableHeader("Assigned At", "assigned_at")}
@@ -148,7 +162,7 @@ export function AdminExams() {
             <tbody>
               {filteredExams.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: "center", padding: 40, color: "var(--text-tertiary)" }}>
+                  <td colSpan={9} style={{ textAlign: "center", padding: 40, color: "var(--text-tertiary)" }}>
                     No assigned exams found matching your search.
                   </td>
                 </tr>
@@ -162,6 +176,57 @@ export function AdminExams() {
                     </td>
                     <td style={{ fontWeight: 500 }}>{e.employee_name}</td>
                     <td>{e.assessment_name}</td>
+                    <td>
+                      {e.exam_key ? (
+                        revealedKeys[e.exam_session_id] ? (
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(245, 158, 11, 0.1)", padding: "4px 8px", borderRadius: 6, border: "1px solid rgba(245, 158, 11, 0.25)" }}>
+                            <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--amber, #f59e0b)", letterSpacing: "0.05em" }}>
+                              {e.exam_key}
+                            </span>
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              style={{ padding: "2px 4px", fontSize: 13, color: "var(--amber, #f59e0b)" }}
+                              title="Copy key"
+                              onClick={() => {
+                                navigator.clipboard.writeText(e.exam_key);
+                                setCopiedKeyId(e.exam_session_id);
+                                setTimeout(() => setCopiedKeyId(null), 2000);
+                              }}
+                            >
+                              <iconify-icon icon={copiedKeyId === e.exam_session_id ? "lucide:check" : "lucide:copy"} />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              style={{ padding: "2px 4px", fontSize: 13, color: "var(--muted, #94a3b8)" }}
+                              title="Hide key"
+                              onClick={() => setRevealedKeys((prev) => ({ ...prev, [e.exam_session_id]: false }))}
+                            >
+                              <iconify-icon icon="lucide:eye-off" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <span className="mono" style={{ fontSize: 12, color: "var(--muted, #94a3b8)", letterSpacing: "0.15em" }}>
+                              ••••••••
+                            </span>
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              style={{ padding: "3px 8px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--accent, #3b82f6)", border: "1px solid rgba(59, 130, 246, 0.25)" }}
+                              title="Click to reveal key for this exam"
+                              onClick={() => setRevealedKeys((prev) => ({ ...prev, [e.exam_session_id]: true }))}
+                            >
+                              <iconify-icon icon="lucide:eye" />
+                              <span>View Key</span>
+                            </button>
+                          </div>
+                        )
+                      ) : (
+                        <span style={{ fontSize: 12, color: "var(--muted, #94a3b8)" }}>N/A</span>
+                      )}
+                    </td>
                     <td>
                       {e.score !== null && e.score !== undefined ? (
                         <span style={{ fontWeight: 600, color: e.score >= 80 ? "var(--emerald)" : "var(--rose)" }}>

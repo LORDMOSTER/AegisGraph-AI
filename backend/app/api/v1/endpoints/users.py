@@ -228,8 +228,8 @@ async def verify_admin(
 
 
 class FaceEmbeddingUpdate(BaseModel):
-    embedding: list  # Float array from face-api.js FaceRecognitionNet
-    photo: str | None = None  # Base64 string from webcam
+    embedding: list | None = None  # Float array from face-api.js FaceRecognitionNet (optional if uploading photo file)
+    photo: str | None = None  # Base64 string from webcam or file upload
 
 
 @router.put("/{employee_code}/face-embedding")
@@ -240,9 +240,7 @@ async def store_face_embedding(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Store or replace the face embedding for an employee.
-    The embedding is a 128-d float vector from face-api.js FaceRecognitionNet.
-    The raw image is never stored — only this embedding.
+    Store or replace the face embedding and/or photo for an employee.
     """
     result = await db.execute(
         select(User).where(User.employee_code == employee_code, User.company_id == current_user.company_id)
@@ -251,7 +249,8 @@ async def store_face_embedding(
     if not user:
         raise HTTPException(status_code=404, detail="Employee not found")
 
-    user.face_embedding = payload.embedding
+    if payload.embedding is not None:
+        user.face_embedding = payload.embedding
     if payload.photo:
         user.photo = payload.photo
         

@@ -16,7 +16,24 @@ os.makedirs(CERT_DIR, exist_ok=True)
 # Fixed key for demo purposes. In production, load from secure vault or env.
 SECRET_KEY_BYTES = b"thisisasecretkeyfornacl123456789"
 
-def generate_certificate(certificate_id: uuid.UUID, employee_id: uuid.UUID, full_name: str, score: float, company_name: str, is_imported: bool = False, original_issuer: str = None, original_issue_date: str = None, cert_number: str = None, assessment_name: str = "Safety Assessment", logo_url: str = None, designation: str = None) -> tuple[str, str, str]:
+def generate_certificate(
+    certificate_id: uuid.UUID,
+    employee_id: uuid.UUID,
+    full_name: str,
+    score: float,
+    company_name: str,
+    is_imported: bool = False,
+    original_issuer: str = None,
+    original_issue_date: str = None,
+    cert_number: str = None,
+    assessment_name: str = "Safety Assessment",
+    logo_url: str = None,
+    designation: str = None,
+    exam_id: uuid.UUID | str | None = None,
+    version: str | None = "1.0",
+    section_breakdown: list[dict] | dict | None = None,
+    include_section_breakdown: bool = False,
+) -> tuple[str, str, str]:
     # 1. Ed25519 Signing
     signing_key = SigningKey(SECRET_KEY_BYTES)
     
@@ -25,7 +42,9 @@ def generate_certificate(certificate_id: uuid.UUID, employee_id: uuid.UUID, full
         "employee_id": str(employee_id),
         "name": full_name,
         "score": score,
-        "issued_at": datetime.utcnow().isoformat()
+        "issued_at": datetime.utcnow().isoformat(),
+        "exam_id": str(exam_id) if exam_id else None,
+        "version": str(version or "1.0"),
     }
     
     if is_imported:
@@ -134,6 +153,33 @@ def generate_certificate(certificate_id: uuid.UUID, employee_id: uuid.UUID, full
         if score is not None:
             c.setFont("Helvetica", 14)
             c.drawCentredString(width / 2.0, height - 400, f"Safety Compliance Index (SCI): {score:.1f}%")
+
+        if include_section_breakdown and section_breakdown:
+            c.setFont("Helvetica-Bold", 10)
+            c.setFillColorRGB(0.2, 0.2, 0.2)
+            c.drawCentredString(width / 2.0, height - 418, "Section Performance Breakdown:")
+            c.setFont("Helvetica", 9)
+            c.setFillColorRGB(0.3, 0.3, 0.3)
+            
+            # Extract section summary items
+            sec_items = []
+            if isinstance(section_breakdown, dict):
+                for sid, sinfo in section_breakdown.items():
+                    title = sinfo.get("title", sid)
+                    pct = sinfo.get("percentage")
+                    if pct is None and sinfo.get("total_possible", 0) > 0:
+                        pct = (sinfo.get("score", 0) / sinfo["total_possible"]) * 100.0
+                    pct_str = f"{pct:.1f}%" if pct is not None else "N/A"
+                    sec_items.append(f"{title}: {pct_str}")
+            elif isinstance(section_breakdown, list):
+                for sinfo in section_breakdown:
+                    title = sinfo.get("title", "Section")
+                    pct = sinfo.get("percentage", 0.0)
+                    sec_items.append(f"{title}: {pct:.1f}%")
+            
+            breakdown_line = "  •  ".join(sec_items[:4])
+            c.drawCentredString(width / 2.0, height - 430, breakdown_line)
+            c.setFillColorRGB(0, 0, 0)
     
     # Draw Logo if exists
     if logo_url:

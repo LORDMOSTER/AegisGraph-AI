@@ -212,11 +212,21 @@ export async function getMe(): Promise<any> {
   return fetchWithRetry<any>(`${BASE}/v1/auth/me`);
 }
 
-export async function assembleExam(jobTitle: string, targetCount: number): Promise<any> {
+export async function assembleExam(
+  jobTitle: string,
+  targetCount: number,
+  employeeId?: string,
+  questionTypes?: string[]
+): Promise<any> {
   return fetchWithRetry<any>(`${BASE}/assessment/assemble`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ job_title: jobTitle, target_count: targetCount })
+    body: JSON.stringify({
+      job_title: jobTitle,
+      target_count: targetCount,
+      ...(employeeId ? { employee_id: employeeId } : {}),
+      ...(questionTypes && questionTypes.length > 0 ? { question_types: questionTypes } : {}),
+    }),
   });
 }
 
@@ -228,11 +238,109 @@ export async function saveAssembledExam(name: string, manifest: any[], duration_
   });
 }
 
-export async function swapQuestion(ruleId: string, currentVariantId: string): Promise<any> {
+export async function swapQuestion(
+  ruleId: string,
+  currentVariantId: string,
+  questionType?: string,
+  currentStem?: string,
+  ruleMode: "same" | "different" = "same",
+  excludeStems?: string[]
+): Promise<any> {
   return fetchWithRetry<any>(`${BASE}/assessment/swap`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rule_id: ruleId, current_variant_id: currentVariantId })
+    body: JSON.stringify({
+      rule_id: ruleId,
+      current_variant_id: currentVariantId,
+      ...(questionType ? { question_type: questionType } : {}),
+      ...(currentStem ? { current_stem: currentStem } : {}),
+      rule_mode: ruleMode,
+      ...(excludeStems ? { exclude_stems: excludeStems } : {}),
+    })
+  });
+}
+
+export interface RegenerateQuestionOptions {
+  mode?: "same_rule" | "other_rule";
+  change_type?: "MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MULTI_SELECT";
+  difficulty?: "easy" | "medium" | "hard";
+  focus_hint?: string;
+}
+
+export async function regenerateDraftQuestion(
+  questionId: string,
+  options?: RegenerateQuestionOptions,
+  draftId?: string
+): Promise<any> {
+  const url = draftId
+    ? `${BASE}/exam-drafts/${draftId}/questions/${questionId}/regenerate`
+    : `${BASE}/questions/${questionId}/regenerate`;
+  return fetchWithRetry<any>(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(options || {})
+  });
+}
+
+export interface AlternativeVariant {
+  id: string;
+  stem: string;
+  question_type: string;
+  difficulty: string;
+  options?: any[];
+  is_same_rule: boolean;
+  rule_id?: string;
+  correct_answer?: string;
+}
+
+export async function getQuestionAlternatives(
+  questionId: string,
+  draftId?: string
+): Promise<AlternativeVariant[]> {
+  const url = draftId
+    ? `${BASE}/exam-drafts/${draftId}/questions/${questionId}/alternatives`
+    : `${BASE}/questions/${questionId}/alternatives`;
+  return fetchWithRetry<AlternativeVariant[]>(url);
+}
+
+export async function swapDraftQuestion(
+  questionId: string,
+  variantId: string,
+  draftId?: string
+): Promise<any> {
+  const url = draftId
+    ? `${BASE}/exam-drafts/${draftId}/questions/${questionId}/swap`
+    : `${BASE}/questions/${questionId}/swap`;
+  return fetchWithRetry<any>(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ variant_id: variantId })
+  });
+}
+
+export async function undoDraftQuestion(
+  questionId: string,
+  draftId?: string
+): Promise<any> {
+  const url = draftId
+    ? `${BASE}/exam-drafts/${draftId}/questions/${questionId}/undo`
+    : `${BASE}/questions/${questionId}/undo`;
+  return fetchWithRetry<any>(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+}
+
+export async function regenerateSection(
+  sectionId: string,
+  draftId?: string
+): Promise<any> {
+  const url = draftId
+    ? `${BASE}/exam-drafts/${draftId}/sections/${sectionId}/regenerate`
+    : `${BASE}/sections/${sectionId}/regenerate`;
+  return fetchWithRetry<any>(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
   });
 }
 
@@ -382,16 +490,37 @@ export async function getAuditTimeline(examId: string): Promise<AuditTimeline> {
 }
 
 export interface AttemptReviewItem {
+  question_id?: string;
   question_text: string;
+  question_type?: "MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MULTI_SELECT";
   options: string[];
   correct_answer: string;
   user_answer: string | null;
   is_correct: boolean;
+  marks_awarded?: number;
+  max_marks?: number;
+  difficulty?: string;
+  section_id?: string;
+  section_title?: string;
+  rule_id?: string | null;
+  rule_code?: string | null;
+  rule_text?: string | null;
 }
 
 export interface AttemptReviewResponse {
   attempt_id: string;
   items: AttemptReviewItem[];
+  section_scores?: Record<string, {
+    title: string;
+    score: number;
+    total_possible: number;
+    percentage: number;
+    min_pass_percent?: number | null;
+    passed?: boolean;
+  }>;
+  total_score?: number | null;
+  passed?: boolean | null;
+  failed_sections?: string[];
 }
 
 export async function getAttemptReview(attemptId: string): Promise<AttemptReviewResponse> {
@@ -434,8 +563,17 @@ export interface QuestionVariant {
   id: string;
   rule_id: string;
   question_text: string;
-  options: string[];
-  correct_option_index: number;
+  question_type: "MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MULTI_SELECT";
+  options?: string[] | null;
+  correct_option_index?: number | null;
+  correct_option_indices?: number[] | null;
+  correct_answer?: string | null;
+  blank_answer_variants?: string[] | null;
+  statement_true?: string | null;
+  statement_false?: string | null;
+  edit_kind?: string | null;
+  changed_fragment?: string | null;
+  difficulty?: string;
   bloom_level: string;
   confidence: number;
   review_status: string;
@@ -444,11 +582,23 @@ export interface QuestionVariant {
   subcategoryName?: string;
   rule_text?: string;
   rule_code?: string;
+  grounding_verified?: boolean;
 }
 
 /** GET /api/questions */
-export async function getQuestions(): Promise<QuestionVariant[]> {
-  return fetchWithRetry<QuestionVariant[]>(`${BASE}/questions/`, { method: "GET" });
+export async function getQuestions(questionType?: string): Promise<QuestionVariant[]> {
+  const url = questionType ? `${BASE}/questions/?question_type=${encodeURIComponent(questionType)}` : `${BASE}/questions/`;
+  return fetchWithRetry<QuestionVariant[]>(url, { method: "GET" });
+}
+
+export async function getApprovedQuestions(questionType?: string): Promise<QuestionVariant[]> {
+  const all = await getQuestions(questionType);
+  return all.filter((q) => q.review_status === "approved" || !q.review_status);
+}
+
+/** GET /api/questions/type-counts */
+export async function getQuestionTypeCounts(): Promise<Record<string, Record<string, number>>> {
+  return fetchWithRetry<Record<string, Record<string, number>>>(`${BASE}/questions/type-counts`, { method: "GET" });
 }
 
 /** PUT /api/questions/{id} */
@@ -461,8 +611,8 @@ export async function updateQuestion(id: string, data: Partial<QuestionVariant>)
 }
 
 /** POST /api/questions/generate/{rule_id} */
-export async function generateQuestionVariants(ruleId: string, count: number = 3, questionType: string = "multiple_choice"): Promise<{message: string, rule_id: string}> {
-  return fetchWithRetry<{message: string, rule_id: string}>(`${BASE}/questions/generate/${ruleId}?count=${count}&question_type=${questionType}`, {
+export async function generateQuestionVariants(ruleId: string, count: number = 3, questionType: string = "all"): Promise<{message: string, rule_id: string, shortfall?: any}> {
+  return fetchWithRetry<{message: string, rule_id: string, shortfall?: any}>(`${BASE}/questions/generate/${ruleId}?count=${count}&question_type=${questionType}`, {
     method: "POST"
   });
 }
@@ -472,9 +622,9 @@ export async function bulkGenerateQuestions(
   onMessage: (msg: any) => void,
   manualId?: string,
   sectionName?: string,
-  questionType: string = "multiple_choice"
+  questionType: string = "all"
 ): Promise<void> {
-  const url = new URL(`${window.location.origin}/api/v1/questions/bulk-generate`);
+  const url = new URL(`${BASE}/questions/bulk-generate`);
   if (manualId) url.searchParams.append("manual_id", manualId);
   if (sectionName) url.searchParams.append("section_name", sectionName);
   url.searchParams.append("question_type", questionType);
@@ -741,11 +891,11 @@ export async function deleteEmployee(empId: string): Promise<void> {
   });
 }
 
-export async function storeFaceEmbedding(employeeCode: string, embedding: number[], photoBase64?: string): Promise<void> {
+export async function storeFaceEmbedding(employeeCode: string, embedding?: number[] | null, photoBase64?: string): Promise<void> {
   return fetchWithRetry<void>(`${BASE}/v1/users/${employeeCode}/face-embedding`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ embedding, photo: photoBase64 })
+    body: JSON.stringify({ embedding: embedding ?? null, photo: photoBase64 })
   });
 }
 
@@ -1111,11 +1261,404 @@ export async function getPendingAttempts(): Promise<any[]> {
   return fetchWithRetry<any[]>(`${BASE}/audit/attempts`);
 }
 
-export async function issueCertificate(attemptId: string, validityMonths: number = 12): Promise<any> {
+export async function issueCertificate(
+  attemptId: string,
+  validityMonths: number = 12,
+  designation?: string,
+  assessmentName?: string,
+  forceNew?: boolean
+): Promise<any> {
   return fetchWithRetry<any>(`${BASE}/audit/attempts/${attemptId}/issue-certificate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ validity_months: validityMonths })
+    body: JSON.stringify({
+      validity_months: validityMonths,
+      ...(designation ? { designation } : {}),
+      ...(assessmentName ? { assessment_name: assessmentName } : {}),
+      ...(forceNew ? { force_new: forceNew } : {}),
+    }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Exam Builder Full Typed API
+// ---------------------------------------------------------------------------
+
+export interface ExamDraftCreate {
+  title: string;
+  target?: { type: "employee_id" | "role" | "department"; value: string; label?: string } | null;
+  duration_minutes?: number;
+  available_from?: string | null;
+  available_until?: string | null;
+  scoring_mode?: "standard" | "per_question_marks" | "risk_weighted";
+  pass_percent?: number;
+  reveal_score?: boolean;
+  exam_key?: string | null;
+}
+
+export interface ExamDraftUpdate {
+  title?: string;
+  target?: { type: "employee_id" | "role" | "department"; value: string; label?: string } | null;
+  duration_minutes?: number;
+  available_from?: string | null;
+  available_until?: string | null;
+  scoring_mode?: "standard" | "per_question_marks" | "risk_weighted";
+  pass_percent?: number;
+  reveal_score?: boolean;
+  exam_key?: string | null;
+}
+
+export interface ExamQuestionModel {
+  id: string;
+  section_id: string;
+  order_index: number;
+  question_type: "MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MULTI_SELECT";
+  difficulty: "easy" | "medium" | "hard";
+  marks: number;
+  stem: string;
+  payload: any;
+  origin: "ai" | "bank" | "manual" | "edited";
+  source_variant_id?: string | null;
+  rule_id?: string | null;
+  is_locked: boolean;
+  explanation?: string | null;
+  confidence?: number;
+  warnings?: string[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ExamSectionModel {
+  id: string;
+  draft_id: string;
+  order_index: number;
+  title: string;
+  instructions?: string | null;
+  topic_filter: string[];
+  type_mix: { MCQ?: number; TRUE_FALSE?: number; FILL_IN_BLANK?: number; MULTI_SELECT?: number };
+  difficulty_mix: { easy?: number; medium?: number; hard?: number };
+  marks_per_question: number;
+  min_pass_percent?: number | null;
+  shuffle_questions: boolean;
+  shuffle_options: boolean;
+  questions: ExamQuestionModel[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ExamDraftModel {
+  id: string;
+  company_id: string;
+  created_by: string;
+  title: string;
+  target?: { type: "employee_id" | "role" | "department"; value: string; label?: string } | null;
+  duration_minutes: number;
+  available_from?: string | null;
+  available_until?: string | null;
+  scoring_mode: "standard" | "risk_weighted";
+  pass_percent: number;
+  reveal_score: boolean;
+  exam_key_hash?: string | null;
+  status: "draft" | "generating" | "locked" | "assigned" | "archived";
+  version: number;
+  locked_assessment_id?: string | null;
+  sections: ExamSectionModel[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExamSectionCreate {
+  title: string;
+  instructions?: string | null;
+  topic_filter?: string[];
+  type_mix: { MCQ?: number; TRUE_FALSE?: number; FILL_IN_BLANK?: number; MULTI_SELECT?: number };
+  difficulty_mix: { easy?: number; medium?: number; hard?: number };
+  question_count?: number;
+  preset?: string | null;
+  marks_per_question?: number;
+  min_pass_percent?: number | null;
+  shuffle_questions?: boolean;
+  shuffle_options?: boolean;
+  order_index?: number;
+}
+
+export interface ExamSectionUpdate {
+  title?: string;
+  instructions?: string | null;
+  topic_filter?: string[];
+  type_mix?: { MCQ?: number; TRUE_FALSE?: number; FILL_IN_BLANK?: number; MULTI_SELECT?: number };
+  difficulty_mix?: { easy?: number; medium?: number; hard?: number };
+  preset?: string | null;
+  marks_per_question?: number;
+  min_pass_percent?: number | null;
+  shuffle_questions?: boolean;
+  shuffle_options?: boolean;
+  order_index?: number;
+}
+
+export interface ExamQuestionCreate {
+  question_type: "MCQ" | "TRUE_FALSE" | "FILL_IN_BLANK" | "MULTI_SELECT";
+  difficulty: "easy" | "medium" | "hard";
+  marks?: number;
+  stem: string;
+  payload?: any;
+  origin?: string;
+  rule_id?: string | null;
+  is_locked?: boolean;
+  explanation?: string | null;
+  confidence?: number;
+  order_index?: number;
+}
+
+export interface ExamQuestionUpdate {
+  stem?: string;
+  difficulty?: "easy" | "medium" | "hard";
+  marks?: number;
+  payload?: any;
+  is_locked?: boolean;
+  explanation?: string | null;
+  order_index?: number;
+  rule_id?: string | null;
+}
+
+export interface SectionPlanSlot {
+  slot_index: number;
+  question_type: string;
+  difficulty: string;
+  status: "in_bank" | "needs_generation" | "impossible";
+  matched_variant_id?: string | null;
+  available_bank_count: number;
+  candidate_rule_count: number;
+  reason?: string;
+}
+
+export interface SectionFeasibilityReport {
+  section_id: string;
+  section_title: string;
+  order_index: number;
+  target_count: number;
+  in_bank_count: number;
+  needs_gen_count: number;
+  impossible_count: number;
+  overall_status: "in_bank" | "needs_generation" | "impossible";
+  slots: SectionPlanSlot[];
+  remediation_suggestions: string[];
+}
+
+export interface DraftFeasibilityResponse {
+  draft_id: string;
+  overall_status: "in_bank" | "needs_generation" | "impossible";
+  total_slots: number;
+  total_in_bank: number;
+  total_needs_gen: number;
+  total_impossible: number;
+  sections: SectionFeasibilityReport[];
+}
+
+export interface ValidationIssue {
+  level: "error" | "warning";
+  field: string;
+  message: string;
+  section_id?: string | null;
+  question_id?: string | null;
+}
+
+export interface ValidationResponse {
+  is_valid: boolean;
+  errors: ValidationIssue[];
+  warnings: ValidationIssue[];
+}
+
+export interface GenerationJobResponse {
+  id: string;
+  draft_id: string;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  progress: any;
+  error_message?: string | null;
+  created_at?: string;
+}
+
+export interface LockDraftResponse {
+  status: string;
+  draft_id: string;
+  assessment_id: string;
+  version: number;
+  total_questions: number;
+}
+
+export interface CloneDraftResponse {
+  status: string;
+  original_draft_id: string;
+  new_draft_id: string;
+  new_version: number;
+}
+
+export async function createExamDraft(data: ExamDraftCreate): Promise<ExamDraftModel> {
+  return fetchWithRetry<ExamDraftModel>(`${BASE}/exam-drafts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getExamDraft(draftId: string): Promise<ExamDraftModel> {
+  return fetchWithRetry<ExamDraftModel>(`${BASE}/exam-drafts/${draftId}`);
+}
+
+
+export async function updateExamDraft(draftId: string, data: ExamDraftUpdate): Promise<ExamDraftModel> {
+  return fetchWithRetry<ExamDraftModel>(`${BASE}/exam-drafts/${draftId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteExamDraft(draftId: string): Promise<{ status: string; id: string }> {
+  return fetchWithRetry<{ status: string; id: string }>(`${BASE}/exam-drafts/${draftId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function listExamDrafts(status?: string): Promise<ExamDraftModel[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return fetchWithRetry<ExamDraftModel[]>(`${BASE}/exam-drafts${query}`);
+}
+
+export async function createDraftSection(draftId: string, data: ExamSectionCreate): Promise<ExamSectionModel> {
+  return fetchWithRetry<ExamSectionModel>(`${BASE}/exam-drafts/${draftId}/sections`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateDraftSection(sectionId: string, data: ExamSectionUpdate): Promise<ExamSectionModel> {
+  return fetchWithRetry<ExamSectionModel>(`${BASE}/exam-sections/${sectionId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteDraftSection(sectionId: string): Promise<{ status: string; id: string }> {
+  return fetchWithRetry<{ status: string; id: string }>(`${BASE}/exam-sections/${sectionId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function reorderDraftSections(draftId: string, items: { id: string; order_index: number }[]): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/exam-drafts/${draftId}/sections/reorder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+}
+
+export async function createDraftQuestion(sectionId: string, data: ExamQuestionCreate): Promise<ExamQuestionModel> {
+  return fetchWithRetry<ExamQuestionModel>(`${BASE}/exam-sections/${sectionId}/questions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateDraftQuestion(questionId: string, data: ExamQuestionUpdate): Promise<ExamQuestionModel> {
+  return fetchWithRetry<ExamQuestionModel>(`${BASE}/exam-questions/${questionId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteDraftQuestion(questionId: string): Promise<{ status: string; id: string }> {
+  return fetchWithRetry<{ status: string; id: string }>(`${BASE}/exam-questions/${questionId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function duplicateDraftQuestion(questionId: string): Promise<ExamQuestionModel> {
+  return fetchWithRetry<ExamQuestionModel>(`${BASE}/exam-questions/${questionId}/duplicate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+export async function moveDraftQuestion(questionId: string, targetSectionId: string): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/exam-questions/${questionId}/move?target_section_id=${targetSectionId}`, {
+    method: "POST",
+  });
+}
+
+export async function reorderDraftQuestions(sectionId: string, items: { id: string; order_index: number }[]): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/exam-sections/${sectionId}/questions/reorder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+}
+
+export async function togglePinQuestion(questionId: string): Promise<{ id: string; is_locked: boolean }> {
+  return fetchWithRetry<{ id: string; is_locked: boolean }>(`${BASE}/exam-questions/${questionId}/pin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+export async function saveQuestionToBank(questionId: string): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/exam-questions/${questionId}/save-to-bank`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+export async function validateDraft(draftId: string): Promise<ValidationResponse> {
+  return fetchWithRetry<ValidationResponse>(`${BASE}/exam-drafts/${draftId}/validate`, {
+    method: "POST",
+  });
+}
+
+export async function planDraft(draftId: string): Promise<DraftFeasibilityResponse> {
+  return fetchWithRetry<DraftFeasibilityResponse>(`${BASE}/exam-drafts/${draftId}/plan`, {
+    method: "POST",
+  });
+}
+
+export async function generateDraftQuestions(draftId: string): Promise<GenerationJobResponse> {
+  return fetchWithRetry<GenerationJobResponse>(`${BASE}/exam-drafts/${draftId}/generate`, {
+    method: "POST",
+  });
+}
+
+export async function getGenerationJob(jobId: string): Promise<GenerationJobResponse> {
+  return fetchWithRetry<GenerationJobResponse>(`${BASE}/generation-jobs/${jobId}`);
+}
+
+export async function cancelGenerationJob(jobId: string): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/generation-jobs/${jobId}/cancel`, {
+    method: "POST",
+  });
+}
+
+export async function lockDraft(draftId: string): Promise<LockDraftResponse> {
+  return fetchWithRetry<LockDraftResponse>(`${BASE}/exam-drafts/${draftId}/lock`, {
+    method: "POST",
+  });
+}
+
+export async function assignDraftExam(draftId: string, data?: { employee_ids?: string[]; exam_key?: string }): Promise<any> {
+  return fetchWithRetry<any>(`${BASE}/exam-drafts/${draftId}/assign`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data || {}),
+  });
+}
+
+export async function cloneDraft(draftId: string): Promise<CloneDraftResponse> {
+  return fetchWithRetry<CloneDraftResponse>(`${BASE}/exam-drafts/${draftId}/clone`, {
+    method: "POST",
+  });
+}
+
+
 

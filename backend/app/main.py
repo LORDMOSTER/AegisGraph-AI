@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 
-from app.api import assessment, ingest, analytics, question_bank
+from app.api import assessment, ingest, analytics, question_bank, exam_builder
 from app.core.config import settings
 from app.core.logging import configure_logging
 
@@ -58,11 +58,15 @@ app.include_router(assessment.router, prefix="/api/assessment", tags=["Assessmen
 app.include_router(ingest.router,     prefix="/api/ingest",     tags=["Ingestion"])
 app.include_router(analytics.router,  prefix="/api/analytics",  tags=["Analytics"])
 app.include_router(question_bank.router, prefix="/api/questions", tags=["Question Bank"])
+app.include_router(exam_builder.router, prefix="/api", tags=["exam-builder"])
+app.include_router(exam_builder.router, tags=["exam-builder"])
+
 
 from app.api.v1.api import api_router as v1_router
 from app.api.v1.endpoints import audit
 
 app.include_router(audit.router, prefix="/api/audit", tags=["Audit"])
+app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
 app.include_router(v1_router, prefix="/api/v1")
 
 

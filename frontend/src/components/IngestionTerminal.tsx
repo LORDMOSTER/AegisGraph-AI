@@ -1,27 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useIngestion, LogLine } from "../context/IngestionContext";
 import { BACKEND_ORIGIN } from "../api";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface IngestResult {
-  filename: string;
-  chunk_count: number;
-  extraction_time_ms: number;
-  status: string;
-  message: string;
-}
-
-interface LogLine {
-  id: number;
-  text: string;
-  type: "info" | "success" | "warn" | "error";
-}
-
-let lineCounter = 0;
-function newLine(text: string, type: LogLine["type"] = "info"): LogLine {
-  return { id: lineCounter++, text, type };
-}
 
 const LOG_PREFIX: Record<LogLine["type"], string> = {
   info:    "[ INFO ]",
@@ -79,77 +59,33 @@ const IconSpinner = () => (
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function IngestionTerminal() {
-  const [isDragOver, setIsDragOver]   = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [result, setResult]           = useState<IngestResult | null>(null);
-  const [logs, setLogs]               = useState<LogLine[]>([]);
-  const [error, setError]             = useState<string | null>(null);
-  const [progress, setProgress]       = useState<{current: number, total: number} | null>(null);
-  const [manuals, setManuals]         = useState<any[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const logEndRef    = useRef<HTMLDivElement>(null);
+  const logEndRef = useRef<HTMLDivElement>(null);
 
-  const fetchManuals = useCallback(async () => {
-    try {
-      const token = localStorage.getItem("aegis_token");
-      const res = await fetch(`${BACKEND_ORIGIN}/api/v1/hierarchy/manuals`, {
-        headers: token ? { "Authorization": `Bearer ${token}` } : undefined
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setManuals(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch manuals", err);
-    }
-  }, []);
-
-  const handleDeleteManual = async (manualId: string) => {
-    try {
-      const token = localStorage.getItem("aegis_token");
-      const res = await fetch(`${BACKEND_ORIGIN}/api/v1/hierarchy/manuals/${manualId}`, {
-        method: "DELETE",
-        headers: token ? { "Authorization": `Bearer ${token}` } : undefined
-      });
-      if (res.ok) {
-        addLog("Manual deleted successfully.", "success");
-        fetchManuals();
-      } else {
-        const body = await res.json().catch(() => ({}));
-        addLog(`Failed to delete manual: ${body.detail || 'Unknown error'}`, "error");
-      }
-    } catch (err) {
-      addLog("Failed to delete manual", "error");
-      console.error(err);
-    } finally {
-      setConfirmDeleteId(null);
-    }
-  };
-
-  useEffect(() => {
-    fetchManuals();
-  }, [fetchManuals]);
-
-  const addLog = useCallback((text: string, type: LogLine["type"] = "info") => {
-    setLogs(prev => {
-      const next = [...prev, newLine(text, type)];
-      setTimeout(() => logEndRef.current?.scrollIntoView({ behavior: "smooth" }), 40);
-      return next;
-    });
-  }, []);
+  const {
+    selectedFile,
+    setSelectedFile,
+    isUploading,
+    result,
+    logs,
+    error,
+    progress,
+    manuals,
+    handleDeleteManual: deleteManualFromContext,
+    startUpload,
+    reset,
+  } = useIngestion();
 
   const handleFile = useCallback((file: File) => {
     if (!file.name.toLowerCase().endsWith(".pdf")) {
-      setError("Only PDF files are accepted. Please drop a valid .pdf file.");
+      alert("Only PDF files are accepted. Please drop a valid .pdf file.");
       return;
     }
-    setError(null);
-    setResult(null);
-    setLogs([]);
+    reset();
     setSelectedFile(file);
-  }, []);
+  }, [reset, setSelectedFile]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -160,90 +96,12 @@ export function IngestionTerminal() {
 
   const handleUpload = async () => {
     if (!selectedFile) return;
-    setIsUploading(true);
-    setResult(null);
-    setLogs([]);
-    setError(null);
-    setProgress(null);
-
-    addLog(`Initiating PDF ingestion pipeline for: ${selectedFile.name}`);
-    addLog(`File size: ${(selectedFile.size / 1024).toFixed(1)} KB`);
-
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-
-    try {
-      const token = localStorage.getItem("aegis_token");
-      const response = await fetch(`${BACKEND_ORIGIN}/api/ingest/pdf`, {
-        method: "POST",
-        body: formData,
-        headers: token ? { "Authorization": `Bearer ${token}` } : undefined,
-      });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        const detail = (body as { detail?: string }).detail ?? `HTTP ${response.status}`;
-        throw new Error(detail);
-      }
-
-      if (!response.body) throw new Error("ReadableStream not supported in this browser");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() || "";
-        
-        for (const part of parts) {
-          if (part.startsWith("data: ")) {
-             const jsonStr = part.substring(6);
-             try {
-               const data = JSON.parse(jsonStr);
-               if (data.error) {
-                 throw new Error(data.error);
-               }
-               if (data.message) {
-                 addLog(data.message, "success");
-                 const match = data.message.match(/Structuring rule (\d+) of (\d+)/);
-                 if (match) {
-                   setProgress({ current: parseInt(match[1], 10), total: parseInt(match[2], 10) });
-                 }
-               }
-               if (data.done) {
-                 setTimeout(() => {
-                   fetchManuals();
-                   reset();
-                 }, 800);
-               }
-             } catch (e) {
-                if (e instanceof Error && e.message !== "Unexpected end of JSON input") {
-                    throw e;
-                }
-             }
-          }
-        }
-      }
-
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Upload failed.";
-      addLog(`ERROR: ${msg}`, "error");
-      setError(msg);
-    } finally {
-      setIsUploading(false);
-    }
+    await startUpload();
   };
 
-  const reset = () => {
-    setSelectedFile(null);
-    setResult(null);
-    setLogs([]);
-    setError(null);
-    setProgress(null);
+  const handleDeleteManual = async (manualId: string) => {
+    await deleteManualFromContext(manualId);
+    setConfirmDeleteId(null);
   };
 
   return (
@@ -358,7 +216,7 @@ export function IngestionTerminal() {
               </p>
               <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
                 {isUploading && progress ? (
-                  <>Structuring rule <strong style={{color: "var(--emerald)"}}>{progress.current}</strong> of {progress.total}</>
+                  <>{progress.label || "Parsing page"} <strong style={{color: "var(--emerald)"}}>{progress.current}</strong> of {progress.total}</>
                 ) : (
                   <>pdfplumber will extract text chunks from <span style={{ color: "var(--violet-400)", fontWeight: 600 }}>{selectedFile.name}</span></>
                 )}

@@ -25,17 +25,21 @@ async def db_engine():
 
 @pytest.fixture(scope="session")
 def session_maker(db_engine):
-    return async_sessionmaker(autocommit=False, autoflush=False, bind=db_engine, class_=AsyncSession)
+    return async_sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=db_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
 
 @pytest.fixture(scope="session", autouse=True)
 async def setup_test_db(db_engine):
-    """Create all tables before tests run, and drop them afterwards."""
+    """Ensure all tables exist before tests run, without dropping user data."""
+    import app.models  # noqa: F401 - ensure all models registered with Base
     async with db_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     yield
-    async with db_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.fixture
 async def db_session(session_maker) -> AsyncGenerator[AsyncSession, None]:

@@ -119,9 +119,18 @@ class QuestionVariantResponse(BaseModel):
     id: uuid.UUID
     rule_id: uuid.UUID
     question_text: str
-    options: list[str]
-    correct_option_index: int
+    question_type: str = "MCQ"
+    options: Optional[list[str]] = None
+    correct_option_index: Optional[int] = None
+    correct_option_indices: Optional[list[int]] = None
+    correct_answer: Optional[str] = None
+    blank_answer_variants: Optional[list[str]] = None
+    statement_true: Optional[str] = None
+    statement_false: Optional[str] = None
+    edit_kind: Optional[str] = None
+    changed_fragment: Optional[str] = None
     bloom_level: str
+    difficulty: str = "medium"
     confidence: float
     review_status: str
 
@@ -132,6 +141,8 @@ class QuestionVariantUpdate(BaseModel):
     question_text: Optional[str] = None
     options: Optional[list[str]] = None
     correct_option_index: Optional[int] = None
+    correct_option_indices: Optional[list[int]] = None
+    blank_answer_variants: Optional[list[str]] = None
     review_status: Optional[str] = None
 
 class FlatQuestionVariantResponse(QuestionVariantResponse):

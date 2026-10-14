@@ -198,9 +198,11 @@ export function useAnomalyClipRecorder({
         .filter((c) => c.timestamp >= preWindow && c.timestamp <= anomalyTime)
         .map((c) => c.blob);
 
-      // Wait for 5s of post-anomaly footage (or MAX_CLIP_DURATION_MS)
-      const postDurationMs = Math.min(5000, MAX_CLIP_DURATION_MS - ROLLING_BUFFER_SECONDS * 1000);
-      await new Promise((r) => setTimeout(r, postDurationMs));
+      // Wait for post-anomaly footage (or immediate for full session)
+      const postDurationMs = anomalyType === "full_session" ? 150 : Math.min(3000, MAX_CLIP_DURATION_MS - ROLLING_BUFFER_SECONDS * 1000);
+      if (postDurationMs > 0) {
+        await new Promise((r) => setTimeout(r, postDurationMs));
+      }
 
       // Grab post-anomaly chunks
       const postChunks = bufferRef.current

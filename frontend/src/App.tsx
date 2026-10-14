@@ -25,6 +25,7 @@ import { AuditLog } from "./pages/AuditLog";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { LogoMark } from "./components/BrandAssets";
 import { AdminExams } from "./pages/AdminExams";
+import { ExamBuilder } from "./pages/ExamBuilder";
 import { deleteClipsOlderThan } from "./hooks/useAnomalyClipRecorder";
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy").then((m) => ({ default: m.PrivacyPolicy })));
 const TermsAndConditions = lazy(() => import("./pages/TermsAndConditions").then((m) => ({ default: m.TermsAndConditions })));
@@ -32,6 +33,7 @@ import { CookieConsent, openCookieSettings } from "./components/CookieConsent";
 import { updateMetaTags } from "./hooks/useMetaTags";
 import { NotFound } from "./pages/NotFound";
 import { analytics } from "./utils/analytics";
+import { useIngestion } from "./context/IngestionContext";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & helpers
@@ -78,7 +80,7 @@ const pageVariants = {
 // App
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type AppRoute = "login" | "register" | "app" | "verify" | "privacy" | "terms" | "not-found";
+export type AppRoute = "login" | "register" | "app" | "verify" | "privacy" | "terms" | "exam-builder" | "not-found";
 
 export default function App() {
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
@@ -88,6 +90,7 @@ export default function App() {
     if (path === "/privacy" || hash === "#privacy") return "privacy";
     if (path === "/terms" || hash === "#terms") return "terms";
     if (path === "/register" || hash === "#register") return "register";
+    if (path.startsWith("/admin/exams/new")) return "exam-builder";
     if (path === "/" || path === "/login" || path === "") return "login";
     return "not-found";
   });
@@ -99,6 +102,10 @@ export default function App() {
     if (route === "privacy") window.history.pushState({}, "", "#privacy");
     else if (route === "terms") window.history.pushState({}, "", "#terms");
     else if (route === "register") window.history.pushState({}, "", "#register");
+    else if (route === "exam-builder") {
+      localStorage.removeItem("aegis_active_draft_id");
+      window.history.pushState({}, "", "/admin/exams/new");
+    }
     else if (route === "login") window.history.pushState({}, "", "/");
   };
 
@@ -127,6 +134,8 @@ export default function App() {
         setCurrentRoute("terms");
       } else if (path === "/register" || hash === "#register") {
         setCurrentRoute("register");
+      } else if (path.startsWith("/admin/exams/new")) {
+        setCurrentRoute("exam-builder");
       } else if (path === "/" || path === "/login" || (!hash && path === "")) {
         setCurrentRoute("login");
       } else {
@@ -150,6 +159,7 @@ export default function App() {
 
   const [userRole, setUserRole] = useState<"admin" | "employee">("admin");
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
+  const { isUploading, selectedFile, progress, statusMessage } = useIngestion();
 
   // Dynamic document title and meta description updates
   useEffect(() => {
@@ -420,6 +430,64 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Persistent floating progress indicator when user navigates away from Manuals while parsing */}
+      <AnimatePresence>
+        {isUploading && activeTab !== "manuals" && (
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.95 }}
+            style={{
+              position: "fixed",
+              bottom: 24,
+              right: 28,
+              zIndex: 9999,
+              background: "var(--surface)",
+              border: "1px solid var(--border-violet)",
+              boxShadow: "0 12px 36px rgba(0, 0, 0, 0.4)",
+              borderRadius: 14,
+              padding: "14px 18px",
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              maxWidth: 420,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  background: "rgba(108, 99, 255, 0.15)",
+                  display: "grid",
+                  placeItems: "center",
+                  color: "var(--indigo-400)",
+                  flexShrink: 0,
+                }}
+              >
+                <iconify-icon icon="lucide:loader-2" className="ing-spin" style={{ fontSize: 20 }} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  Parsing: {selectedFile?.name || "Safety Manual"}
+                </span>
+                <span style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {statusMessage || (progress ? `${progress.label || "Parsing"}: ${progress.current}/${progress.total}` : "Ingestion active in background...")}
+                </span>
+              </div>
+            </div>
+            <button
+              className="btn btn-secondary"
+              style={{ padding: "6px 12px", fontSize: 12, marginLeft: "auto", flexShrink: 0 }}
+              onClick={() => setActiveTab("manuals")}
+            >
+              View Manuals
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 
@@ -635,6 +703,23 @@ export default function App() {
           onNavigate={(r) => navigateTo(r as AppRoute)}
           darkMode={darkMode}
           onToggleDark={() => setDarkMode((d) => !d)}
+        />
+        <CookieConsent onNavigatePolicy={openPolicy} />
+      </>
+    );
+  }
+
+  if (currentRoute === "exam-builder") {
+    return (
+      <>
+        <ExamBuilder
+          darkMode={darkMode}
+          onToggleDark={() => setDarkMode(d => !d)}
+          onExit={() => {
+            window.history.pushState({}, "", "/");
+            setCurrentRoute("app");
+            setActiveTab("exams");
+          }}
         />
         <CookieConsent onNavigatePolicy={openPolicy} />
       </>

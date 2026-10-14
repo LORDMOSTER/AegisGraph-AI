@@ -164,7 +164,7 @@ const VariantCard: React.FC<VariantCardProps> = ({
 
       {/* Options */}
       <ol className="qr-options" type="A">
-        {variant.options.map((optText: string, idx: number) => {
+        {(variant.options || []).map((optText: string, idx: number) => {
           const isCorrect = idx === variant.correct_option_index;
           return (
             <li

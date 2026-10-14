@@ -129,6 +129,15 @@
   --card-border:    1px solid var(--line);
   --card-shadow:    var(--shadow-card);
   --clay-radius:    var(--card-radius);
+
+  /* Theme surface and card aliases */
+  --bg-card:          var(--surface);
+  --bg-subtle:        var(--raised);
+  --border-color:     var(--line);
+  --surface-border:   var(--line);
+  --surface-elevated: var(--raised);
+  --surface-base:     var(--surface);
+  --text-muted:       var(--muted);
 }
 
 /* ================================================================== */
@@ -195,6 +204,15 @@
   --glass-border:   1px solid var(--line);
   --card-bg:        var(--surface);
   --card-border:    1px solid var(--line);
+
+  /* Theme surface and card aliases */
+  --bg-card:          var(--surface);
+  --bg-subtle:        var(--raised);
+  --border-color:     var(--line);
+  --surface-border:   var(--line);
+  --surface-elevated: var(--raised);
+  --surface-base:     var(--surface);
+  --text-muted:       var(--muted);
 
   /* Dark-mode shadows — subtle glow instead of neomorphism */
   --shadow-card:
