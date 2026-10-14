@@ -15,6 +15,7 @@ node_modules/
 dist/
 dist-ssr/
 .vite/
+*.tsbuildinfo
 
 # Editor/OS
 .DS_Store
